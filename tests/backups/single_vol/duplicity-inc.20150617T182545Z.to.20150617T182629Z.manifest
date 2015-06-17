@@ -1,0 +1,6 @@
+Hostname dellxps
+Localdir dir1
+Volume 1:
+    StartingPath   .  
+    EndingPath     symbolic_link  
+    Hash SHA1 8f0b68e072cd54cdae5baade2504d8e6028be678
