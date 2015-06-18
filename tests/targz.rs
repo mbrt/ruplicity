@@ -16,3 +16,17 @@ fn targz() {
         .collect();
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn single_vol_names() {
+    let file = File::open("tests/backups/single_vol/duplicity-full.20150617T182545Z.vol1.difftar.gz").unwrap();
+    let gz_decoder = GzDecoder::new(file).unwrap();
+    let mut tar = Archive::new(gz_decoder);
+    for file in tar.files_mut().unwrap() {
+        let file = match file {
+            Ok(f) => f,
+            Err(_) => { continue; },
+        };
+        println!("{:?} {:?}", file.mode(), file.filename())
+    }
+}
