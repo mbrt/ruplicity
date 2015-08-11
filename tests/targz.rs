@@ -23,10 +23,8 @@ fn single_vol_names() {
     let gz_decoder = GzDecoder::new(file).unwrap();
     let mut tar = Archive::new(gz_decoder);
     for file in tar.files_mut().unwrap() {
-        let file = match file {
-            Ok(f) => f,
-            Err(_) => { continue; },
-        };
-        println!("{:?} {:?}", file.mode(), file.filename())
+        if let Ok(f) = file {
+            println!("{:?} {:?}", f.mode(), f.filename())
+        }
     }
 }
