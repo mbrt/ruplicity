@@ -4,3 +4,17 @@
 * [tempfile library](https://www.reddit.com/r/rust/comments/32n864/tempfile_temporary_file_library/);
 * how to restore duplicity backups in the [worst case](https://wiki.gnome.org/Apps/DejaDup/Help/Restore/WorstCase);
 * [man rdiff](http://linux.die.net/man/1/rdiff).
+
+## Duplicity
+
+To restore a backup without passphrase into a directory use this command:
+
+```
+duplicity restore --no-encryption file://<absolute-path-of-backup> <path-to-restore>
+```
+
+To backup incrementally from an existing backup and a source directory:
+
+```
+duplicity incremental --no-encryption <source-dir> file://<absolute-path-of-backup>
+```
