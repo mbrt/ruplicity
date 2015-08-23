@@ -6,3 +6,4 @@ authors = ["mbrt"]
 [dependencies]
 flate2 = "0.2"
 tar = "0.2.14"
+regex = "0.1.8"
