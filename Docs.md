@@ -18,3 +18,15 @@ To backup incrementally from an existing backup and a source directory:
 ```
 duplicity incremental --no-encryption <source-dir> file://<absolute-path-of-backup>
 ```
+
+To list current files in backup:
+
+```
+duplicity list-current-files --no-encryption file://<absolute-path-of-backup>
+```
+
+To list all the backup snapshots contained in a directory:
+
+```
+duplicity collection-status --no-encryption file://<absolute-path-of-backup>
+```
