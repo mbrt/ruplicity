@@ -15,7 +15,7 @@ use regex::Regex;
 //}
 
 #[derive(Eq, PartialEq, Debug)]
-enum FileType {
+pub enum FileType {
     //FullSig,
     //NewSig,
     //Inc,
@@ -24,19 +24,19 @@ enum FileType {
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct FileName {
-    ftype : FileType,
-    manifest : bool,
-    volume_number : i32,
-    time : String,
+    pub ftype : FileType,
+    pub manifest : bool,
+    pub volume_number : i32,
+    pub time : String,
     // TODO enable those fields
     //start_time : String,
     //end_time : String,
     //compressed : bool,
     //encrypted : bool,
-    //partial : bool
+    pub partial : bool
 }
 
-struct FileNameParser {
+pub struct FileNameParser {
     full_vol_re : Regex,
     full_manifest_re : Regex
 }
@@ -61,15 +61,22 @@ impl FileNameParser {
             let time = captures.name("time").unwrap();
             // TODO: str2time
             if let Some(vol_num) = self.get_vol_num(captures.name("num").unwrap()) {
-                return Some(FileName{ ftype : FileType::Full,
-                                      manifest : false,
-                                      volume_number : vol_num,
-                                      time : time.to_owned() });
+                return Some(FileName{ftype : FileType::Full,
+                                     manifest : false,
+                                     volume_number : vol_num,
+                                     time : time.to_owned(),
+                                     partial : false});
             }
             return None;
         }
         if let Some(captures) = self.full_manifest_re.captures(filename) {
-            return None;
+            let time = captures.name("time").unwrap();
+            // TODO: str2time
+            return Some(FileName{ftype : FileType::Full,
+                                 manifest : true,
+                                 volume_number : 0,
+                                 time : time.to_owned(),
+                                 partial : captures.name("partial").is_some()});
         }
         return None;
     }
@@ -82,11 +89,17 @@ impl FileNameParser {
 
 #[cfg(test)]
 mod test {
-    use super::FileNameParser;
+    use super::*;
 
     #[test]
     fn parser_test() {
         let parser = FileNameParser::new();
         assert_eq!(parser.parse("invalid"), None);
+        assert_eq!(parser.parse("duplicity-full.20150617T182545Z.vol1.difftar.gz"),
+                   Some(FileName{ftype : FileType::Full,
+                                 manifest : false,
+                                 volume_number : 1,
+                                 time : "20150617t182545z".to_owned(),
+                                 partial : false}));
     }
 }
