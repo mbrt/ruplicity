@@ -1,18 +1,7 @@
 extern crate regex;
 
-mod collections;
-
-use collections::Collection;
-
-pub struct Backup {
-    collection : Collection
-}
-
-impl Backup {
-    pub fn new() -> Self {
-        Backup{ collection : Collection::open("") }
-    }
-}
+// TODO: Make this non public
+pub mod collections;
 
 #[cfg(test)]
 mod test {
