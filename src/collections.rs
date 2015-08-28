@@ -32,7 +32,7 @@ pub struct FileName {
     //start_time : String,
     //end_time : String,
     compressed : bool,
-    //encrypted : bool,
+    encrypted : bool,
     pub partial : bool
 }
 
@@ -52,7 +52,7 @@ impl FileName {
                  //start_time : "".to_owned(),
                  //end_time : "".to_owned(),
                  compressed : false,
-                 //encrypted : false,
+                 encrypted : false,
                  partial : false}
     }
 
@@ -81,6 +81,11 @@ impl FileName {
         self
     }
 
+    pub fn encrypted(&mut self, encrypted : bool) -> &mut Self {
+        self.encrypted = encrypted;
+        self
+    }
+
     pub fn partial(mut self, partial : bool) -> Self {
         self.partial = partial;
         self
@@ -100,7 +105,11 @@ impl FileNameParser {
 
         let lower_fname = filename.to_ascii_lowercase();
         self.check_full(&lower_fname)
-            .map(|f| f.compressed(self.is_compressed(filename)))
+            .map(|mut f| {
+                    f.compressed(self.is_compressed(lower_fname.as_ref()));
+                    f.encrypted(self.is_encrypted(lower_fname.as_ref()));
+                    f
+            })
     }
 
     fn check_full(&self, filename : &str) -> Option<FileName> {
@@ -152,7 +161,8 @@ mod test {
                                  manifest : false,
                                  volume_number : 1,
                                  time : "20150617t182545z".to_owned(),
-                                 compressed : false,
+                                 compressed : true,
+                                 encrypted: false,
                                  partial : false}));
     }
 }
