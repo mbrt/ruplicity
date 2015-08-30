@@ -7,3 +7,4 @@ authors = ["mbrt"]
 flate2 = "0.2"
 tar = "0.2.14"
 regex = "0.1.8"
+try_opt = "0.1.1"

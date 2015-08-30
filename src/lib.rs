@@ -1,5 +1,8 @@
+#[macro_use]
+extern crate try_opt;
 extern crate regex;
 
+mod macros;
 // TODO: Make this non public
 pub mod collections;
 

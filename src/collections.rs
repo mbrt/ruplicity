@@ -36,11 +36,6 @@ pub struct FileName {
     pub partial : bool
 }
 
-pub struct FileNameParser {
-    full_vol_re : Regex,
-    full_manifest_re : Regex
-}
-
 impl FileName {
     /// Builder pattern for FileName
     pub fn new() -> Self {
@@ -55,41 +50,24 @@ impl FileName {
                  encrypted : false,
                  partial : false}
     }
+}
 
-    pub fn file_type(mut self, file_type : FileType) -> Self {
-        self.file_type = file_type;
-        self
-    }
+gen_setters!(FileName,
+    file_type : FileType,
+    manifest : bool,
+    volume_number : i32,
+    time : String,
+    //start_time : String,
+    //end_time : String,
+    compressed : bool,
+    encrypted : bool,
+    partial : bool
+);
 
-    pub fn manifest(mut self, manifest : bool) -> Self {
-        self.manifest = manifest;
-        self
-    }
 
-    pub fn volume_number(mut self, volume_number : i32) -> Self {
-        self.volume_number = volume_number;
-        self
-    }
-
-    pub fn time(mut self, time : String) -> Self {
-        self.time = time;
-        self
-    }
-
-    pub fn compressed(&mut self, compressed : bool) -> &mut Self {
-        self.compressed = compressed;
-        self
-    }
-
-    pub fn encrypted(&mut self, encrypted : bool) -> &mut Self {
-        self.encrypted = encrypted;
-        self
-    }
-
-    pub fn partial(mut self, partial : bool) -> Self {
-        self.partial = partial;
-        self
-    }
+pub struct FileNameParser {
+    full_vol_re : Regex,
+    full_manifest_re : Regex
 }
 
 impl FileNameParser {
@@ -104,24 +82,24 @@ impl FileNameParser {
         use std::ascii::AsciiExt;
 
         let lower_fname = filename.to_ascii_lowercase();
-        self.check_full(&lower_fname)
-            .map(|mut f| {
-                    f.compressed(self.is_compressed(lower_fname.as_ref()));
-                    f.encrypted(self.is_encrypted(lower_fname.as_ref()));
-                    f
-            })
+        let mut opt_result = self.check_full(&lower_fname);
+        // write encrypted and compressed properties
+        // independently of which type of file is
+        if let Some(ref mut result) = opt_result {
+            result.compressed = self.is_compressed(lower_fname.as_ref());
+            result.encrypted = self.is_encrypted(lower_fname.as_ref());
+        }
+        opt_result
     }
 
     fn check_full(&self, filename : &str) -> Option<FileName> {
         if let Some(captures) = self.full_vol_re.captures(filename) {
             let time = captures.name("time").unwrap();
             // TODO: str2time
-            if let Some(vol_num) = self.get_vol_num(captures.name("num").unwrap()) {
-                return Some(FileName::new().file_type(FileType::Full)
-                            .volume_number(vol_num)
-                            .time(time.to_owned()));
-            }
-            return None;
+            let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
+            return Some(FileName::new().file_type(FileType::Full)
+                        .volume_number(vol_num)
+                        .time(time.to_owned()));
         }
         if let Some(captures) = self.full_manifest_re.captures(filename) {
             let time = captures.name("time").unwrap();
