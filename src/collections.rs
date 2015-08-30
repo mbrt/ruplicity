@@ -31,8 +31,8 @@ pub struct FileName {
     // TODO enable those fields
     //start_time : String,
     //end_time : String,
-    compressed : bool,
-    encrypted : bool,
+    pub compressed : bool,
+    pub encrypted : bool,
     pub partial : bool
 }
 
