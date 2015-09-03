@@ -18,7 +18,7 @@ use regex::Regex;
 pub enum FileType {
     //FullSig,
     //NewSig,
-    //Inc,
+    Inc,
     Full
 }
 
@@ -28,9 +28,8 @@ pub struct FileName {
     pub manifest : bool,
     pub volume_number : i32,
     pub time : String,
-    // TODO enable those fields
-    //start_time : String,
-    //end_time : String,
+    pub start_time : String,
+    pub end_time : String,
     pub compressed : bool,
     pub encrypted : bool,
     pub partial : bool
@@ -42,10 +41,9 @@ impl FileName {
         FileName{file_type : FileType::Full,
                  manifest : false,
                  volume_number : 0,
-                 time : "".to_owned(),
-                 // TODO enable those fields
-                 //start_time : "".to_owned(),
-                 //end_time : "".to_owned(),
+                 time : String::new(),
+                 start_time : String::new(),
+                 end_time : String::new(),
                  compressed : false,
                  encrypted : false,
                  partial : false}
@@ -57,8 +55,8 @@ gen_setters!(FileName,
     manifest : bool,
     volume_number : i32,
     time : String,
-    //start_time : String,
-    //end_time : String,
+    start_time : String,
+    end_time : String,
     compressed : bool,
     encrypted : bool,
     partial : bool
@@ -67,14 +65,18 @@ gen_setters!(FileName,
 
 pub struct FileNameParser {
     full_vol_re : Regex,
-    full_manifest_re : Regex
+    full_manifest_re : Regex,
+    inc_vol_re : Regex,
+    inc_manifest_re : Regex
 }
 
 impl FileNameParser {
     pub fn new() -> Self {
         FileNameParser {
             full_vol_re : Regex::new(r"^duplicity-full\.(?P<time>.*?)\.vol(?P<num>[0-9]+)\.difftar(?P<partial>(\.part))?($|\.)").unwrap(),
-            full_manifest_re : Regex::new(r"^duplicity-full\.(?P<time>.*?)\.manifest(?P<partial>(\.part))?($|\.)").unwrap()
+            full_manifest_re : Regex::new(r"^duplicity-full\.(?P<time>.*?)\.manifest(?P<partial>(\.part))?($|\.)").unwrap(),
+            inc_vol_re : Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.vol(?P<num>[0-9]+)\.difftar($|\\.)").unwrap(),
+            inc_manifest_re : Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.manifest(?P<partial>(\.part))?(\.|$)").unwrap()
         }
     }
 
@@ -82,7 +84,9 @@ impl FileNameParser {
         use std::ascii::AsciiExt;
 
         let lower_fname = filename.to_ascii_lowercase();
-        let mut opt_result = self.check_full(&lower_fname);
+        let mut opt_result = self.check_full(&lower_fname)
+            .or(self.check_inc(&lower_fname));
+
         // write encrypted and compressed properties
         // independently of which type of file is
         if let Some(ref mut result) = opt_result {
@@ -107,6 +111,30 @@ impl FileNameParser {
             return Some(FileName::new().file_type(FileType::Full)
                         .manifest(true)
                         .time(time.to_owned())
+                        .partial(captures.name("partial").is_some()));
+        }
+        return None;
+    }
+
+    fn check_inc(&self, filename : &str) -> Option<FileName> {
+        if let Some(captures) = self.inc_vol_re.captures(filename) {
+            let start_time = captures.name("start_time").unwrap();
+            let end_time = captures.name("end_time").unwrap();
+            // TODO: str2time
+            let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
+            return Some(FileName::new().file_type(FileType::Inc)
+                        .start_time(start_time.to_owned())
+                        .end_time(end_time.to_owned())
+                        .volume_number(vol_num));
+        }
+        if let Some(captures) = self.inc_manifest_re.captures(filename) {
+            let start_time = captures.name("start_time").unwrap();
+            let end_time = captures.name("end_time").unwrap();
+            // TODO: str2time
+            return Some(FileName::new().file_type(FileType::Inc)
+                        .start_time(start_time.to_owned())
+                        .end_time(end_time.to_owned())
+                        .manifest(true)
                         .partial(captures.name("partial").is_some()));
         }
         return None;
@@ -139,6 +167,8 @@ mod test {
                                  manifest : false,
                                  volume_number : 1,
                                  time : "20150617t182545z".to_owned(),
+                                 start_time : String::new(),
+                                 end_time : String::new(),
                                  compressed : true,
                                  encrypted: false,
                                  partial : false}));
