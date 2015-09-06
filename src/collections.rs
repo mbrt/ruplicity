@@ -16,8 +16,8 @@ use regex::Regex;
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum FileType {
-    //FullSig,
-    //NewSig,
+    FullSig,
+    NewSig,
     Inc,
     Full
 }
@@ -67,7 +67,9 @@ pub struct FileNameParser {
     full_vol_re : Regex,
     full_manifest_re : Regex,
     inc_vol_re : Regex,
-    inc_manifest_re : Regex
+    inc_manifest_re : Regex,
+    full_sig_re : Regex,
+    new_sig_re : Regex
 }
 
 impl FileNameParser {
@@ -75,8 +77,10 @@ impl FileNameParser {
         FileNameParser {
             full_vol_re : Regex::new(r"^duplicity-full\.(?P<time>.*?)\.vol(?P<num>[0-9]+)\.difftar(?P<partial>(\.part))?($|\.)").unwrap(),
             full_manifest_re : Regex::new(r"^duplicity-full\.(?P<time>.*?)\.manifest(?P<partial>(\.part))?($|\.)").unwrap(),
-            inc_vol_re : Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.vol(?P<num>[0-9]+)\.difftar($|\\.)").unwrap(),
-            inc_manifest_re : Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.manifest(?P<partial>(\.part))?(\.|$)").unwrap()
+            inc_vol_re : Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.vol(?P<num>[0-9]+)\.difftar($|\.)").unwrap(),
+            inc_manifest_re : Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.manifest(?P<partial>(\.part))?(\.|$)").unwrap(),
+            full_sig_re : Regex::new(r"^duplicity-full-signatures\.(?P<time>.*?)\.sigtar(?P<partial>(\.part))?(\.|$)").unwrap(),
+            new_sig_re : Regex::new(r"^duplicity-new-signatures\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.sigtar(?P<partial>(\.part))?(\.|$)").unwrap(),
         }
     }
 
@@ -85,7 +89,8 @@ impl FileNameParser {
 
         let lower_fname = filename.to_ascii_lowercase();
         let mut opt_result = self.check_full(&lower_fname)
-            .or(self.check_inc(&lower_fname));
+            .or(self.check_inc(&lower_fname))
+            .or(self.check_sig(&lower_fname));
 
         // write encrypted and compressed properties
         // independently of which type of file is
@@ -140,6 +145,26 @@ impl FileNameParser {
         return None;
     }
 
+    fn check_sig(&self, filename : &str) -> Option<FileName> {
+        if let Some(captures) = self.full_sig_re.captures(filename) {
+            let time = captures.name("time").unwrap();
+            // TODO: str2time
+            return Some(FileName::new().file_type(FileType::FullSig)
+                        .time(time.to_owned())
+                        .partial(captures.name("partial").is_some()));
+        }
+        if let Some(captures) = self.new_sig_re.captures(filename) {
+            let start_time = captures.name("start_time").unwrap();
+            let end_time = captures.name("end_time").unwrap();
+            // TODO: str2time
+            return Some(FileName::new().file_type(FileType::NewSig)
+                        .start_time(start_time.to_owned())
+                        .end_time(end_time.to_owned())
+                        .partial(captures.name("partial").is_some()));
+        }
+        return None;
+    }
+
     fn get_vol_num(&self, s : &str) -> Option<i32> {
         s.parse::<i32>().ok()
     }
@@ -161,11 +186,66 @@ mod test {
     #[test]
     fn parser_test() {
         let parser = FileNameParser::new();
+        // invalid
         assert_eq!(parser.parse("invalid"), None);
+        // full
         assert_eq!(parser.parse("duplicity-full.20150617T182545Z.vol1.difftar.gz"),
                    Some(FileName{file_type : FileType::Full,
                                  manifest : false,
                                  volume_number : 1,
+                                 time : "20150617t182545z".to_owned(),
+                                 start_time : String::new(),
+                                 end_time : String::new(),
+                                 compressed : true,
+                                 encrypted: false,
+                                 partial : false}));
+        assert_eq!(parser.parse("duplicity-full.20150617T182545Z.manifest"),
+                   Some(FileName{file_type : FileType::Full,
+                                 manifest : true,
+                                 volume_number : 0,
+                                 time : "20150617t182545z".to_owned(),
+                                 start_time : String::new(),
+                                 end_time : String::new(),
+                                 compressed : false,
+                                 encrypted: false,
+                                 partial : false}));
+        // inc
+        assert_eq!(parser.parse("duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz"),
+                   Some(FileName{file_type : FileType::Inc,
+                                 manifest : false,
+                                 volume_number : 1,
+                                 time : String::new(),
+                                 start_time : "20150617t182629z".to_owned(),
+                                 end_time : "20150617t182650z".to_owned(),
+                                 compressed : true,
+                                 encrypted: false,
+                                 partial : false}));
+        assert_eq!(parser.parse("duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest"),
+                   Some(FileName{file_type : FileType::Inc,
+                                 manifest : true,
+                                 volume_number : 0,
+                                 time : String::new(),
+                                 start_time : "20150617t182545z".to_owned(),
+                                 end_time : "20150617t182629z".to_owned(),
+                                 compressed : false,
+                                 encrypted: false,
+                                 partial : false}));
+        // new sig
+        assert_eq!(parser.parse("duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz"),
+                   Some(FileName{file_type : FileType::NewSig,
+                                 manifest : false,
+                                 volume_number : 0,
+                                 time : String::new(),
+                                 start_time : "20150617t182545z".to_owned(),
+                                 end_time : "20150617t182629z".to_owned(),
+                                 compressed : true,
+                                 encrypted: false,
+                                 partial : false}));
+        // full sig
+        assert_eq!(parser.parse("duplicity-full-signatures.20150617T182545Z.sigtar.gz"),
+                   Some(FileName{file_type : FileType::FullSig,
+                                 manifest : false,
+                                 volume_number : 0,
                                  time : "20150617t182545z".to_owned(),
                                  start_time : String::new(),
                                  end_time : String::new(),
