@@ -1,18 +1,5 @@
 use regex::Regex;
 
-//pub struct Collection {
-//    pub backup_chain : Vec<BackupSet>
-//}
-//
-//pub struct BackupSet {
-//    files : Vec<FileName>
-//}
-//
-//impl Collection {
-//    pub fn open(path : &str) -> Self {
-//        Collection{ backup_chain : Vec::new() }
-//    }
-//}
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum FileType {
