@@ -1,7 +1,7 @@
 use regex::Regex;
 
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub enum FileType {
     FullSig,
     NewSig,
