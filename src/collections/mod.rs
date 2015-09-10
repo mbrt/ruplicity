@@ -81,3 +81,11 @@ impl BackupSet {
         self.info_set = true;
     }
 }
+
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn it_works() {
+    }
+}
