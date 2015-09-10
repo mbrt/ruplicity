@@ -10,9 +10,7 @@ rust:
   - nightly
 
 script:
-  - |
-      travis-cargo build &&
-      travis-cargo test
+  - cargo test
 
 after_success:
   - travis-cargo coveralls
