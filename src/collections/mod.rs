@@ -13,7 +13,7 @@ pub struct BackupSet {
     pub compressed : bool,
     pub encrypted : bool,
     pub partial : bool,
-    manifest_path : String,
+    pub manifest_path : String,
     volumes_paths : HashMap<i32, String>,
     info_set : bool,    // true if informations are set
 }
@@ -85,7 +85,33 @@ impl BackupSet {
 
 #[cfg(test)]
 mod test {
+    use super::BackupSet;
+    use super::file_naming::{FileType, FileNameParser};
+
     #[test]
-    fn it_works() {
+    fn parse_and_add() {
+        let full1_name = "duplicity-full.20150617T182545Z.vol1.difftar.gz";
+        let manifest1_name = "duplicity-full.20150617T182545Z.manifest";
+        let inc1_name = "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz";
+
+        let parser = FileNameParser::new();
+        let full1 = parser.parse(full1_name).unwrap();
+        let manifest1 = parser.parse(manifest1_name).unwrap();
+        let inc1 = parser.parse(inc1_name).unwrap();
+
+        let mut set = BackupSet::new();
+        // add to set
+        assert!(set.add_filename(full1_name, &full1));
+        assert!(set.add_filename(manifest1_name, &manifest1));
+        assert!(!set.add_filename(inc1_name, &inc1));
+        // test results
+        assert_eq!(set.file_type, FileType::Full);
+        assert_eq!(set.time, "20150617t182545z");
+        assert_eq!(set.start_time, "");
+        assert_eq!(set.end_time, "");
+        assert!(set.compressed);
+        assert!(!set.encrypted);
+        assert!(!set.partial);
+        assert_eq!(set.manifest_path, manifest1_name);
     }
 }

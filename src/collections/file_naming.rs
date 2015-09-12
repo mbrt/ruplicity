@@ -25,15 +25,16 @@ pub struct FileName {
 impl FileName {
     /// Builder pattern for FileName
     pub fn new() -> Self {
-        FileName{file_type : FileType::Full,
-                 manifest : false,
-                 volume_number : 0,
-                 time : String::new(),
-                 start_time : String::new(),
-                 end_time : String::new(),
-                 compressed : false,
-                 encrypted : false,
-                 partial : false}
+        FileName{
+            file_type : FileType::Full,
+            manifest : false,
+            volume_number : 0,
+            time : String::new(),
+            start_time : String::new(),
+            end_time : String::new(),
+            compressed : false,
+            encrypted : false,
+            partial : false}
     }
 }
 
