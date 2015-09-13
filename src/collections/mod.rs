@@ -153,6 +153,7 @@ impl CollectionsStatus {
     pub fn compute_backup_chains(&mut self, filename_list : &FileNameList) {
         let mut sets = self.compute_backup_sets(filename_list);
         self.sort_backup_sets(&mut sets);
+        self.add_to_chains(sets);
     }
 
     fn compute_backup_sets(&self, filename_list : &FileNameList) -> BackupSetList {
@@ -181,9 +182,28 @@ impl CollectionsStatus {
         set_list.sort_by(|a, b| a.get_time().cmp(b.get_time()));
     }
 
-    fn add_to_chains(&self, set_list : &BackupSetList) {
-        let chains = BackupChains::new();
-        for set in set_list.iter() {
+    fn add_to_chains(&self, set_list : BackupSetList) {
+        let mut chains = BackupChains::new();
+        for set in set_list.into_iter() {
+            match set.file_type {
+                FileType::Full => {
+                    let new_chain = BackupChain::new(set);
+                    chains.push(new_chain);
+                }
+                FileType::Inc => {
+                    let mut rejected_set = Some(set);
+                    for chain in chains.iter_mut() {
+                        rejected_set = chain.add_inc(rejected_set.unwrap());
+                        if rejected_set.is_none() {
+                            break;
+                        }
+                    }
+                    if let Some(_) = rejected_set {
+                        // TODO: add to orphaned sets
+                    }
+                }
+                _ => { continue; }
+            }
         }
     }
 }
