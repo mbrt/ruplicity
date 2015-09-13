@@ -2,7 +2,7 @@
 pub mod file_naming;
 
 use std::collections::HashMap;
-use self::file_naming::{FileName, FileType};
+use self::file_naming::{FileName, FileType, FileNameParser};
 
 
 pub struct BackupSet {
@@ -42,7 +42,6 @@ impl BackupSet {
     pub fn add_filename(&mut self, fname : &str, pr : &FileName) -> bool {
         if !self.info_set {
             self.set_info(pr);
-            true
         }
         else {
             // check if the file is from the same backup set
@@ -50,7 +49,7 @@ impl BackupSet {
                 self.time != pr.time ||
                 self.start_time != pr.start_time ||
                 self.end_time != pr.end_time {
-                    false
+                    return false;
             }
             else {
                 // fix encrypted flag
@@ -58,15 +57,28 @@ impl BackupSet {
                     self.partial && pr.encrypted {
                         self.encrypted = pr.encrypted;
                     }
-                // set manifest or volume number
-                if pr.manifest {
-                    self.manifest_path = fname.to_owned();
-                }
-                else {
-                    self.volumes_paths.insert(pr.volume_number, fname.to_owned());
-                }
-                true
             }
+        }
+        // set manifest or volume number
+        if pr.manifest {
+            self.manifest_path = fname.to_owned();
+        }
+        else {
+            self.volumes_paths.insert(pr.volume_number, fname.to_owned());
+        }
+        true
+    }
+
+    pub fn is_complete(&self) -> bool {
+        !self.manifest_path.is_empty()
+    }
+
+    pub fn get_time(&self) -> &str {
+        if self.time.is_empty() {
+            self.end_time.as_ref()
+        }
+        else {
+            self.time.as_ref()
         }
     }
 
@@ -79,6 +91,100 @@ impl BackupSet {
         self.encrypted = fname.encrypted;
         self.partial = fname.partial;
         self.info_set = true;
+    }
+}
+
+
+pub struct BackupChain {
+    fullset : BackupSet,
+    incset_list : Vec<BackupSet>,
+    start_time : String,
+    end_time : String
+}
+
+impl BackupChain {
+    /// Create a new BackupChain starting from a full backup set.
+    pub fn new(fullset : BackupSet) -> Self {
+        assert_eq!(fullset.file_type, FileType::Full);
+        let time = fullset.time.clone();
+
+        BackupChain{
+            fullset : fullset,
+            incset_list : Vec::new(),
+            start_time : time.clone(),
+            end_time : time
+        }
+    }
+
+    /// Adds the given incremental backkup element to the backup chain if possible,
+    /// returns it back otherwise.
+    pub fn add_inc(&mut self, incset : BackupSet) -> Option<BackupSet> {
+        if self.end_time == incset.start_time {
+            self.end_time = incset.time.clone();
+            self.incset_list.push(incset);
+            None
+        }
+        else {
+            // replace the last element if the end time comes before
+            let replace_last = self.incset_list.last().map_or(false,
+                |last| incset.start_time == last.start_time && incset.end_time > last.end_time);
+            if replace_last {
+                self.end_time = incset.time.clone();
+                self.incset_list.pop();
+                self.incset_list.push(incset);
+                None
+            }
+            else {
+                // ignore the given incremental backup set
+                Some(incset)
+            }
+        }
+    }
+}
+
+
+pub type FileNameList = Vec<String>;
+type BackupSetList = Vec<BackupSet>;
+type BackupChains = Vec<BackupChain>;
+
+pub struct CollectionsStatus;
+
+impl CollectionsStatus {
+    pub fn compute_backup_chains(&mut self, filename_list : &FileNameList) {
+        let mut sets = self.compute_backup_sets(filename_list);
+        self.sort_backup_sets(&mut sets);
+    }
+
+    fn compute_backup_sets(&self, filename_list : &FileNameList) -> BackupSetList {
+        let mut sets = BackupSetList::new();
+        let parser = FileNameParser::new();
+        for filename in filename_list.iter() {
+            if let Some(filename_info) = parser.parse(filename.as_ref()) {
+                let mut inserted = false;
+                for set in sets.iter_mut() {
+                    if set.add_filename(filename.as_ref(), &filename_info) {
+                        inserted = true;
+                        break;
+                    }
+                }
+                if !inserted {
+                    let mut new_set = BackupSet::new();
+                    new_set.add_filename(filename.as_ref(), &filename_info);
+                    sets.push(new_set);
+                }
+            }
+        }
+        sets
+    }
+
+    fn sort_backup_sets(&self, set_list : &mut BackupSetList) {
+        set_list.sort_by(|a, b| a.get_time().cmp(b.get_time()));
+    }
+
+    fn add_to_chains(&self, set_list : &BackupSetList) {
+        let chains = BackupChain::new();
+        for set in set_list.iter() {
+        }
     }
 }
 
