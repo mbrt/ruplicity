@@ -182,7 +182,7 @@ impl CollectionsStatus {
     }
 
     fn add_to_chains(&self, set_list : &BackupSetList) {
-        let chains = BackupChain::new();
+        let chains = BackupChains::new();
         for set in set_list.iter() {
         }
     }
