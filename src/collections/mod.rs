@@ -188,6 +188,42 @@ impl Display for BackupChain {
 }
 
 
+pub struct SignatureChain {
+    pub fullsig : String,
+    pub inclist : Vec<String>,
+    pub start_time : String,
+    pub end_time : String
+}
+
+impl SignatureChain {
+    pub fn new() -> Self {
+        SignatureChain {
+            fullsig : String::new(),
+            inclist : Vec::new(),
+            start_time : String::new(),
+            end_time : String::new()
+        }
+    }
+
+    pub fn add_filename(&mut self, fname : &str, pr : &FileName) -> bool {
+        match pr.file_type {
+            FileType::FullSig if self.fullsig.is_empty() => {
+                self.fullsig = fname.to_owned();
+                self.start_time = pr.start_time.clone();
+                self.end_time = pr.end_time.clone();
+                true
+            },
+            FileType::NewSig if !self.fullsig.is_empty() => {
+                self.inclist.push(fname.to_owned());
+                self.end_time = pr.end_time.clone();
+                true
+            }
+            _ => false
+        }
+    }
+}
+
+
 pub type FileNameList<'a> = Vec<&'a str>;
 pub type BackupChains = Vec<BackupChain>;
 type BackupSetList = Vec<BackupSet>;
