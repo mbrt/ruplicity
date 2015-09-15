@@ -150,7 +150,7 @@ impl BackupChain {
         }
     }
 
-    /// Adds the given incremental backkup element to the backup chain if possible,
+    /// Adds the given incremental backup element to the backup chain if possible,
     /// returns it back otherwise.
     pub fn add_inc(&mut self, incset : BackupSet) -> Option<BackupSet> {
         if self.end_time == incset.start_time {
@@ -188,7 +188,7 @@ impl Display for BackupChain {
 }
 
 
-pub type FileNameList = Vec<String>;
+pub type FileNameList<'a> = Vec<&'a str>;
 pub type BackupChains = Vec<BackupChain>;
 type BackupSetList = Vec<BackupSet>;
 
@@ -221,7 +221,7 @@ impl CollectionsStatus {
         let mut sets = BackupSetList::new();
         let parser = FileNameParser::new();
         for filename in filename_list.iter() {
-            if let Some(filename_info) = parser.parse(filename.as_ref()) {
+            if let Some(filename_info) = parser.parse(filename) {
                 let mut inserted = false;
                 for set in sets.iter_mut() {
                     if set.add_filename(filename.as_ref(), &filename_info) {
@@ -317,15 +317,15 @@ mod test {
     #[test]
     fn collection_status() {
         let filename_list = vec![
-            "duplicity-full.20150617T182545Z.manifest".to_owned(),
-            "duplicity-full.20150617T182545Z.vol1.difftar.gz".to_owned(),
-            "duplicity-full-signatures.20150617T182545Z.sigtar.gz".to_owned(),
-            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest".to_owned(),
-            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz".to_owned(),
-            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest".to_owned(),
-            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz".to_owned(),
-            "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz".to_owned(),
-            "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz".to_owned()
+            "duplicity-full.20150617T182545Z.manifest",
+            "duplicity-full.20150617T182545Z.vol1.difftar.gz",
+            "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
+            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest",
+            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz",
+            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest",
+            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz",
+            "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz",
+            "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz"
         ];
         let collection_status = CollectionsStatus::from_filename_list(&filename_list);
         println!("collection: {}", collection_status);
