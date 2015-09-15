@@ -147,13 +147,23 @@ pub type FileNameList = Vec<String>;
 type BackupSetList = Vec<BackupSet>;
 type BackupChains = Vec<BackupChain>;
 
-pub struct CollectionsStatus;
+pub struct CollectionsStatus {
+    backup_chains : BackupChains,
+}
 
 impl CollectionsStatus {
+    pub fn new() -> Self {
+        CollectionsStatus {
+            backup_chains : Vec::new()
+        }
+    }
+
     pub fn compute_backup_chains(&mut self, filename_list : &FileNameList) {
         let mut sets = self.compute_backup_sets(filename_list);
         self.sort_backup_sets(&mut sets);
-        self.add_to_chains(sets);
+        let mut chains = self.add_to_chains(sets);
+        self.get_sorted_chains(&mut chains);
+        self.backup_chains = chains;
     }
 
     fn compute_backup_sets(&self, filename_list : &FileNameList) -> BackupSetList {
@@ -182,7 +192,7 @@ impl CollectionsStatus {
         set_list.sort_by(|a, b| a.get_time().cmp(b.get_time()));
     }
 
-    fn add_to_chains(&self, set_list : BackupSetList) {
+    fn add_to_chains(&self, set_list : BackupSetList) -> BackupChains {
         let mut chains = BackupChains::new();
         for set in set_list.into_iter() {
             match set.file_type {
@@ -205,6 +215,11 @@ impl CollectionsStatus {
                 _ => { continue; }
             }
         }
+        chains
+    }
+
+    fn get_sorted_chains(&self, chains : &mut BackupChains) {
+        chains.sort_by(|a, b| a.end_time.cmp(&b.end_time));
     }
 }
 
