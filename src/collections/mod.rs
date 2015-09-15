@@ -196,29 +196,26 @@ pub struct SignatureChain {
 }
 
 impl SignatureChain {
-    pub fn new() -> Self {
+    /// Create a new SignatureChain starting from a full signature.
+    pub fn new(fname : &str, pr : &FileName) -> Self {
         SignatureChain {
-            fullsig : String::new(),
+            fullsig : fname.to_owned(),
             inclist : Vec::new(),
-            start_time : String::new(),
-            end_time : String::new()
+            start_time : pr.time.clone(),
+            end_time : pr.time.clone()
         }
     }
 
-    pub fn add_filename(&mut self, fname : &str, pr : &FileName) -> bool {
-        match pr.file_type {
-            FileType::FullSig if self.fullsig.is_empty() => {
-                self.fullsig = fname.to_owned();
-                self.start_time = pr.start_time.clone();
-                self.end_time = pr.end_time.clone();
-                true
-            },
-            FileType::NewSig if !self.fullsig.is_empty() => {
-                self.inclist.push(fname.to_owned());
-                self.end_time = pr.end_time.clone();
-                true
-            }
-            _ => false
+    /// Adds the given incremental signature to the signature chain if possible,
+    /// returns false otherwise.
+    pub fn add_new_sig(&mut self, fname : &str, pr : &FileName) -> bool {
+        if pr.file_type != FileType::NewSig {
+            false
+        }
+        else {
+            self.inclist.push(fname.to_owned());
+            self.end_time = pr.end_time.clone();
+            true
         }
     }
 }
@@ -226,17 +223,20 @@ impl SignatureChain {
 
 pub type FileNameList<'a> = Vec<&'a str>;
 pub type BackupChains = Vec<BackupChain>;
+pub type SignatureChains = Vec<SignatureChain>;
 type BackupSetList = Vec<BackupSet>;
 
 
 pub struct CollectionsStatus {
     pub backup_chains : BackupChains,
+    pub sig_chains : SignatureChains
 }
 
 impl CollectionsStatus {
     pub fn new() -> Self {
         CollectionsStatus {
-            backup_chains : Vec::new()
+            backup_chains : Vec::new(),
+            sig_chains : Vec::new()
         }
     }
 
@@ -249,7 +249,7 @@ impl CollectionsStatus {
     fn compute_backup_chains(&mut self, filename_list : &FileNameList) {
         let mut sets = self.compute_backup_sets(filename_list);
         self.sort_backup_sets(&mut sets);
-        self.add_to_chains(sets);
+        self.add_to_backup_chains(sets);
         self.sort_chains();
     }
 
@@ -279,7 +279,7 @@ impl CollectionsStatus {
         set_list.sort_by(|a, b| a.get_time().cmp(b.get_time()));
     }
 
-    fn add_to_chains(&mut self, set_list : BackupSetList) {
+    fn add_to_backup_chains(&mut self, set_list : BackupSetList) {
         for set in set_list.into_iter() {
             match set.file_type {
                 FileType::Full => {
