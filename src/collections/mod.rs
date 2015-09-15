@@ -2,6 +2,7 @@
 pub mod file_naming;
 
 use std::collections::HashMap;
+use std::fmt::{Display, Error, Formatter};
 use self::file_naming::{FileName, FileType, FileNameParser};
 
 
@@ -94,12 +95,45 @@ impl BackupSet {
     }
 }
 
+impl Display for BackupSet {
+    fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
+        match self.file_type {
+            FileType::Full => {
+                try!(write!(f, "Full, time: {}", self.time));
+            },
+            FileType::Inc => {
+                try!(write!(f, "Incremental, start time: {}, end time: {}", self.start_time, self.end_time));
+            },
+            _ => { }
+        }
+        if self.compressed {
+            try!(write!(f, ", compressed"));
+        }
+        if self.encrypted {
+            try!(write!(f, ", encrypted"));
+        }
+        if self.partial {
+            try!(write!(f, ", partial"));
+        }
+        if !self.manifest_path.is_empty() {
+            try!(write!(f, "\n manifest: {}", self.manifest_path));
+        }
+        if !self.volumes_paths.is_empty() {
+            try!(write!(f, "\n volumes:\n"));
+            for (_, vol) in self.volumes_paths.iter() {
+                try!(write!(f, " {}", vol));
+            }
+        }
+        Ok(())
+    }
+}
+
 
 pub struct BackupChain {
-    fullset : BackupSet,
-    incset_list : Vec<BackupSet>,
-    start_time : String,
-    end_time : String
+    pub fullset : BackupSet,
+    pub incset_list : Vec<BackupSet>,
+    pub start_time : String,
+    pub end_time : String
 }
 
 impl BackupChain {
@@ -120,7 +154,7 @@ impl BackupChain {
     /// returns it back otherwise.
     pub fn add_inc(&mut self, incset : BackupSet) -> Option<BackupSet> {
         if self.end_time == incset.start_time {
-            self.end_time = incset.time.clone();
+            self.end_time = incset.end_time.clone();
             self.incset_list.push(incset);
             None
         }
@@ -129,7 +163,7 @@ impl BackupChain {
             let replace_last = self.incset_list.last().map_or(false,
                 |last| incset.start_time == last.start_time && incset.end_time > last.end_time);
             if replace_last {
-                self.end_time = incset.time.clone();
+                self.end_time = incset.end_time.clone();
                 self.incset_list.pop();
                 self.incset_list.push(incset);
                 None
@@ -139,6 +173,17 @@ impl BackupChain {
                 Some(incset)
             }
         }
+    }
+}
+
+impl Display for BackupChain {
+    fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
+        try!(write!(f, "start time: {}, end time: {}\n{}",
+                    &self.start_time, &self.end_time, &self.fullset));
+        for inc in self.incset_list.iter() {
+            try!(write!(f, "\n{}", inc));
+        }
+        Ok(())
     }
 }
 
@@ -227,10 +272,19 @@ impl CollectionsStatus {
     }
 }
 
+impl Display for CollectionsStatus {
+    fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
+        for backup_chain in &self.backup_chains {
+            try!(backup_chain.fmt(f));
+        }
+        Ok(())
+    }
+}
+
 
 #[cfg(test)]
 mod test {
-    use super::BackupSet;
+    use super::{BackupSet, CollectionsStatus};
     use super::file_naming::{FileType, FileNameParser};
 
     #[test]
@@ -258,5 +312,22 @@ mod test {
         assert!(!set.encrypted);
         assert!(!set.partial);
         assert_eq!(set.manifest_path, manifest1_name);
+    }
+
+    #[test]
+    fn collection_status() {
+        let filename_list = vec![
+            "duplicity-full.20150617T182545Z.manifest".to_owned(),
+            "duplicity-full.20150617T182545Z.vol1.difftar.gz".to_owned(),
+            "duplicity-full-signatures.20150617T182545Z.sigtar.gz".to_owned(),
+            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest".to_owned(),
+            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz".to_owned(),
+            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest".to_owned(),
+            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz".to_owned(),
+            "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz".to_owned(),
+            "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz".to_owned()
+        ];
+        let collection_status = CollectionsStatus::from_filename_list(&filename_list);
+        println!("collection: {}", collection_status);
     }
 }
