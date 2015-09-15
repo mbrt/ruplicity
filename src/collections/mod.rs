@@ -144,11 +144,12 @@ impl BackupChain {
 
 
 pub type FileNameList = Vec<String>;
+pub type BackupChains = Vec<BackupChain>;
 type BackupSetList = Vec<BackupSet>;
-type BackupChains = Vec<BackupChain>;
+
 
 pub struct CollectionsStatus {
-    backup_chains : BackupChains,
+    pub backup_chains : BackupChains,
 }
 
 impl CollectionsStatus {
@@ -158,12 +159,17 @@ impl CollectionsStatus {
         }
     }
 
-    pub fn compute_backup_chains(&mut self, filename_list : &FileNameList) {
+    pub fn from_filename_list(filename_list : &FileNameList) -> Self {
+        let mut result = Self::new();
+        result.compute_backup_chains(filename_list);
+        result
+    }
+
+    fn compute_backup_chains(&mut self, filename_list : &FileNameList) {
         let mut sets = self.compute_backup_sets(filename_list);
         self.sort_backup_sets(&mut sets);
-        let mut chains = self.add_to_chains(sets);
-        self.get_sorted_chains(&mut chains);
-        self.backup_chains = chains;
+        self.add_to_chains(sets);
+        self.sort_chains();
     }
 
     fn compute_backup_sets(&self, filename_list : &FileNameList) -> BackupSetList {
@@ -192,17 +198,16 @@ impl CollectionsStatus {
         set_list.sort_by(|a, b| a.get_time().cmp(b.get_time()));
     }
 
-    fn add_to_chains(&self, set_list : BackupSetList) -> BackupChains {
-        let mut chains = BackupChains::new();
+    fn add_to_chains(&mut self, set_list : BackupSetList) {
         for set in set_list.into_iter() {
             match set.file_type {
                 FileType::Full => {
                     let new_chain = BackupChain::new(set);
-                    chains.push(new_chain);
+                    self.backup_chains.push(new_chain);
                 }
                 FileType::Inc => {
                     let mut rejected_set = Some(set);
-                    for chain in chains.iter_mut() {
+                    for chain in self.backup_chains.iter_mut() {
                         rejected_set = chain.add_inc(rejected_set.unwrap());
                         if rejected_set.is_none() {
                             break;
@@ -215,11 +220,10 @@ impl CollectionsStatus {
                 _ => { continue; }
             }
         }
-        chains
     }
 
-    fn get_sorted_chains(&self, chains : &mut BackupChains) {
-        chains.sort_by(|a, b| a.end_time.cmp(&b.end_time));
+    fn sort_chains(&mut self) {
+        self.backup_chains.sort_by(|a, b| a.end_time.cmp(&b.end_time));
     }
 }
 
