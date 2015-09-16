@@ -51,6 +51,21 @@ gen_setters!(FileName,
 );
 
 
+pub struct FileNameInfo<'a> {
+    pub file_name : &'a str,
+    pub info : FileName
+}
+
+impl<'a> FileNameInfo<'a> {
+    pub fn new(name : &'a str, info : FileName) -> Self {
+        FileNameInfo {
+            file_name : &name,
+            info : info
+        }
+    }
+}
+
+
 pub struct FileNameParser {
     full_vol_re : Regex,
     full_manifest_re : Regex,
