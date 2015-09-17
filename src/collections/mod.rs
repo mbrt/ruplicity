@@ -360,7 +360,7 @@ impl Display for CollectionsStatus {
 #[cfg(test)]
 mod test {
     use super::{BackupSet, CollectionsStatus};
-    use super::file_naming::{FileType, FileNameParser};
+    use super::file_naming::{FileType, FileNameInfo, FileNameParser};
 
     #[test]
     fn parse_and_add() {
@@ -369,15 +369,15 @@ mod test {
         let inc1_name = "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz";
 
         let parser = FileNameParser::new();
-        let full1 = parser.parse(full1_name).unwrap();
-        let manifest1 = parser.parse(manifest1_name).unwrap();
-        let inc1 = parser.parse(inc1_name).unwrap();
+        let full1 = FileNameInfo::new(full1_name, parser.parse(full1_name).unwrap());
+        let manifest1 = FileNameInfo::new(manifest1_name, parser.parse(manifest1_name).unwrap());
+        let inc1 = FileNameInfo::new(inc1_name, parser.parse(inc1_name).unwrap());
 
         let mut set = BackupSet::new();
         // add to set
-        assert!(set.add_filename(full1_name, &full1));
-        assert!(set.add_filename(manifest1_name, &manifest1));
-        assert!(!set.add_filename(inc1_name, &inc1));
+        assert!(set.add_filename(&full1));
+        assert!(set.add_filename(&manifest1));
+        assert!(!set.add_filename(&inc1));
         // test results
         assert_eq!(set.file_type, FileType::Full);
         assert_eq!(set.time, "20150617t182545z");
