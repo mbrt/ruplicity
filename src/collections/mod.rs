@@ -227,6 +227,17 @@ impl SignatureChain {
     }
 }
 
+impl Display for SignatureChain {
+    fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
+        try!(write!(f, "start time: {}, end time: {}\n{}",
+                    &self.start_time, &self.end_time, &self.fullsig));
+        for inc in self.inclist.iter() {
+            try!(write!(f, "\n{}", inc));
+        }
+        Ok(())
+    }
+}
+
 
 pub type FileNameList<'a> = Vec<&'a str>;
 pub type BackupChains = Vec<BackupChain>;
@@ -351,6 +362,10 @@ impl Display for CollectionsStatus {
     fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
         for backup_chain in &self.backup_chains {
             try!(backup_chain.fmt(f));
+        }
+        try!(write!(f, "\nsignature chains:\n"));
+        for signature_chain in &self.sig_chains {
+            try!(signature_chain.fmt(f));
         }
         Ok(())
     }
