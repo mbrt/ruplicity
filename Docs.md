@@ -30,3 +30,26 @@ To list all the backup snapshots contained in a directory:
 ```
 duplicity collection-status --no-encryption file://<absolute-path-of-backup>
 ```
+
+## Duplicity file format
+
+### Filenames
+
+File extensions are used to determine if the file is compressed or encrypted:
+
+* `.gz` is a compressed file;
+* `.gpg` is an encrypted file.
+
+File names are used to define the type, the time, the volume and the relationships between snapshots. Those files must obey certain regular expressions to be considered part of a duplicity backup.
+
+
+### Signatures
+
+A signature file is a tar file (compressed and/or encrypted) with a defined structure.
+Every file in the tar is in one of the following folders:
+
+* `signature`;
+* `snapshot`;
+* `deleted`.
+
+Any other folder is ignored.
