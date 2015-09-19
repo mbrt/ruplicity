@@ -53,3 +53,13 @@ Every file in the tar is in one of the following folders:
 * `deleted`.
 
 Any other folder is ignored.
+
+To determine which files belongs to a given snapshot, consider and sort the signature files up to the desired date. The algorithm works as follows:
+
+1. open the tar files of all the signature files, and iterate over their first file (they are alphabetically ordered);
+2. sort the resulting filenames by name and number of signature file; in this way, when the filenames are the same, the last signature file wins;
+3. yield the top element of this list;
+4. advance the iterators on the signature files; if a signature files comes to an end, remove it;
+5. collect the resulting filenames;
+6. go to point 2 if there are still filenames to consider.
+
