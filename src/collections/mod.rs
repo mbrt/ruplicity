@@ -1,16 +1,19 @@
 // TODO: Make this non public
 pub mod file_naming;
 
+use time_utils;
+use time_utils::to_pretty_utc;
 use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
+use time::Timespec;
 use self::file_naming::{FileName, FileNameInfo, FileType, FileNameParser};
 
 
 pub struct BackupSet {
     pub file_type : FileType,
-    pub time : String,
-    pub start_time : String,
-    pub end_time : String,
+    pub time : Timespec,
+    pub start_time : Timespec,
+    pub end_time : Timespec,
     pub compressed : bool,
     pub encrypted : bool,
     pub partial : bool,
@@ -23,9 +26,9 @@ impl BackupSet {
     pub fn new() -> Self {
         BackupSet{
             file_type : FileType::Full,
-            time : String::new(),
-            start_time : String::new(),
-            end_time : String::new(),
+            time : time_utils::DEFAULT_TIMESPEC,
+            start_time : time_utils::DEFAULT_TIMESPEC,
+            end_time : time_utils::DEFAULT_TIMESPEC,
             compressed : false,
             encrypted : false,
             partial : false,
@@ -77,12 +80,12 @@ impl BackupSet {
         !self.manifest_path.is_empty()
     }
 
-    pub fn get_time(&self) -> &str {
-        if self.time.is_empty() {
-            self.end_time.as_ref()
+    pub fn get_time(&self) -> &Timespec {
+        if self.time == time_utils::DEFAULT_TIMESPEC {
+            &self.end_time
         }
         else {
-            self.time.as_ref()
+            &self.time
         }
     }
 
@@ -102,10 +105,12 @@ impl Display for BackupSet {
     fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
         match self.file_type {
             FileType::Full => {
-                try!(write!(f, "Full, time: {}", self.time));
+                try!(write!(f, "Full, time: {}", to_pretty_utc(self.time)));
             },
             FileType::Inc => {
-                try!(write!(f, "Incremental, start time: {}, end time: {}", self.start_time, self.end_time));
+                try!(write!(f, "Incremental, start time: {}, end time: {}",
+                            to_pretty_utc(self.start_time),
+                            to_pretty_utc(self.end_time)));
             },
             _ => { }
         }
@@ -135,8 +140,8 @@ impl Display for BackupSet {
 pub struct BackupChain {
     pub fullset : BackupSet,
     pub incset_list : Vec<BackupSet>,
-    pub start_time : String,
-    pub end_time : String
+    pub start_time : Timespec,
+    pub end_time : Timespec
 }
 
 impl BackupChain {
@@ -148,7 +153,7 @@ impl BackupChain {
         BackupChain{
             fullset : fullset,
             incset_list : Vec::new(),
-            start_time : time.clone(),
+            start_time : time,
             end_time : time
         }
     }
@@ -182,7 +187,9 @@ impl BackupChain {
 impl Display for BackupChain {
     fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
         try!(write!(f, "start time: {}, end time: {}\n{}",
-                    &self.start_time, &self.end_time, &self.fullset));
+                    to_pretty_utc(self.start_time),
+                    to_pretty_utc(self.end_time),
+                    &self.fullset));
         for inc in self.incset_list.iter() {
             try!(write!(f, "\n{}", inc));
         }
@@ -194,8 +201,8 @@ impl Display for BackupChain {
 pub struct SignatureChain {
     pub fullsig : String,
     pub inclist : Vec<String>,
-    pub start_time : String,
-    pub end_time : String
+    pub start_time : Timespec,
+    pub end_time : Timespec
 }
 
 impl SignatureChain {
@@ -204,8 +211,8 @@ impl SignatureChain {
         SignatureChain {
             fullsig : fname.to_owned(),
             inclist : Vec::new(),
-            start_time : pr.time.clone(),
-            end_time : pr.time.clone()
+            start_time : pr.time,
+            end_time : pr.time
         }
     }
 
@@ -230,7 +237,9 @@ impl SignatureChain {
 impl Display for SignatureChain {
     fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
         try!(write!(f, "start time: {}, end time: {}\n{}",
-                    &self.start_time, &self.end_time, &self.fullsig));
+                    to_pretty_utc(self.start_time),
+                    to_pretty_utc(self.end_time),
+                    &self.fullsig));
         for inc in self.inclist.iter() {
             try!(write!(f, "\n{}", inc));
         }
@@ -376,6 +385,7 @@ impl Display for CollectionsStatus {
 mod test {
     use super::{BackupSet, CollectionsStatus};
     use super::file_naming::{FileType, FileNameInfo, FileNameParser};
+    use time_utils::{DEFAULT_TIMESPEC, parse_time_str};
 
     #[test]
     fn parse_and_add() {
@@ -395,9 +405,9 @@ mod test {
         assert!(!set.add_filename(&inc1));
         // test results
         assert_eq!(set.file_type, FileType::Full);
-        assert_eq!(set.time, "20150617t182545z");
-        assert_eq!(set.start_time, "");
-        assert_eq!(set.end_time, "");
+        assert_eq!(set.time, parse_time_str("20150617t182545z").unwrap());
+        assert_eq!(set.start_time, DEFAULT_TIMESPEC);
+        assert_eq!(set.end_time, DEFAULT_TIMESPEC);
         assert!(set.compressed);
         assert!(!set.encrypted);
         assert!(!set.partial);

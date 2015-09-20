@@ -4,11 +4,5 @@ extern crate regex;
 extern crate time;
 
 mod macros;
+mod time_utils;
 pub mod collections;
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn it_works() {
-    }
-}

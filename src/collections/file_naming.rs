@@ -1,4 +1,7 @@
+use time_utils;
+use time_utils::parse_time_str;
 use regex::Regex;
+use time::Timespec;
 
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
@@ -14,9 +17,9 @@ pub struct FileName {
     pub file_type : FileType,
     pub manifest : bool,
     pub volume_number : i32,
-    pub time : String,
-    pub start_time : String,
-    pub end_time : String,
+    pub time : Timespec,
+    pub start_time : Timespec,
+    pub end_time : Timespec,
     pub compressed : bool,
     pub encrypted : bool,
     pub partial : bool
@@ -29,9 +32,9 @@ impl FileName {
             file_type : FileType::Full,
             manifest : false,
             volume_number : 0,
-            time : String::new(),
-            start_time : String::new(),
-            end_time : String::new(),
+            time : time_utils::DEFAULT_TIMESPEC,
+            start_time : time_utils::DEFAULT_TIMESPEC,
+            end_time : time_utils::DEFAULT_TIMESPEC,
             compressed : false,
             encrypted : false,
             partial : false}
@@ -42,9 +45,9 @@ gen_setters!(FileName,
     file_type : FileType,
     manifest : bool,
     volume_number : i32,
-    time : String,
-    start_time : String,
-    end_time : String,
+    time : Timespec,
+    start_time : Timespec,
+    end_time : Timespec,
     compressed : bool,
     encrypted : bool,
     partial : bool
@@ -106,19 +109,17 @@ impl FileNameParser {
 
     fn check_full(&self, filename : &str) -> Option<FileName> {
         if let Some(captures) = self.full_vol_re.captures(filename) {
-            let time = captures.name("time").unwrap();
-            // TODO: str2time
+            let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
             let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
             return Some(FileName::new().file_type(FileType::Full)
                         .volume_number(vol_num)
-                        .time(time.to_owned()));
+                        .time(time));
         }
         if let Some(captures) = self.full_manifest_re.captures(filename) {
-            let time = captures.name("time").unwrap();
-            // TODO: str2time
+            let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
             return Some(FileName::new().file_type(FileType::Full)
                         .manifest(true)
-                        .time(time.to_owned())
+                        .time(time)
                         .partial(captures.name("partial").is_some()));
         }
         return None;
@@ -126,22 +127,20 @@ impl FileNameParser {
 
     fn check_inc(&self, filename : &str) -> Option<FileName> {
         if let Some(captures) = self.inc_vol_re.captures(filename) {
-            let start_time = captures.name("start_time").unwrap();
-            let end_time = captures.name("end_time").unwrap();
-            // TODO: str2time
+            let start_time = try_opt!(parse_time_str(captures.name("start_time").unwrap()));
+            let end_time = try_opt!(parse_time_str(captures.name("end_time").unwrap()));
             let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
             return Some(FileName::new().file_type(FileType::Inc)
-                        .start_time(start_time.to_owned())
-                        .end_time(end_time.to_owned())
+                        .start_time(start_time)
+                        .end_time(end_time)
                         .volume_number(vol_num));
         }
         if let Some(captures) = self.inc_manifest_re.captures(filename) {
-            let start_time = captures.name("start_time").unwrap();
-            let end_time = captures.name("end_time").unwrap();
-            // TODO: str2time
+            let start_time = try_opt!(parse_time_str(captures.name("start_time").unwrap()));
+            let end_time = try_opt!(parse_time_str(captures.name("end_time").unwrap()));
             return Some(FileName::new().file_type(FileType::Inc)
-                        .start_time(start_time.to_owned())
-                        .end_time(end_time.to_owned())
+                        .start_time(start_time)
+                        .end_time(end_time)
                         .manifest(true)
                         .partial(captures.name("partial").is_some()));
         }
@@ -150,19 +149,17 @@ impl FileNameParser {
 
     fn check_sig(&self, filename : &str) -> Option<FileName> {
         if let Some(captures) = self.full_sig_re.captures(filename) {
-            let time = captures.name("time").unwrap();
-            // TODO: str2time
+            let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
             return Some(FileName::new().file_type(FileType::FullSig)
-                        .time(time.to_owned())
+                        .time(time)
                         .partial(captures.name("partial").is_some()));
         }
         if let Some(captures) = self.new_sig_re.captures(filename) {
-            let start_time = captures.name("start_time").unwrap();
-            let end_time = captures.name("end_time").unwrap();
-            // TODO: str2time
+            let start_time = try_opt!(parse_time_str(captures.name("start_time").unwrap()));
+            let end_time = try_opt!(parse_time_str(captures.name("end_time").unwrap()));
             return Some(FileName::new().file_type(FileType::NewSig)
-                        .start_time(start_time.to_owned())
-                        .end_time(end_time.to_owned())
+                        .start_time(start_time)
+                        .end_time(end_time)
                         .partial(captures.name("partial").is_some()));
         }
         return None;
@@ -185,6 +182,7 @@ impl FileNameParser {
 #[cfg(test)]
 mod test {
     use super::*;
+    use time_utils::{parse_time_str, DEFAULT_TIMESPEC};
 
     #[test]
     fn parser_test() {
@@ -196,9 +194,9 @@ mod test {
                    Some(FileName{file_type : FileType::Full,
                                  manifest : false,
                                  volume_number : 1,
-                                 time : "20150617t182545z".to_owned(),
-                                 start_time : String::new(),
-                                 end_time : String::new(),
+                                 time : parse_time_str("20150617t182545z").unwrap(),
+                                 start_time : DEFAULT_TIMESPEC,
+                                 end_time : DEFAULT_TIMESPEC,
                                  compressed : true,
                                  encrypted: false,
                                  partial : false}));
@@ -206,9 +204,9 @@ mod test {
                    Some(FileName{file_type : FileType::Full,
                                  manifest : true,
                                  volume_number : 0,
-                                 time : "20150617t182545z".to_owned(),
-                                 start_time : String::new(),
-                                 end_time : String::new(),
+                                 time : parse_time_str("20150617t182545z").unwrap(),
+                                 start_time : DEFAULT_TIMESPEC,
+                                 end_time : DEFAULT_TIMESPEC,
                                  compressed : false,
                                  encrypted: false,
                                  partial : false}));
@@ -217,9 +215,9 @@ mod test {
                    Some(FileName{file_type : FileType::Inc,
                                  manifest : false,
                                  volume_number : 1,
-                                 time : String::new(),
-                                 start_time : "20150617t182629z".to_owned(),
-                                 end_time : "20150617t182650z".to_owned(),
+                                 time : DEFAULT_TIMESPEC,
+                                 start_time : parse_time_str("20150617t182629z").unwrap(),
+                                 end_time : parse_time_str("20150617t182650z").unwrap(),
                                  compressed : true,
                                  encrypted: false,
                                  partial : false}));
@@ -227,9 +225,9 @@ mod test {
                    Some(FileName{file_type : FileType::Inc,
                                  manifest : true,
                                  volume_number : 0,
-                                 time : String::new(),
-                                 start_time : "20150617t182545z".to_owned(),
-                                 end_time : "20150617t182629z".to_owned(),
+                                 time : DEFAULT_TIMESPEC,
+                                 start_time : parse_time_str("20150617t182545z").unwrap(),
+                                 end_time : parse_time_str("20150617t182629z").unwrap(),
                                  compressed : false,
                                  encrypted: false,
                                  partial : false}));
@@ -238,9 +236,9 @@ mod test {
                    Some(FileName{file_type : FileType::NewSig,
                                  manifest : false,
                                  volume_number : 0,
-                                 time : String::new(),
-                                 start_time : "20150617t182545z".to_owned(),
-                                 end_time : "20150617t182629z".to_owned(),
+                                 time : DEFAULT_TIMESPEC,
+                                 start_time : parse_time_str("20150617t182545z").unwrap(),
+                                 end_time : parse_time_str("20150617t182629z").unwrap(),
                                  compressed : true,
                                  encrypted: false,
                                  partial : false}));
@@ -249,9 +247,9 @@ mod test {
                    Some(FileName{file_type : FileType::FullSig,
                                  manifest : false,
                                  volume_number : 0,
-                                 time : "20150617t182545z".to_owned(),
-                                 start_time : String::new(),
-                                 end_time : String::new(),
+                                 time : parse_time_str("20150617t182545z").unwrap(),
+                                 start_time : DEFAULT_TIMESPEC,
+                                 end_time : DEFAULT_TIMESPEC,
                                  compressed : true,
                                  encrypted: false,
                                  partial : false}));
@@ -259,7 +257,7 @@ mod test {
 
     #[test]
     fn time_test() {
-        use ::time::{strptime, strftime, at_utc, Tm};
+        use time::{strptime, strftime, at_utc, Tm};
 
         // parse
         let tm = strptime("20150617t182545Z", "%Y%m%dt%H%M%S%Z").unwrap();
