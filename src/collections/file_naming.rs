@@ -256,4 +256,10 @@ mod test {
                                  encrypted: false,
                                  partial : false}));
     }
+
+    #[test]
+    fn time_test() {
+        let result = ::time::strptime("20150617t182545Z", "%Y%m%dt%H%M%S%Z").unwrap();
+        println!("{}", ::time::strftime("%a %d/%m/%Y %H:%M:%S", &result).unwrap());
+    }
 }
