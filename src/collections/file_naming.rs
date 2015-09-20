@@ -99,7 +99,7 @@ impl FileNameParser {
             .or(self.check_sig(&lower_fname));
 
         // write encrypted and compressed properties
-        // independently of which type of file is
+        // independently from the file type
         if let Some(ref mut result) = opt_result {
             result.compressed = self.is_compressed(lower_fname.as_ref());
             result.encrypted = self.is_encrypted(lower_fname.as_ref());
@@ -267,7 +267,7 @@ mod test {
         // store in Timespec and restore in Tm
         let ts = tm.to_timespec();
         let tm1 = at_utc(ts);
-        // somehow they have not the same identical structure :(
+        // somehow they don't have the same identical structure :(
         // assert_eq!(tm, tm1);
         // test equally formatted
         let format_fn = |tm : &Tm| { format!("{}", tm.rfc3339()) };

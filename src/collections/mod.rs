@@ -2,7 +2,7 @@
 pub mod file_naming;
 
 use time_utils;
-use time_utils::to_pretty_utc;
+use time_utils::to_pretty_local;
 use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
 use time::Timespec;
@@ -105,12 +105,12 @@ impl Display for BackupSet {
     fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
         match self.file_type {
             FileType::Full => {
-                try!(write!(f, "Full, time: {}", to_pretty_utc(self.time)));
+                try!(write!(f, "Full, time: {}", to_pretty_local(self.time)));
             },
             FileType::Inc => {
                 try!(write!(f, "Incremental, start time: {}, end time: {}",
-                            to_pretty_utc(self.start_time),
-                            to_pretty_utc(self.end_time)));
+                            to_pretty_local(self.start_time),
+                            to_pretty_local(self.end_time)));
             },
             _ => { }
         }
@@ -187,8 +187,8 @@ impl BackupChain {
 impl Display for BackupChain {
     fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
         try!(write!(f, "start time: {}, end time: {}\n{}",
-                    to_pretty_utc(self.start_time),
-                    to_pretty_utc(self.end_time),
+                    to_pretty_local(self.start_time),
+                    to_pretty_local(self.end_time),
                     &self.fullset));
         for inc in self.incset_list.iter() {
             try!(write!(f, "\n{}", inc));
@@ -237,8 +237,8 @@ impl SignatureChain {
 impl Display for SignatureChain {
     fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
         try!(write!(f, "start time: {}, end time: {}\n{}",
-                    to_pretty_utc(self.start_time),
-                    to_pretty_utc(self.end_time),
+                    to_pretty_local(self.start_time),
+                    to_pretty_local(self.end_time),
                     &self.fullsig));
         for inc in self.inclist.iter() {
             try!(write!(f, "\n{}", inc));
