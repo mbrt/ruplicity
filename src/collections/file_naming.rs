@@ -259,7 +259,20 @@ mod test {
 
     #[test]
     fn time_test() {
-        let result = ::time::strptime("20150617t182545Z", "%Y%m%dt%H%M%S%Z").unwrap();
-        println!("{}", ::time::strftime("%a %d/%m/%Y %H:%M:%S", &result).unwrap());
+        use ::time::{strptime, strftime, at_utc, Tm};
+
+        // parse
+        let tm = strptime("20150617t182545Z", "%Y%m%dt%H%M%S%Z").unwrap();
+        // format
+        assert_eq!(strftime("%a %d/%m/%Y %H:%M:%S", &tm).unwrap(), "Sun 17/06/2015 18:25:45");
+        assert_eq!(format!("{}", tm.rfc3339()), "2015-06-17T18:25:45Z");
+        // store in Timespec and restore in Tm
+        let ts = tm.to_timespec();
+        let tm1 = at_utc(ts);
+        // somehow they have not the same identical structure :(
+        // assert_eq!(tm, tm1);
+        // test equally formatted
+        let format_fn = |tm : &Tm| { format!("{}", tm.rfc3339()) };
+        assert_eq!(format_fn(&tm), format_fn(&tm1));
     }
 }
