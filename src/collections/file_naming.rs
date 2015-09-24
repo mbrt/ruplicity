@@ -14,83 +14,83 @@ pub enum FileType {
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct FileName {
-    pub file_type : FileType,
-    pub manifest : bool,
-    pub volume_number : i32,
-    pub time : Timespec,
-    pub start_time : Timespec,
-    pub end_time : Timespec,
-    pub compressed : bool,
-    pub encrypted : bool,
-    pub partial : bool
+    pub file_type: FileType,
+    pub manifest: bool,
+    pub volume_number: i32,
+    pub time: Timespec,
+    pub start_time: Timespec,
+    pub end_time: Timespec,
+    pub compressed: bool,
+    pub encrypted: bool,
+    pub partial: bool
 }
 
 impl FileName {
     /// Builder pattern for FileName
     pub fn new() -> Self {
         FileName{
-            file_type : FileType::Full,
-            manifest : false,
-            volume_number : 0,
-            time : time_utils::DEFAULT_TIMESPEC,
-            start_time : time_utils::DEFAULT_TIMESPEC,
-            end_time : time_utils::DEFAULT_TIMESPEC,
-            compressed : false,
-            encrypted : false,
-            partial : false}
+            file_type: FileType::Full,
+            manifest: false,
+            volume_number: 0,
+            time: time_utils::DEFAULT_TIMESPEC,
+            start_time: time_utils::DEFAULT_TIMESPEC,
+            end_time: time_utils::DEFAULT_TIMESPEC,
+            compressed: false,
+            encrypted: false,
+            partial: false}
     }
 }
 
 gen_setters!(FileName,
-    file_type : FileType,
-    manifest : bool,
-    volume_number : i32,
-    time : Timespec,
-    start_time : Timespec,
-    end_time : Timespec,
-    compressed : bool,
-    encrypted : bool,
-    partial : bool
+    file_type: FileType,
+    manifest: bool,
+    volume_number: i32,
+    time: Timespec,
+    start_time: Timespec,
+    end_time: Timespec,
+    compressed: bool,
+    encrypted: bool,
+    partial: bool
 );
 
 
 pub struct FileNameInfo<'a> {
-    pub file_name : &'a str,
-    pub info : FileName
+    pub file_name: &'a str,
+    pub info: FileName
 }
 
 impl<'a> FileNameInfo<'a> {
-    pub fn new(name : &'a str, info : FileName) -> Self {
+    pub fn new(name: &'a str, info: FileName) -> Self {
         FileNameInfo {
-            file_name : &name,
-            info : info
+            file_name: &name,
+            info: info
         }
     }
 }
 
 
 pub struct FileNameParser {
-    full_vol_re : Regex,
-    full_manifest_re : Regex,
-    inc_vol_re : Regex,
-    inc_manifest_re : Regex,
-    full_sig_re : Regex,
-    new_sig_re : Regex
+    full_vol_re: Regex,
+    full_manifest_re: Regex,
+    inc_vol_re: Regex,
+    inc_manifest_re: Regex,
+    full_sig_re: Regex,
+    new_sig_re: Regex
 }
 
 impl FileNameParser {
     pub fn new() -> Self {
         FileNameParser {
-            full_vol_re : Regex::new(r"^duplicity-full\.(?P<time>.*?)\.vol(?P<num>[0-9]+)\.difftar(?P<partial>(\.part))?($|\.)").unwrap(),
-            full_manifest_re : Regex::new(r"^duplicity-full\.(?P<time>.*?)\.manifest(?P<partial>(\.part))?($|\.)").unwrap(),
-            inc_vol_re : Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.vol(?P<num>[0-9]+)\.difftar($|\.)").unwrap(),
-            inc_manifest_re : Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.manifest(?P<partial>(\.part))?(\.|$)").unwrap(),
-            full_sig_re : Regex::new(r"^duplicity-full-signatures\.(?P<time>.*?)\.sigtar(?P<partial>(\.part))?(\.|$)").unwrap(),
-            new_sig_re : Regex::new(r"^duplicity-new-signatures\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.sigtar(?P<partial>(\.part))?(\.|$)").unwrap(),
+            full_vol_re: Regex::new(r"^duplicity-full\.(?P<time>.*?)\.vol(?P<num>[0-9]+)\.difftar(?P<partial>(\.part))?($|\.)").unwrap(),
+            full_manifest_re: Regex::new(r"^duplicity-full\.(?P<time>.*?)\.manifest(?P<partial>(\.part))?($|\.)").unwrap(),
+            inc_vol_re: Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.vol(?P<num>[0-9]+)\.difftar($|\.)").unwrap(),
+            inc_manifest_re: Regex::new(r"^duplicity-inc\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.manifest(?P<partial>(\.part))?(\.|$)").unwrap(),
+            full_sig_re: Regex::new(r"^duplicity-full-signatures\.(?P<time>.*?)\.sigtar(?P<partial>(\.part))?(\.|$)").unwrap(),
+            new_sig_re: Regex::new(r"^duplicity-new-signatures\.(?P<start_time>.*?)\.to\.(?P<end_time>.*?)\.sigtar(?P<partial>(\.part))?(\.|$)").unwrap(),
         }
     }
 
-    pub fn parse(&self, filename : &str) -> Option<FileName> {
+    pub fn parse(&self, filename: &str) -> Option<FileName> {
         use std::ascii::AsciiExt;
 
         let lower_fname = filename.to_ascii_lowercase();
@@ -107,7 +107,7 @@ impl FileNameParser {
         opt_result
     }
 
-    fn check_full(&self, filename : &str) -> Option<FileName> {
+    fn check_full(&self, filename: &str) -> Option<FileName> {
         if let Some(captures) = self.full_vol_re.captures(filename) {
             let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
             let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
@@ -125,7 +125,7 @@ impl FileNameParser {
         return None;
     }
 
-    fn check_inc(&self, filename : &str) -> Option<FileName> {
+    fn check_inc(&self, filename: &str) -> Option<FileName> {
         if let Some(captures) = self.inc_vol_re.captures(filename) {
             let start_time = try_opt!(parse_time_str(captures.name("start_time").unwrap()));
             let end_time = try_opt!(parse_time_str(captures.name("end_time").unwrap()));
@@ -147,7 +147,7 @@ impl FileNameParser {
         return None;
     }
 
-    fn check_sig(&self, filename : &str) -> Option<FileName> {
+    fn check_sig(&self, filename: &str) -> Option<FileName> {
         if let Some(captures) = self.full_sig_re.captures(filename) {
             let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
             return Some(FileName::new().file_type(FileType::FullSig)
@@ -165,15 +165,15 @@ impl FileNameParser {
         return None;
     }
 
-    fn get_vol_num(&self, s : &str) -> Option<i32> {
+    fn get_vol_num(&self, s: &str) -> Option<i32> {
         s.parse::<i32>().ok()
     }
 
-    fn is_encrypted(&self, s : &str) -> bool {
+    fn is_encrypted(&self, s: &str) -> bool {
         s.ends_with(".gpg") || s.ends_with(".g")
     }
 
-    fn is_compressed(&self, s : &str) -> bool {
+    fn is_compressed(&self, s: &str) -> bool {
         s.ends_with(".gz") || s.ends_with(".z")
     }
 }
@@ -191,68 +191,68 @@ mod test {
         assert_eq!(parser.parse("invalid"), None);
         // full
         assert_eq!(parser.parse("duplicity-full.20150617T182545Z.vol1.difftar.gz"),
-                   Some(FileName{file_type : FileType::Full,
-                                 manifest : false,
-                                 volume_number : 1,
-                                 time : parse_time_str("20150617t182545z").unwrap(),
-                                 start_time : DEFAULT_TIMESPEC,
-                                 end_time : DEFAULT_TIMESPEC,
-                                 compressed : true,
+                   Some(FileName{file_type: FileType::Full,
+                                 manifest: false,
+                                 volume_number: 1,
+                                 time: parse_time_str("20150617t182545z").unwrap(),
+                                 start_time: DEFAULT_TIMESPEC,
+                                 end_time: DEFAULT_TIMESPEC,
+                                 compressed: true,
                                  encrypted: false,
-                                 partial : false}));
+                                 partial: false}));
         assert_eq!(parser.parse("duplicity-full.20150617T182545Z.manifest"),
-                   Some(FileName{file_type : FileType::Full,
-                                 manifest : true,
-                                 volume_number : 0,
-                                 time : parse_time_str("20150617t182545z").unwrap(),
-                                 start_time : DEFAULT_TIMESPEC,
-                                 end_time : DEFAULT_TIMESPEC,
-                                 compressed : false,
+                   Some(FileName{file_type: FileType::Full,
+                                 manifest: true,
+                                 volume_number: 0,
+                                 time: parse_time_str("20150617t182545z").unwrap(),
+                                 start_time: DEFAULT_TIMESPEC,
+                                 end_time: DEFAULT_TIMESPEC,
+                                 compressed: false,
                                  encrypted: false,
-                                 partial : false}));
+                                 partial: false}));
         // inc
         assert_eq!(parser.parse("duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz"),
-                   Some(FileName{file_type : FileType::Inc,
-                                 manifest : false,
-                                 volume_number : 1,
-                                 time : DEFAULT_TIMESPEC,
-                                 start_time : parse_time_str("20150617t182629z").unwrap(),
-                                 end_time : parse_time_str("20150617t182650z").unwrap(),
-                                 compressed : true,
+                   Some(FileName{file_type: FileType::Inc,
+                                 manifest: false,
+                                 volume_number: 1,
+                                 time: DEFAULT_TIMESPEC,
+                                 start_time: parse_time_str("20150617t182629z").unwrap(),
+                                 end_time: parse_time_str("20150617t182650z").unwrap(),
+                                 compressed: true,
                                  encrypted: false,
-                                 partial : false}));
+                                 partial: false}));
         assert_eq!(parser.parse("duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest"),
-                   Some(FileName{file_type : FileType::Inc,
-                                 manifest : true,
-                                 volume_number : 0,
-                                 time : DEFAULT_TIMESPEC,
-                                 start_time : parse_time_str("20150617t182545z").unwrap(),
-                                 end_time : parse_time_str("20150617t182629z").unwrap(),
-                                 compressed : false,
+                   Some(FileName{file_type: FileType::Inc,
+                                 manifest: true,
+                                 volume_number: 0,
+                                 time: DEFAULT_TIMESPEC,
+                                 start_time: parse_time_str("20150617t182545z").unwrap(),
+                                 end_time: parse_time_str("20150617t182629z").unwrap(),
+                                 compressed: false,
                                  encrypted: false,
-                                 partial : false}));
+                                 partial: false}));
         // new sig
         assert_eq!(parser.parse("duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz"),
-                   Some(FileName{file_type : FileType::NewSig,
-                                 manifest : false,
-                                 volume_number : 0,
-                                 time : DEFAULT_TIMESPEC,
-                                 start_time : parse_time_str("20150617t182545z").unwrap(),
-                                 end_time : parse_time_str("20150617t182629z").unwrap(),
-                                 compressed : true,
+                   Some(FileName{file_type: FileType::NewSig,
+                                 manifest: false,
+                                 volume_number: 0,
+                                 time: DEFAULT_TIMESPEC,
+                                 start_time: parse_time_str("20150617t182545z").unwrap(),
+                                 end_time: parse_time_str("20150617t182629z").unwrap(),
+                                 compressed: true,
                                  encrypted: false,
-                                 partial : false}));
+                                 partial: false}));
         // full sig
         assert_eq!(parser.parse("duplicity-full-signatures.20150617T182545Z.sigtar.gz"),
-                   Some(FileName{file_type : FileType::FullSig,
-                                 manifest : false,
-                                 volume_number : 0,
-                                 time : parse_time_str("20150617t182545z").unwrap(),
-                                 start_time : DEFAULT_TIMESPEC,
-                                 end_time : DEFAULT_TIMESPEC,
-                                 compressed : true,
+                   Some(FileName{file_type: FileType::FullSig,
+                                 manifest: false,
+                                 volume_number: 0,
+                                 time: parse_time_str("20150617t182545z").unwrap(),
+                                 start_time: DEFAULT_TIMESPEC,
+                                 end_time: DEFAULT_TIMESPEC,
+                                 compressed: true,
                                  encrypted: false,
-                                 partial : false}));
+                                 partial: false}));
     }
 
     #[test]
@@ -270,7 +270,7 @@ mod test {
         // somehow they don't have the same identical structure :(
         // assert_eq!(tm, tm1);
         // test equally formatted
-        let format_fn = |tm : &Tm| { format!("{}", tm.rfc3339()) };
+        let format_fn = |tm: &Tm| { format!("{}", tm.rfc3339()) };
         assert_eq!(format_fn(&tm), format_fn(&tm1));
     }
 }

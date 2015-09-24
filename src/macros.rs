@@ -58,7 +58,7 @@ macro_rules! unwrap_opt_or_continue(
     ($e:expr) => (
         match $e {
             Some(v) => v,
-            _     => { continue; }
+            _       => { continue; }
         }
     )
 );

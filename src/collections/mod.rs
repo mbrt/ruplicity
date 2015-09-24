@@ -10,31 +10,31 @@ use self::file_naming::{FileName, FileNameInfo, FileType, FileNameParser};
 
 
 pub struct BackupSet {
-    pub file_type : FileType,
-    pub time : Timespec,
-    pub start_time : Timespec,
-    pub end_time : Timespec,
-    pub compressed : bool,
-    pub encrypted : bool,
-    pub partial : bool,
-    pub manifest_path : String,
-    volumes_paths : HashMap<i32, String>,
-    info_set : bool,    // true if informations are set
+    pub file_type: FileType,
+    pub time: Timespec,
+    pub start_time: Timespec,
+    pub end_time: Timespec,
+    pub compressed: bool,
+    pub encrypted: bool,
+    pub partial: bool,
+    pub manifest_path: String,
+    volumes_paths: HashMap<i32, String>,
+    info_set: bool,    // true if informations are set
 }
 
 impl BackupSet {
     pub fn new() -> Self {
         BackupSet{
-            file_type : FileType::Full,
-            time : time_utils::DEFAULT_TIMESPEC,
-            start_time : time_utils::DEFAULT_TIMESPEC,
-            end_time : time_utils::DEFAULT_TIMESPEC,
-            compressed : false,
-            encrypted : false,
-            partial : false,
-            manifest_path : String::new(),
-            volumes_paths : HashMap::new(),
-            info_set : false
+            file_type: FileType::Full,
+            time: time_utils::DEFAULT_TIMESPEC,
+            start_time: time_utils::DEFAULT_TIMESPEC,
+            end_time: time_utils::DEFAULT_TIMESPEC,
+            compressed: false,
+            encrypted: false,
+            partial: false,
+            manifest_path: String::new(),
+            volumes_paths: HashMap::new(),
+            info_set: false
         }
     }
 
@@ -43,7 +43,7 @@ impl BackupSet {
     /// The filename will match the given set if it has the right
     /// times and is of the right type. The information will be set
     /// from the first filename given.
-    pub fn add_filename(&mut self, file_info : &FileNameInfo) -> bool {
+    pub fn add_filename(&mut self, file_info: &FileNameInfo) -> bool {
         let pr = &file_info.info;
         let fname = file_info.file_name;
 
@@ -89,7 +89,7 @@ impl BackupSet {
         }
     }
 
-    fn set_info(&mut self, fname : &FileName) {
+    fn set_info(&mut self, fname: &FileName) {
         self.file_type = fname.file_type;
         self.time = fname.time.clone();
         self.start_time = fname.start_time.clone();
@@ -102,7 +102,7 @@ impl BackupSet {
 }
 
 impl Display for BackupSet {
-    fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self.file_type {
             FileType::Full => {
                 try!(write!(f, "Full, time: {}", to_pretty_local(self.time)));
@@ -138,29 +138,29 @@ impl Display for BackupSet {
 
 
 pub struct BackupChain {
-    pub fullset : BackupSet,
-    pub incset_list : Vec<BackupSet>,
-    pub start_time : Timespec,
-    pub end_time : Timespec
+    pub fullset: BackupSet,
+    pub incset_list: Vec<BackupSet>,
+    pub start_time: Timespec,
+    pub end_time: Timespec
 }
 
 impl BackupChain {
     /// Create a new BackupChain starting from a full backup set.
-    pub fn new(fullset : BackupSet) -> Self {
+    pub fn new(fullset: BackupSet) -> Self {
         assert_eq!(fullset.file_type, FileType::Full);
         let time = fullset.time.clone();
 
         BackupChain{
-            fullset : fullset,
-            incset_list : Vec::new(),
-            start_time : time,
-            end_time : time
+            fullset: fullset,
+            incset_list: Vec::new(),
+            start_time: time,
+            end_time: time
         }
     }
 
     /// Adds the given incremental backup element to the backup chain if possible,
     /// returns it back otherwise.
-    pub fn add_inc(&mut self, incset : BackupSet) -> Option<BackupSet> {
+    pub fn add_inc(&mut self, incset: BackupSet) -> Option<BackupSet> {
         if self.end_time == incset.start_time {
             self.end_time = incset.end_time.clone();
             self.incset_list.push(incset);
@@ -185,7 +185,7 @@ impl BackupChain {
 }
 
 impl Display for BackupChain {
-    fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         try!(write!(f, "start time: {}, end time: {}\n{}",
                     to_pretty_local(self.start_time),
                     to_pretty_local(self.end_time),
@@ -199,30 +199,30 @@ impl Display for BackupChain {
 
 
 pub struct SignatureChain {
-    pub fullsig : String,
-    pub inclist : Vec<String>,
-    pub start_time : Timespec,
-    pub end_time : Timespec
+    pub fullsig: String,
+    pub inclist: Vec<String>,
+    pub start_time: Timespec,
+    pub end_time: Timespec
 }
 
 impl SignatureChain {
     /// Create a new SignatureChain starting from a full signature.
-    pub fn new(fname : &str, pr : &FileName) -> Self {
+    pub fn new(fname: &str, pr: &FileName) -> Self {
         SignatureChain {
-            fullsig : fname.to_owned(),
-            inclist : Vec::new(),
-            start_time : pr.time,
-            end_time : pr.time
+            fullsig: fname.to_owned(),
+            inclist: Vec::new(),
+            start_time: pr.time,
+            end_time: pr.time
         }
     }
 
-    pub fn from_filename_info(fname_info : &FileNameInfo) -> Self {
+    pub fn from_filename_info(fname_info: &FileNameInfo) -> Self {
         Self::new(fname_info.file_name, &fname_info.info)
     }
 
     /// Adds the given incremental signature to the signature chain if possible,
     /// returns false otherwise.
-    pub fn add_new_sig(&mut self, fname : &FileNameInfo) -> bool {
+    pub fn add_new_sig(&mut self, fname: &FileNameInfo) -> bool {
         if fname.info.file_type != FileType::NewSig {
             false
         }
@@ -235,7 +235,7 @@ impl SignatureChain {
 }
 
 impl Display for SignatureChain {
-    fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         try!(write!(f, "start time: {}, end time: {}\n{}",
                     to_pretty_local(self.start_time),
                     to_pretty_local(self.end_time),
@@ -256,19 +256,19 @@ type FileNameInfos<'a> = Vec<FileNameInfo<'a>>;
 
 
 pub struct CollectionsStatus {
-    pub backup_chains : BackupChains,
-    pub sig_chains : SignatureChains
+    pub backup_chains: BackupChains,
+    pub sig_chains: SignatureChains
 }
 
 impl CollectionsStatus {
     pub fn new() -> Self {
         CollectionsStatus {
-            backup_chains : Vec::new(),
-            sig_chains : Vec::new()
+            backup_chains: Vec::new(),
+            sig_chains: Vec::new()
         }
     }
 
-    pub fn from_filename_list<T: AsRef<str>>(filename_list : &[T]) -> Self {
+    pub fn from_filename_list<T: AsRef<str>>(filename_list: &[T]) -> Self {
         let mut result = Self::new();
         let filename_info_list = Self::compute_filename_infos(&filename_list);
         result.compute_backup_chains(&filename_info_list);
@@ -287,12 +287,12 @@ impl CollectionsStatus {
         result
     }
 
-    fn compute_backup_chains(&mut self, filename_list : &FileNameInfos) {
+    fn compute_backup_chains(&mut self, filename_list: &FileNameInfos) {
         let sets = Self::compute_backup_sets(filename_list);
         self.add_to_backup_chains(sets);
     }
 
-    fn compute_backup_sets(filename_list : &FileNameInfos) -> BackupSetList {
+    fn compute_backup_sets(filename_list: &FileNameInfos) -> BackupSetList {
         let mut sets = BackupSetList::new();
         for fileinfo in filename_list.iter() {
             let mut inserted = false;
@@ -313,7 +313,7 @@ impl CollectionsStatus {
         sets
     }
 
-    fn add_to_backup_chains(&mut self, set_list : BackupSetList) {
+    fn add_to_backup_chains(&mut self, set_list: BackupSetList) {
         for set in set_list.into_iter() {
             match set.file_type {
                 FileType::Full => {
@@ -339,7 +339,7 @@ impl CollectionsStatus {
         self.backup_chains.sort_by(|a, b| a.end_time.cmp(&b.end_time));
     }
 
-    fn compute_signature_chains(&mut self, filename_list : &FileNameInfos) {
+    fn compute_signature_chains(&mut self, filename_list: &FileNameInfos) {
         // create a new signature chain for each fill signature
         self.sig_chains = filename_list.iter()
             .filter(|f| f.info.file_type == FileType::FullSig)
@@ -368,7 +368,7 @@ impl CollectionsStatus {
 }
 
 impl Display for CollectionsStatus {
-    fn fmt(&self, f : &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         for backup_chain in &self.backup_chains {
             try!(backup_chain.fmt(f));
         }
