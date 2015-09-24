@@ -268,7 +268,7 @@ impl CollectionsStatus {
         }
     }
 
-    pub fn from_filename_list(filename_list : &FileNameList) -> Self {
+    pub fn from_filename_list<T: AsRef<str>>(filename_list : &[T]) -> Self {
         let mut result = Self::new();
         let filename_info_list = Self::compute_filename_infos(&filename_list);
         result.compute_backup_chains(&filename_info_list);
@@ -276,12 +276,12 @@ impl CollectionsStatus {
         result
     }
 
-    fn compute_filename_infos<'a>(filename_list : &'a FileNameList) -> FileNameInfos<'a> {
+    fn compute_filename_infos<'a, T: AsRef<str>>(filename_list: &'a [T]) -> FileNameInfos<'a> {
         let mut result = Vec::new();
         let parser = FileNameParser::new();
         for name in filename_list {
-            if let Some(info) = parser.parse(&name) {
-                result.push(FileNameInfo::new(&name, info));
+            if let Some(info) = parser.parse(name.as_ref()) {
+                result.push(FileNameInfo::new(name.as_ref(), info));
             }
         }
         result

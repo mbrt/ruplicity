@@ -14,8 +14,6 @@ pub struct BackupFiles {
 impl BackupFiles {
     pub fn from_dir<P : AsRef<Path>>(path : P) -> io::Result<BackupFiles> {
         let filenames = try!(Self::collect_filenames(path));
-        // FIXME: from owned to &str... is this necessary??
-        let filenames = filenames.iter().map(|f| f.as_ref()).collect::<Vec<_>>();
         let collection = CollectionsStatus::from_filename_list(&filenames);
         // TODO: go from signature chains to snapshots
         Ok(BackupFiles{ snapshots : Vec::new() })
