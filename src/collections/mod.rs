@@ -248,16 +248,12 @@ impl Display for SignatureChain {
 }
 
 
-pub type FileNameList<'a> = Vec<&'a str>;
-pub type BackupChains = Vec<BackupChain>;
-pub type SignatureChains = Vec<SignatureChain>;
-type BackupSetList = Vec<BackupSet>;
 type FileNameInfos<'a> = Vec<FileNameInfo<'a>>;
 
 
 pub struct CollectionsStatus {
-    pub backup_chains: BackupChains,
-    pub sig_chains: SignatureChains
+    pub backup_chains: Vec<BackupChain>,
+    pub sig_chains: Vec<SignatureChain>
 }
 
 impl CollectionsStatus {
@@ -268,11 +264,11 @@ impl CollectionsStatus {
         }
     }
 
-    pub fn from_filename_list<T: AsRef<str>>(filename_list: &[T]) -> Self {
+    pub fn from_filenames<T: AsRef<str>>(filenames: &[T]) -> Self {
         let mut result = Self::new();
-        let filename_info_list = Self::compute_filename_infos(&filename_list);
-        result.compute_backup_chains(&filename_info_list);
-        result.compute_signature_chains(&filename_info_list);
+        let filename_infos = Self::compute_filename_infos(&filenames);
+        result.compute_backup_chains(&filename_infos);
+        result.compute_signature_chains(&filename_infos);
         result
     }
 
@@ -292,8 +288,8 @@ impl CollectionsStatus {
         self.add_to_backup_chains(sets);
     }
 
-    fn compute_backup_sets(filename_list: &FileNameInfos) -> BackupSetList {
-        let mut sets = BackupSetList::new();
+    fn compute_backup_sets(filename_list: &FileNameInfos) -> Vec<BackupSet> {
+        let mut sets = Vec::<BackupSet>::new();
         for fileinfo in filename_list.iter() {
             let mut inserted = false;
             for set in sets.iter_mut() {
@@ -313,7 +309,7 @@ impl CollectionsStatus {
         sets
     }
 
-    fn add_to_backup_chains(&mut self, set_list: BackupSetList) {
+    fn add_to_backup_chains(&mut self, set_list: Vec<BackupSet>) {
         for set in set_list.into_iter() {
             match set.file_type {
                 FileType::Full => {
@@ -416,7 +412,7 @@ mod test {
 
     #[test]
     fn collection_status() {
-        let filename_list = vec![
+        let filenames = vec![
             "duplicity-full.20150617T182545Z.manifest",
             "duplicity-full.20150617T182545Z.vol1.difftar.gz",
             "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
@@ -427,7 +423,7 @@ mod test {
             "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz",
             "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz"
         ];
-        let collection_status = CollectionsStatus::from_filename_list(&filename_list);
+        let collection_status = CollectionsStatus::from_filenames(&filenames);
         println!("collection: {}", collection_status);
     }
 }
