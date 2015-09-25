@@ -5,6 +5,7 @@ use time_utils;
 use time_utils::to_pretty_local;
 use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
+use std::slice;
 use time::Timespec;
 use self::file_naming::{FileName, FileNameInfo, FileType, FileNameParser};
 
@@ -249,11 +250,13 @@ impl Display for SignatureChain {
 
 
 type FileNameInfos<'a> = Vec<FileNameInfo<'a>>;
+pub type BackupChainIterator<'a> = slice::Iter<'a, BackupChain>;
+pub type SignatureChainIterator<'a> = slice::Iter<'a, SignatureChain>;
 
 
 pub struct CollectionsStatus {
-    pub backup_chains: Vec<BackupChain>,
-    pub sig_chains: Vec<SignatureChain>
+    backup_chains: Vec<BackupChain>,
+    sig_chains: Vec<SignatureChain>
 }
 
 impl CollectionsStatus {
@@ -270,6 +273,14 @@ impl CollectionsStatus {
         result.compute_backup_chains(&filename_infos);
         result.compute_signature_chains(&filename_infos);
         result
+    }
+
+    pub fn backup_chains(&self) -> BackupChainIterator {
+        self.backup_chains.iter()
+    }
+
+    pub fn signature_chains(&self) -> SignatureChainIterator {
+        self.sig_chains.iter()
     }
 
     fn compute_filename_infos<'a, T: AsRef<str>>(filename_list: &'a [T]) -> FileNameInfos<'a> {
@@ -342,9 +353,9 @@ impl CollectionsStatus {
             .map(|f| SignatureChain::from_filename_info(f))
             .collect();
         // and collect all the new signatures, sorted by start time
-        let mut new_sig = filename_list.iter()
+        let mut new_sig: Vec<_> = filename_list.iter()
             .filter(|f| f.info.file_type == FileType::NewSig)
-            .collect::<Vec<_>>();
+            .collect();
         new_sig.sort_by(|a, b| a.info.start_time.cmp(&b.info.start_time));
 
         // add the new signatures to signature chains
