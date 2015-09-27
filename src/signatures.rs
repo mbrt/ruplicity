@@ -1,37 +1,28 @@
 use std::slice;
-use std::path::Path;
-use std::fs;
 use std::io;
 use time::Timespec;
 
 use collections::CollectionsStatus;
+use backend::Backend;
 
 
-pub struct BackupFiles {
+pub struct BackupFiles<B: Backend> {
+    backend: B,
     snapshots: Vec<Snapshot>
 }
 
-impl BackupFiles {
-    pub fn from_dir<P: AsRef<Path>>(path: P) -> io::Result<BackupFiles> {
-        let filenames = try!(Self::collect_filenames(path));
-        let collection = CollectionsStatus::from_filenames(&filenames);
+impl<B: Backend> BackupFiles<B> {
+    pub fn new(backend: B) -> io::Result<BackupFiles<B>> {
+        let collection = {
+            let filenames = try!(backend.get_file_names());
+            CollectionsStatus::from_filenames(&filenames)
+        };
         // TODO: go from signature chains to snapshots
-        Ok(BackupFiles{ snapshots: Vec::new() })
+        Ok(BackupFiles{ backend: backend, snapshots: Vec::new() })
     }
 
     pub fn snapshots(&self) -> Snapshots {
         self.snapshots.iter()
-    }
-
-    fn collect_filenames<P: AsRef<Path>>(path: P) -> io::Result<Vec<String>> {
-        let paths = try!(fs::read_dir(path));
-        let mut filenames = Vec::new();
-        for entry in paths {
-            let entry = unwrap_or_continue!(entry);
-            let filename = unwrap_or_continue!(entry.file_name().into_string());
-            filenames.push(filename);
-        }
-        Ok(filenames)
     }
 }
 
