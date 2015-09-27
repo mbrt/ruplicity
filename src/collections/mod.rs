@@ -24,6 +24,7 @@ pub struct BackupSet {
 }
 
 impl BackupSet {
+    // TODO: remake new like BackupChain, only with the starting filename and remove info_set.
     pub fn new() -> Self {
         BackupSet{
             file_type: FileType::Full,
@@ -199,21 +200,43 @@ impl Display for BackupChain {
 }
 
 
+pub struct SignatureFile {
+    pub file_name: String,
+    pub time: Timespec,
+    pub compressed: bool,
+    pub encrypted: bool
+}
+
+impl SignatureFile {
+    pub fn from_file_and_info(fname: &str, pr: &FileName) -> Self {
+        SignatureFile{
+            file_name: fname.to_owned(),
+            time: if pr.file_type == FileType::FullSig { pr.time } else { pr.end_time },
+            compressed: pr.compressed,
+            encrypted: pr.encrypted
+        }
+    }
+
+    pub fn from_filename_info(info: &FileNameInfo) -> Self {
+        Self::from_file_and_info(info.file_name, &info.info)
+    }
+}
+
+
+/// A chain of signature belonging to the same backup set.
 pub struct SignatureChain {
-    pub fullsig: String,
-    pub inclist: Vec<String>,
-    pub start_time: Timespec,
-    pub end_time: Timespec
+    /// The file name of the full signature chain.
+    pub fullsig: SignatureFile,
+    /// A list of file names for incremental signatures.
+    pub inclist: Vec<SignatureFile>
 }
 
 impl SignatureChain {
     /// Create a new SignatureChain starting from a full signature.
     pub fn new(fname: &str, pr: &FileName) -> Self {
         SignatureChain {
-            fullsig: fname.to_owned(),
-            inclist: Vec::new(),
-            start_time: pr.time,
-            end_time: pr.time
+            fullsig: SignatureFile::from_file_and_info(fname, pr),
+            inclist: Vec::new()
         }
     }
 
@@ -228,21 +251,28 @@ impl SignatureChain {
             false
         }
         else {
-            self.inclist.push(fname.file_name.to_owned());
-            self.end_time = fname.info.end_time.clone();
+            self.inclist.push(SignatureFile::from_filename_info(fname));
             true
         }
+    }
+
+    pub fn start_time(&self) -> Timespec {
+        self.fullsig.time
+    }
+
+    pub fn end_time(&self) -> Timespec {
+        self.inclist.last().map_or(self.start_time(), |inc| inc.time)
     }
 }
 
 impl Display for SignatureChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         try!(write!(f, "start time: {}, end time: {}\n{}",
-                    to_pretty_local(self.start_time),
-                    to_pretty_local(self.end_time),
-                    &self.fullsig));
+                    to_pretty_local(self.start_time()),
+                    to_pretty_local(self.end_time()),
+                    &self.fullsig.file_name));
         for inc in self.inclist.iter() {
-            try!(write!(f, "\n{}", inc));
+            try!(write!(f, "\n{}", inc.file_name));
         }
         Ok(())
     }
@@ -250,8 +280,9 @@ impl Display for SignatureChain {
 
 
 type FileNameInfos<'a> = Vec<FileNameInfo<'a>>;
-pub type BackupChainIterator<'a> = slice::Iter<'a, BackupChain>;
-pub type SignatureChainIterator<'a> = slice::Iter<'a, SignatureChain>;
+
+/// Iterator over some kind of chain
+pub type ChainIter<'a, T> = slice::Iter<'a, T>;
 
 
 pub struct CollectionsStatus {
@@ -275,11 +306,11 @@ impl CollectionsStatus {
         result
     }
 
-    pub fn backup_chains(&self) -> BackupChainIterator {
+    pub fn backup_chains(&self) -> ChainIter<BackupChain> {
         self.backup_chains.iter()
     }
 
-    pub fn signature_chains(&self) -> SignatureChainIterator {
+    pub fn signature_chains(&self) -> ChainIter<SignatureChain> {
         self.sig_chains.iter()
     }
 

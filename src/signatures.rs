@@ -6,7 +6,7 @@ use collections::CollectionsStatus;
 use backend::Backend;
 
 
-pub struct BackupFiles<B: Backend> {
+pub struct BackupFiles<B> {
     backend: B,
     snapshots: Vec<Snapshot>
 }
@@ -17,6 +17,7 @@ impl<B: Backend> BackupFiles<B> {
             let filenames = try!(backend.get_file_names());
             CollectionsStatus::from_filenames(&filenames)
         };
+        let chains = collection.signature_chains();
         // TODO: go from signature chains to snapshots
         Ok(BackupFiles{ backend: backend, snapshots: Vec::new() })
     }
