@@ -1,7 +1,9 @@
+extern crate flate2;
+extern crate regex;
+extern crate tar;
+extern crate time;
 #[macro_use]
 extern crate try_opt;
-extern crate regex;
-extern crate time;
 
 mod macros;
 mod time_utils;

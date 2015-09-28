@@ -1,8 +1,12 @@
-use std::slice;
 use std::io;
+use std::iter::Iterator;
+use std::slice;
+
+use flate2::read::GzDecoder;
+use tar;
 use time::Timespec;
 
-use collections::CollectionsStatus;
+use collections::{CollectionsStatus, SignatureChain, SignatureFile};
 use backend::Backend;
 
 
@@ -25,7 +29,33 @@ impl<B: Backend> BackupFiles<B> {
     pub fn snapshots(&self) -> Snapshots {
         self.snapshots.iter()
     }
+
+//    fn signatures_files(chain: &SignatureChain) -> Vec<TarHeaderIter> {
+//        unimplemented!()
+//    }
+
+    fn signature_file_iter(&self, signature: &SignatureFile) -> io::Result<TarHeaderIter> {
+        let file = try!(self.backend.open_file(signature.file_name.as_ref()));
+        if signature.compressed {
+            let gz_decoder = try!(GzDecoder::new(file));
+            let mut tar = tar::Archive::new(gz_decoder);
+        }
+        unimplemented!()
+    }
 }
+
+type TarHeaderIter<'a> = Box<Iterator<Item=&'a tar::Header>>;
+
+struct TarHeaderIterImpl<'a, R: 'a>(tar::FilesMut<'a, R>);
+
+impl<'a, R> Iterator for TarHeaderIterImpl<'a, R> {
+    type Item = &'a tar::Header;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        None
+    }
+}
+
 
 /// Iterator over a list of backup snapshots.
 pub type Snapshots<'a> = slice::Iter<'a, Snapshot>;
