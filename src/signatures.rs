@@ -34,17 +34,29 @@ impl<B: Backend> BackupFiles<B> {
 //        unimplemented!()
 //    }
 
-    fn signature_file_iter(&self, signature: &SignatureFile) -> io::Result<TarHeaderIter> {
-        let file = try!(self.backend.open_file(signature.file_name.as_ref()));
-        if signature.compressed {
-            let gz_decoder = try!(GzDecoder::new(file));
-            let mut tar = tar::Archive::new(gz_decoder);
-        }
-        unimplemented!()
+//    fn signature_file_iter(&self, signature: &SignatureFile) -> io::Result<BoxTarHeaderIter> {
+//        let file = try!(self.backend.open_file(signature.file_name.as_ref()));
+//        if signature.compressed {
+//            let gz_decoder = try!(GzDecoder::new(file));
+//            let mut tar = tar::Archive::new(gz_decoder);
+//        }
+//        unimplemented!()
+//    }
+}
+
+trait TarArchive {
+    fn file_headers(&mut self) -> io::Result<Box<TarHeaderIter>>;
+}
+
+impl<R: io::Read> TarArchive for tar::Archive<R> {
+    fn file_headers(&mut self) -> io::Result<Box<TarHeaderIter>> {
+        let files = try!(self.files_mut());
+        Ok(Box::new(TarHeaderIterImpl(files)))
     }
 }
 
-type TarHeaderIter<'a> = Box<Iterator<Item=&'a tar::Header>>;
+
+type TarHeaderIter<'a> = Iterator<Item=&'a tar::Header>;
 
 struct TarHeaderIterImpl<'a, R: 'a>(tar::FilesMut<'a, R>);
 
