@@ -10,20 +10,14 @@ use collections::{CollectionsStatus, SignatureChain, SignatureFile};
 use backend::Backend;
 
 
-pub struct BackupFiles<B> {
-    backend: B,
+pub struct BackupFiles {
     snapshots: Vec<Snapshot>
 }
 
-impl<B: Backend> BackupFiles<B> {
-    pub fn new(backend: B) -> io::Result<BackupFiles<B>> {
-        let collection = {
-            let filenames = try!(backend.get_file_names());
-            CollectionsStatus::from_filenames(&filenames)
-        };
-        let chains = collection.signature_chains();
-        // TODO: go from signature chains to snapshots
-        Ok(BackupFiles{ backend: backend, snapshots: Vec::new() })
+impl BackupFiles {
+    pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
+        let builder = BackupFilesBuilder{ backend: backend };
+        builder.build()
     }
 
     pub fn snapshots(&self) -> Snapshots {
@@ -44,27 +38,20 @@ impl<B: Backend> BackupFiles<B> {
 //    }
 }
 
-trait TarArchive {
-    fn file_headers(&mut self) -> io::Result<Box<TarHeaderIter>>;
+
+struct BackupFilesBuilder<'a, B: Backend + 'a> {
+    backend: &'a B
 }
 
-impl<R: io::Read> TarArchive for tar::Archive<R> {
-    fn file_headers(&mut self) -> io::Result<Box<TarHeaderIter>> {
-        let files = try!(self.files_mut());
-        Ok(Box::new(TarHeaderIterImpl(files)))
-    }
-}
-
-
-type TarHeaderIter<'a> = Iterator<Item=&'a tar::Header>;
-
-struct TarHeaderIterImpl<'a, R: 'a>(tar::FilesMut<'a, R>);
-
-impl<'a, R> Iterator for TarHeaderIterImpl<'a, R> {
-    type Item = &'a tar::Header;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        None
+impl<'a, B: Backend> BackupFilesBuilder<'a, B> {
+    pub fn build(&self) -> io::Result<BackupFiles> {
+        let collection = {
+            let filenames = try!(self.backend.get_file_names());
+            CollectionsStatus::from_filenames(&filenames)
+        };
+        let chains = collection.signature_chains();
+        // TODO: go from signature chains to snapshots
+        Ok(BackupFiles{ snapshots: Vec::new() })
     }
 }
 
