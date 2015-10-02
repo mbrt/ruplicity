@@ -34,6 +34,24 @@ impl BackupFiles {
             CollectionsStatus::from_filenames(&filenames)
         };
         let chains = collection.signature_chains();
+        for chain in chains {
+            let file = try!(backend.open_file(chain.fullsig.file_name.as_ref()));
+            if chain.fullsig.compressed {
+                let gz_decoder = try!(GzDecoder::new(file));
+                let mut tar = tar::Archive::new(gz_decoder);
+                for tarfile in try!(tar.files_mut()) {
+                    if let Ok(tarfile) = tarfile {
+                        let header = tarfile.header();
+                        let path = unwrap_or_continue!(header.path());
+                        let mut pcomps = path.components();
+                        // split the path in (first directory, the remaining path)
+                        // the first is the type, the remaining is the real path
+                        let pfirst = unwrap_opt_or_continue!(pcomps.next());
+                        let ptail = pcomps.as_path();
+                    }
+                }
+            }
+        }
         // TODO: go from signature chains to snapshots
         Ok(BackupFiles{ snapshots: Vec::new() })
     }
@@ -41,22 +59,5 @@ impl BackupFiles {
     pub fn snapshots(&self) -> Snapshots {
         self.snapshots.iter()
     }
-
-//    fn signatures_files(chain: &SignatureChain) -> Vec<TarHeaderIter> {
-//        unimplemented!()
-//    }
-
-//    fn signature_file_iter(&self, signature: &SignatureFile) -> io::Result<BoxTarHeaderIter> {
-//        let file = try!(self.backend.open_file(signature.file_name.as_ref()));
-//        if signature.compressed {
-//            let gz_decoder = try!(GzDecoder::new(file));
-//            let mut tar = tar::Archive::new(gz_decoder);
-//        }
-//        unimplemented!()
-//    }
 }
 
-
-// impl Snapshot {
-//     pub fn files(&self) ->
-// }

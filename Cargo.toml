@@ -5,7 +5,7 @@ authors = ["mbrt"]
 
 [dependencies]
 flate2 = "0.2"
-tar = "0.2.14"
+tar = "0.3.1"
 regex = "0.1.8"
 try_opt = "0.1.1"
 time = "0.1.32"
