@@ -14,10 +14,28 @@ pub struct BackupFiles {
     snapshots: Vec<Snapshot>
 }
 
+pub struct Snapshot {
+    pub time: Timespec
+}
+
+pub struct File {
+    pub name: String,
+    pub last_modified: Timespec
+}
+
+/// Iterator over a list of backup snapshots.
+pub type Snapshots<'a> = slice::Iter<'a, Snapshot>;
+
+
 impl BackupFiles {
     pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
-        let builder = BackupFilesBuilder{ backend: backend };
-        builder.build()
+        let collection = {
+            let filenames = try!(backend.get_file_names());
+            CollectionsStatus::from_filenames(&filenames)
+        };
+        let chains = collection.signature_chains();
+        // TODO: go from signature chains to snapshots
+        Ok(BackupFiles{ snapshots: Vec::new() })
     }
 
     pub fn snapshots(&self) -> Snapshots {
@@ -39,36 +57,6 @@ impl BackupFiles {
 }
 
 
-struct BackupFilesBuilder<'a, B: Backend + 'a> {
-    backend: &'a B
-}
-
-impl<'a, B: Backend> BackupFilesBuilder<'a, B> {
-    pub fn build(&self) -> io::Result<BackupFiles> {
-        let collection = {
-            let filenames = try!(self.backend.get_file_names());
-            CollectionsStatus::from_filenames(&filenames)
-        };
-        let chains = collection.signature_chains();
-        // TODO: go from signature chains to snapshots
-        Ok(BackupFiles{ snapshots: Vec::new() })
-    }
-}
-
-
-/// Iterator over a list of backup snapshots.
-pub type Snapshots<'a> = slice::Iter<'a, Snapshot>;
-
-
-pub struct Snapshot {
-    pub time: Timespec
-}
-
 // impl Snapshot {
 //     pub fn files(&self) ->
 // }
-
-pub struct File {
-    pub name: String,
-    pub last_modified: Timespec
-}

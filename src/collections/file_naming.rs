@@ -25,6 +25,31 @@ pub struct FileName {
     pub partial: bool
 }
 
+pub struct FileNameInfo<'a> {
+    pub file_name: &'a str,
+    pub info: FileName
+}
+
+pub struct FileNameParser {
+    full_vol_re: Regex,
+    full_manifest_re: Regex,
+    inc_vol_re: Regex,
+    inc_manifest_re: Regex,
+    full_sig_re: Regex,
+    new_sig_re: Regex
+}
+
+
+impl<'a> FileNameInfo<'a> {
+    pub fn new(name: &'a str, info: FileName) -> Self {
+        FileNameInfo {
+            file_name: &name,
+            info: info
+        }
+    }
+}
+
+
 impl FileName {
     /// Builder pattern for FileName
     pub fn new() -> Self {
@@ -53,30 +78,6 @@ gen_setters!(FileName,
     partial: bool
 );
 
-
-pub struct FileNameInfo<'a> {
-    pub file_name: &'a str,
-    pub info: FileName
-}
-
-impl<'a> FileNameInfo<'a> {
-    pub fn new(name: &'a str, info: FileName) -> Self {
-        FileNameInfo {
-            file_name: &name,
-            info: info
-        }
-    }
-}
-
-
-pub struct FileNameParser {
-    full_vol_re: Regex,
-    full_manifest_re: Regex,
-    inc_vol_re: Regex,
-    inc_manifest_re: Regex,
-    full_sig_re: Regex,
-    new_sig_re: Regex
-}
 
 impl FileNameParser {
     pub fn new() -> Self {

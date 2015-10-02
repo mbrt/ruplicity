@@ -13,13 +13,6 @@ pub struct PrettyDisplay {
     tm: Tm
 }
 
-impl Display for PrettyDisplay {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{}", self.tm.rfc822z())
-    }
-}
-
-
 /// The format to be used to display a time.
 /// It could be a local or an UTC time.
 #[allow(dead_code)]
@@ -27,6 +20,13 @@ pub enum Format {
     Local,
     Utc
 }
+
+impl Display for PrettyDisplay {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{}", self.tm.rfc822z())
+    }
+}
+
 
 /// Returns an object implementing Display as a pretty printed UTC time.
 #[allow(dead_code)]

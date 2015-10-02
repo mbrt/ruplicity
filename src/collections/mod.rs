@@ -23,6 +23,41 @@ pub struct BackupSet {
     info_set: bool,    // true if informations are set
 }
 
+pub struct BackupChain {
+    pub fullset: BackupSet,
+    pub incset_list: Vec<BackupSet>,
+    pub start_time: Timespec,
+    pub end_time: Timespec
+}
+
+pub struct SignatureFile {
+    pub file_name: String,
+    pub time: Timespec,
+    pub compressed: bool,
+    pub encrypted: bool
+}
+
+/// A chain of signature belonging to the same backup set.
+pub struct SignatureChain {
+    /// The file name of the full signature chain.
+    pub fullsig: SignatureFile,
+    /// A list of file names for incremental signatures.
+    pub inclist: Vec<SignatureFile>
+}
+
+pub struct CollectionsStatus {
+    backup_chains: Vec<BackupChain>,
+    sig_chains: Vec<SignatureChain>
+}
+
+/// Iterator over some kind of chain
+pub type ChainIter<'a, T> = slice::Iter<'a, T>;
+
+
+// TODO: Remove
+type FileNameInfos<'a> = Vec<FileNameInfo<'a>>;
+
+
 impl BackupSet {
     // TODO: remake new like BackupChain, only with the starting filename and remove info_set.
     pub fn new() -> Self {
@@ -139,13 +174,6 @@ impl Display for BackupSet {
 }
 
 
-pub struct BackupChain {
-    pub fullset: BackupSet,
-    pub incset_list: Vec<BackupSet>,
-    pub start_time: Timespec,
-    pub end_time: Timespec
-}
-
 impl BackupChain {
     /// Create a new BackupChain starting from a full backup set.
     pub fn new(fullset: BackupSet) -> Self {
@@ -200,13 +228,6 @@ impl Display for BackupChain {
 }
 
 
-pub struct SignatureFile {
-    pub file_name: String,
-    pub time: Timespec,
-    pub compressed: bool,
-    pub encrypted: bool
-}
-
 impl SignatureFile {
     pub fn from_file_and_info(fname: &str, pr: &FileName) -> Self {
         SignatureFile{
@@ -222,14 +243,6 @@ impl SignatureFile {
     }
 }
 
-
-/// A chain of signature belonging to the same backup set.
-pub struct SignatureChain {
-    /// The file name of the full signature chain.
-    pub fullsig: SignatureFile,
-    /// A list of file names for incremental signatures.
-    pub inclist: Vec<SignatureFile>
-}
 
 impl SignatureChain {
     /// Create a new SignatureChain starting from a full signature.
@@ -278,17 +291,6 @@ impl Display for SignatureChain {
     }
 }
 
-
-type FileNameInfos<'a> = Vec<FileNameInfo<'a>>;
-
-/// Iterator over some kind of chain
-pub type ChainIter<'a, T> = slice::Iter<'a, T>;
-
-
-pub struct CollectionsStatus {
-    backup_chains: Vec<BackupChain>,
-    sig_chains: Vec<SignatureChain>
-}
 
 impl CollectionsStatus {
     pub fn new() -> Self {
