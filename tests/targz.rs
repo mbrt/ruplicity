@@ -12,7 +12,7 @@ fn targz() {
     let mut tar = Archive::new(gz_decoder);
     let expected = ["a", "b", "c/", "c/d"];
     let actual: Vec<_> = tar.files_mut().unwrap()
-        .map(|f| f.unwrap().filename().unwrap().to_owned())
+        .map(|f| f.unwrap().header().path().unwrap().to_str().unwrap().to_owned())
         .collect();
     assert_eq!(actual, expected);
 }
@@ -24,7 +24,7 @@ fn single_vol_names() {
     let mut tar = Archive::new(gz_decoder);
     for file in tar.files_mut().unwrap() {
         if let Ok(f) = file {
-            println!("{:?} {:?}", f.mode(), f.filename())
+            println!("{:?} {:?}", f.header().mode(), f.header().path().unwrap())
         }
     }
 }
