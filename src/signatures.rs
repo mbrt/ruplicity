@@ -1,6 +1,7 @@
 use std::io;
 use std::iter::Iterator;
 use std::slice;
+use std::path::Component;
 
 use flate2::read::GzDecoder;
 use tar;
@@ -27,6 +28,13 @@ pub struct File {
 pub type Snapshots<'a> = slice::Iter<'a, Snapshot>;
 
 
+enum DiffType {
+    Signature,
+    Snapshot,
+    Deleted
+}
+
+
 impl BackupFiles {
     pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
         let collection = {
@@ -47,7 +55,15 @@ impl BackupFiles {
                         // split the path in (first directory, the remaining path)
                         // the first is the type, the remaining is the real path
                         let pfirst = unwrap_opt_or_continue!(pcomps.next());
-                        let ptail = pcomps.as_path();
+                        if let Component::Normal(strfirst) = pfirst {
+                            let difftype = match strfirst.to_str() {
+                                Some("signature") => DiffType::Signature,
+                                Some("snapshot")  => DiffType::Snapshot,
+                                Some("deleted")   => DiffType::Deleted,
+                                _                 => { continue; }
+                            };
+                            let realpath = pcomps.as_path();
+                        }
                     }
                 }
             }
