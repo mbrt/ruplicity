@@ -22,10 +22,9 @@ pub trait Backend {
 
 pub mod local {
     use super::Backend;
+    use std::fs::{self, File};
+    use std::io;
     use std::path::{Path, PathBuf};
-    use std::{io, fs};
-    use std::io::Read;
-    use std::fs::File;
 
 
     /// Backend operating on the local filesystem.
@@ -60,7 +59,9 @@ pub mod local {
         }
 
         fn open_file(&self, name: &str) -> io::Result<File> {
-            unimplemented!()
+            let mut path = self.base_path.clone();
+            path.push(name);
+            File::open(path)
         }
     }
 }
