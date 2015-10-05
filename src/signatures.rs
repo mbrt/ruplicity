@@ -1,4 +1,3 @@
-use std::convert::From;
 use std::io::{self, Read};
 use std::iter::Iterator;
 use std::path::{Component, Path, PathBuf};
@@ -121,14 +120,52 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
                                     mut tar: tar::Archive<R>,
                                     snapshot_id: u8) -> io::Result<()>
 {
-    for tarfile in try!(tar.files_mut()) {
-        // we can ignore paths with errors
-        // the only problem here is that we miss some change in the chain, but it is better
-        // than abort the whole signature
-        let tarfile = unwrap_or_continue!(tarfile);
-        let header = tarfile.header();
-        let path = unwrap_or_continue!(header.path());
-        let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
+    let mut new_files: Vec<PathSnapshots> = Vec::new();
+    {
+        let mut old_snapshots = snapshots.iter_mut();
+        for tarfile in try!(tar.files_mut()) {
+            // we can ignore paths with errors
+            // the only problem here is that we miss some change in the chain, but it is better
+            // than abort the whole signature
+            let tarfile = unwrap_or_continue!(tarfile);
+            let header = tarfile.header();
+            let path = unwrap_or_continue!(header.path());
+            let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
+            let info = match difftype {
+                DiffType::Signature | DiffType::Snapshot => {
+                    let time = Timespec::new(header.mtime().unwrap_or(0 as u64) as i64, 0);
+                    Some(PathInfo{ mtime: time })
+                }
+                _ => None
+            };
+            let new_snapshot = PathSnapshot{ info: info, index: snapshot_id };
+            // find the current path in the old snapshots
+            // note: they are ordered
+            while let Some(path_snapshots) = old_snapshots.next() {
+                if path_snapshots.path.as_path() < path {
+                    continue;
+                }
+                if path_snapshots.path.as_path() == path {
+                    // this path is already present in old snapshots: update them
+                    path_snapshots.snapshots.push(new_snapshot);
+                }
+                else {
+                    // the path is not present in the old snapshots: add to new list
+                    new_files.push(PathSnapshots{
+                        path: path.to_path_buf(),
+                        snapshots: vec![new_snapshot]
+                    });
+                }
+                break;
+            }
+        }
+    }
+    // merge the new files with old snapthots
+    if !new_files.is_empty() {
+        // TODO: Performance hurt here: we have two sorted arrays to merge,
+        // better to use this algorithm: http://stackoverflow.com/a/4553321/1667955
+        snapshots.extend(new_files.into_iter());
+        snapshots.sort_by(|a, b| a.path.cmp(&b.path));
     }
     Ok(())
 }
