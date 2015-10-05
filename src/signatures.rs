@@ -94,14 +94,18 @@ impl BackupFiles {
 }
 
 
-fn add_sigfile_to_chain<R: Read>(chain: &mut Chain, file: R, sigfile: &SignatureFile) -> io::Result<()> {
+fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
+                                 file: R,
+                                 sigfile: &SignatureFile) -> io::Result<()>
+{
     let result = {
+        let snapshot_id = chain.files.len() as u8;
         if sigfile.compressed {
             let gz_decoder = try!(GzDecoder::new(file));
-            add_sigtar_to_chain(chain, tar::Archive::new(gz_decoder))
+            add_sigtar_to_snapshots(&mut chain.files, tar::Archive::new(gz_decoder), snapshot_id)
         }
         else {
-            add_sigtar_to_chain(chain, tar::Archive::new(file))
+            add_sigtar_to_snapshots(&mut chain.files, tar::Archive::new(file), snapshot_id)
         }
     };
     if result.is_ok() {
@@ -113,7 +117,10 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain, file: R, sigfile: &Signature
     result
 }
 
-fn add_sigtar_to_chain<R: Read>(chain: &mut Chain, mut tar: tar::Archive<R>) -> io::Result<()> {
+fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
+                                    mut tar: tar::Archive<R>,
+                                    snapshot_id: u8) -> io::Result<()>
+{
     for tarfile in try!(tar.files_mut()) {
         // we can ignore paths with errors
         // the only problem here is that we miss some change in the chain, but it is better
