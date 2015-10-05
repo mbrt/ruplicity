@@ -94,29 +94,6 @@ impl BackupFiles {
 }
 
 
-// TODO
-// impl<P: AsRef<Path>> From<P> for PathSnapshot {
-//     fn from(path: P) -> Self {
-//         use std::io::{Error, ErrorKind};
-// 
-//         let mut pcomps = path.as_ref().components();
-//         // split the path in (first directory, the remaining path)
-//         // the first is the type, the remaining is the real path
-//         let pfirst = try!(pcomps.next());
-//         if let Component::Normal(strfirst) = pfirst {
-//             let difftype = match strfirst.to_str() {
-//                 Some("signature") => DiffType::Signature,
-//                 Some("snapshot")  => DiffType::Snapshot,
-//                 Some("deleted")   => DiffType::Deleted,
-//                 _                 => { return io::Error::new(ErrorKind::Other, "unexpected signature type"); }
-//             };
-//             let realpath = pcomps.as_path();
-//         }
-//         unimplemented!()
-//     }
-// }
-
-
 fn add_sigfile_to_chain<R: Read>(chain: &mut Chain, file: R, sigfile: &SignatureFile) -> io::Result<()> {
     let result = {
         if sigfile.compressed {
@@ -138,26 +115,34 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain, file: R, sigfile: &Signature
 
 fn add_sigtar_to_chain<R: Read>(chain: &mut Chain, mut tar: tar::Archive<R>) -> io::Result<()> {
     for tarfile in try!(tar.files_mut()) {
-        if let Ok(tarfile) = tarfile {
-            let header = tarfile.header();
-            // we can ignore paths with errors
-            // the only problem here is that we miss some change in the chain, but it is better
-            // than abort the whole signature
-            let path = unwrap_or_continue!(header.path());
-            let mut pcomps = path.components();
-            // split the path in (first directory, the remaining path)
-            // the first is the type, the remaining is the real path
-            let pfirst = unwrap_opt_or_continue!(pcomps.next());
-            if let Component::Normal(strfirst) = pfirst {
-                let difftype = match strfirst.to_str() {
-                    Some("signature") => DiffType::Signature,
-                    Some("snapshot")  => DiffType::Snapshot,
-                    Some("deleted")   => DiffType::Deleted,
-                    _                 => { continue; /* unexpected diff type */ }
-                };
-                let realpath = pcomps.as_path();
-            }
-        }
+        // we can ignore paths with errors
+        // the only problem here is that we miss some change in the chain, but it is better
+        // than abort the whole signature
+        let tarfile = unwrap_or_continue!(tarfile);
+        let header = tarfile.header();
+        let path = unwrap_or_continue!(header.path());
+        let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
     }
     Ok(())
 }
+
+fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
+    // split the path in (first directory, the remaining path)
+    // the first is the type, the remaining is the real path
+    let mut pcomps = path.components();
+    let pfirst = try_opt!(pcomps.next());
+    if let Component::Normal(strfirst) = pfirst {
+        let difftype = match strfirst.to_str() {
+            Some("signature") => DiffType::Signature,
+            Some("snapshot")  => DiffType::Snapshot,
+            Some("deleted")   => DiffType::Deleted,
+            _                 => { return None; }
+        };
+        let realpath = pcomps.as_path();
+        Some((difftype, realpath))
+    }
+    else {
+        None
+    }
+}
+
