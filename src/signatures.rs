@@ -15,17 +15,27 @@ pub struct BackupFiles {
     chains: Vec<Chain>
 }
 
-pub struct Snapshot {
-    pub time: Timespec
+pub struct Snapshot<'a> {
+    index: u8,
+    chain: &'a Chain
 }
 
-pub struct File {
-    pub name: String,
+pub struct File<'a> {
+    pub name: &'a str,
     pub last_modified: Timespec
 }
 
 /// Iterator over a list of backup snapshots.
-pub type Snapshots<'a> = slice::Iter<'a, Snapshot>;
+pub struct Snapshots<'a> {
+    chain_iter: slice::Iter<'a, Chain>,
+    chain: Option<&'a Chain>,
+    snapshot_id: u8
+}
+
+pub struct SnapshotFiles<'a> {
+    index: u8,
+    iter: slice::Iter<'a, PathSnapshots>
+}
 
 
 enum DiffType {
@@ -88,7 +98,63 @@ impl BackupFiles {
     }
 
     pub fn snapshots(&self) -> Snapshots {
-        unimplemented!()
+        let mut iter = self.chains.iter();
+        let first_chain = iter.next();
+        Snapshots{ chain_iter: iter, chain: first_chain, snapshot_id: 0 as u8 }
+    }
+}
+
+
+impl<'a> Iterator for Snapshots<'a> {
+    type Item = Snapshot<'a>;
+
+    fn next(&mut self) -> Option<Snapshot<'a>> {
+        loop {
+            if let Some(chain) = self.chain {
+                if let Some(_) = chain.timestamps.get(self.snapshot_id as usize) {
+                    self.snapshot_id += 1;
+                    return Some(Snapshot{ index: self.snapshot_id, chain: chain })
+                }
+                else {
+                    // this chain is completed
+                    // go to next chain
+                    self.chain = self.chain_iter.next();
+                }
+            }
+            else {
+                // no other chains are present
+                return None
+            }
+        }
+    }
+}
+
+
+impl<'a> Snapshot<'a> {
+    pub fn time(&self) -> Timespec {
+        self.chain.timestamps[self.index as usize]
+    }
+
+    pub fn files(&self) -> SnapshotFiles<'a> {
+        SnapshotFiles{ index: self.index, iter: self.chain.files.iter() }
+    }
+}
+
+
+impl<'a> Iterator for SnapshotFiles<'a> {
+    type Item = File<'a>;
+
+    fn next(&mut self) -> Option<File<'a>> {
+        while let Some(path_snapshots) = self.iter.next() {
+            if let Some(s) = path_snapshots.snapshots.iter().rev().find(|s| s.index <= self.index) {
+                // now we have a path info present in this snaptshot
+                // if it is not deleted return it
+                if let Some(ref info) = s.info {
+                    return Some(File{ name: path_snapshots.path.to_str().unwrap(), last_modified: info.mtime })
+                }
+            }
+        }
+        None
     }
 }
 
