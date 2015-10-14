@@ -210,22 +210,34 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             let new_snapshot = PathSnapshot{ info: info, index: snapshot_id };
             // find the current path in the old snapshots
             // note: they are ordered
-            while let Some(path_snapshots) = old_snapshots.next() {
-                if path_snapshots.path.as_path() < path {
-                    continue;
-                }
-                if path_snapshots.path.as_path() == path {
-                    // this path is already present in old snapshots: update them
-                    path_snapshots.snapshots.push(new_snapshot);
-                }
-                else {
-                    // the path is not present in the old snapshots: add to new list
-                    new_files.push(PathSnapshots{
-                        path: path.to_path_buf(),
-                        snapshots: vec![new_snapshot]
-                    });
-                }
-                break;
+            let position = {
+                let mut position: Option<&mut PathSnapshots> = None;
+                while let Some(path_snapshots) = old_snapshots.next() {
+                    if path_snapshots.path.as_path() < path {
+                        continue;
+                    }
+                    if path_snapshots.path.as_path() == path {
+                        // this path is already present in old snapshots: update them
+                        position = Some(path_snapshots);
+                    }
+                    else {
+                        // we've already reached the first item next to the current path
+                        // so, the path is not present in old snapshots
+                        position = None;
+                    }
+                    break;
+                };
+                position
+            };
+            if let Some(path_snapshots) = position {
+                path_snapshots.snapshots.push(new_snapshot);
+            }
+            else {
+                // the path is not present in the old snapshots: add to new list
+                new_files.push(PathSnapshots{
+                    path: path.to_path_buf(),
+                    snapshots: vec![new_snapshot]
+                });
             }
         }
     }
