@@ -423,7 +423,7 @@ impl Display for CollectionsStatus {
 
 #[cfg(test)]
 mod test {
-    use super::{BackupSet, CollectionsStatus};
+    use super::*;
     use super::file_naming::{FileType, FileNameInfo, FileNameParser};
     use time_utils::{DEFAULT_TIMESPEC, parse_time_str};
 

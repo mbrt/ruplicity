@@ -20,6 +20,7 @@ pub struct Snapshot<'a> {
     chain: &'a Chain
 }
 
+#[derive(Debug)]
 pub struct File<'a> {
     pub name: &'a str,
     pub last_modified: Timespec
@@ -100,7 +101,7 @@ impl BackupFiles {
     pub fn snapshots(&self) -> Snapshots {
         let mut iter = self.chains.iter();
         let first_chain = iter.next();
-        Snapshots{ chain_iter: iter, chain: first_chain, snapshot_id: 0 as u8 }
+        Snapshots{ chain_iter: iter, chain: first_chain, snapshot_id: 0 }
     }
 }
 
@@ -112,13 +113,15 @@ impl<'a> Iterator for Snapshots<'a> {
         loop {
             if let Some(chain) = self.chain {
                 if let Some(_) = chain.timestamps.get(self.snapshot_id as usize) {
+                    let result = Some(Snapshot{ index: self.snapshot_id, chain: chain });
                     self.snapshot_id += 1;
-                    return Some(Snapshot{ index: self.snapshot_id, chain: chain })
+                    return result;
                 }
                 else {
                     // this chain is completed
                     // go to next chain
                     self.chain = self.chain_iter.next();
+                    self.snapshot_id = 0;
                 }
             }
             else {
@@ -147,7 +150,7 @@ impl<'a> Iterator for SnapshotFiles<'a> {
     fn next(&mut self) -> Option<File<'a>> {
         while let Some(path_snapshots) = self.iter.next() {
             if let Some(s) = path_snapshots.snapshots.iter().rev().find(|s| s.index <= self.index) {
-                // now we have a path info present in this snaptshot
+                // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
                     return Some(File{ name: path_snapshots.path.to_str().unwrap(), last_modified: info.mtime })
@@ -226,7 +229,7 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             }
         }
     }
-    // merge the new files with old snapthots
+    // merge the new files with old snapshots
     if !new_files.is_empty() {
         // TODO: Performance hurt here: we have two sorted arrays to merge,
         // better to use this algorithm: http://stackoverflow.com/a/4553321/1667955
@@ -256,3 +259,24 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     }
 }
 
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use backend::local::LocalBackend;
+    use time_utils::to_pretty_local;
+
+
+    #[test]
+    fn open_from_local() {
+        let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
+        let files = BackupFiles::new(&backend).unwrap();
+        println!("Backup snapshots:");
+        for snapshot in files.snapshots() {
+            println!("Snapshot {}", to_pretty_local(snapshot.time()));
+            for file in snapshot.files() {
+                println!("    {:?}", file);
+            }
+        }
+    }
+}
