@@ -22,7 +22,7 @@ pub struct Snapshot<'a> {
 
 #[derive(Debug)]
 pub struct File<'a> {
-    pub name: &'a str,
+    pub path: &'a Path,
     pub last_modified: Timespec
 }
 
@@ -153,7 +153,10 @@ impl<'a> Iterator for SnapshotFiles<'a> {
                 // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
-                    return Some(File{ name: path_snapshots.path.to_str().unwrap(), last_modified: info.mtime })
+                    return Some(File{
+                        path: path_snapshots.path.as_ref(),
+                        last_modified: info.mtime
+                    });
                 }
             }
         }
