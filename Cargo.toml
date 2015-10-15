@@ -15,4 +15,4 @@ try_opt = "0.1.1"
 time = "0.1.32"
 
 # optional, working only on nightly
-clippy = { version = "*", optional = true }
+clippy = { git = "https://github.com/Manishearth/rust-clippy", optional = true }
