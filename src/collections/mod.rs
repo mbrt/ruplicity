@@ -1,12 +1,13 @@
 // TODO: Make this non public
 pub mod file_naming;
 
-use time_utils;
-use time_utils::to_pretty_local;
 use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
+use std::path::Path;
 use std::slice;
 use time::Timespec;
+
+use time_utils::{self, to_pretty_local};
 use self::file_naming::{FileName, FileNameInfo, FileType, FileNameParser};
 
 
@@ -300,7 +301,7 @@ impl CollectionsStatus {
         }
     }
 
-    pub fn from_filenames<T: AsRef<str>>(filenames: &[T]) -> Self {
+    pub fn from_filenames<T: AsRef<Path>>(filenames: &[T]) -> Self {
         let mut result = Self::new();
         let filename_infos = Self::compute_filename_infos(&filenames);
         result.compute_backup_chains(&filename_infos);
@@ -316,12 +317,14 @@ impl CollectionsStatus {
         self.sig_chains.iter()
     }
 
-    fn compute_filename_infos<'a, T: AsRef<str>>(filename_list: &'a [T]) -> FileNameInfos<'a> {
+    fn compute_filename_infos<'a, T: AsRef<Path>>(filename_list: &'a [T]) -> FileNameInfos<'a> {
         let mut result = Vec::new();
         let parser = FileNameParser::new();
         for name in filename_list {
-            if let Some(info) = parser.parse(name.as_ref()) {
-                result.push(FileNameInfo::new(name.as_ref(), info));
+            if let Some(name) = name.as_ref().to_str() {
+                if let Some(info) = parser.parse(name) {
+                    result.push(FileNameInfo::new(name, info));
+                }
             }
         }
         result

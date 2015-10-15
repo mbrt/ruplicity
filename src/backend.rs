@@ -1,12 +1,12 @@
-use std::io;
-use std::io::Read;
+use std::io::{self, Read};
+use std::path::Path;
 
 
 /// Backend is a trait used to provide access to backup files.
 pub trait Backend {
     /// FileName is an associated type for a file name. It must be convertible to a string
     /// reference.
-    type FileName: AsRef<str>;
+    type FileName: AsRef<Path>;
 
     /// FileStream is an associated type for a read stream for a file.
     type FileStream: Read;
@@ -30,7 +30,7 @@ pub mod local {
     /// Backend operating on the local filesystem.
     pub struct LocalBackend {
         base_path: PathBuf,
-        file_names: Vec<String>
+        file_names: Vec<PathBuf>
     }
 
     impl LocalBackend {
@@ -40,8 +40,9 @@ pub mod local {
             let mut filenames = Vec::new();
             for entry in paths {
                 let entry = unwrap_or_continue!(entry);
-                let filename = unwrap_or_continue!(entry.file_name().into_string());
-                filenames.push(filename);
+                let filename = entry.file_name();
+                let filename: &Path = filename.as_ref();
+                filenames.push(filename.to_path_buf());
             }
             Ok(LocalBackend{
                 base_path: path.as_ref().to_path_buf(),
@@ -51,10 +52,10 @@ pub mod local {
     }
 
     impl Backend for LocalBackend {
-        type FileName = String;
+        type FileName = PathBuf;
         type FileStream = File;
 
-        fn get_file_names(&self) -> io::Result<&[String]> {
+        fn get_file_names(&self) -> io::Result<&[PathBuf]> {
             Ok(&self.file_names)
         }
 
