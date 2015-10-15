@@ -3,9 +3,16 @@ name = "ruplicity"
 version = "0.1.0"
 authors = ["mbrt"]
 
+[features]
+default = []
+unstable = ["clippy"]
+
 [dependencies]
 flate2 = "0.2"
 tar = "0.3.1"
 regex = "0.1.8"
 try_opt = "0.1.1"
 time = "0.1.32"
+
+# optional, working only on nightly
+clippy = { git = "https://github.com/Manishearth/rust-clippy", optional = true }

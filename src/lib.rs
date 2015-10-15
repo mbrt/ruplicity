@@ -1,3 +1,6 @@
+#![cfg_attr(unstable, feature(plugin))]
+#![cfg_attr(unstable, plugin(clippy))]
+
 extern crate flate2;
 extern crate regex;
 extern crate tar;
