@@ -166,7 +166,7 @@ impl Display for BackupSet {
         }
         if !self.volumes_paths.is_empty() {
             try!(write!(f, "\n volumes:\n"));
-            for (_, vol) in self.volumes_paths.iter() {
+            for (_, vol) in &self.volumes_paths {
                 try!(write!(f, " {}", vol));
             }
         }
@@ -221,7 +221,7 @@ impl Display for BackupChain {
                     to_pretty_local(self.start_time),
                     to_pretty_local(self.end_time),
                     &self.fullset));
-        for inc in self.incset_list.iter() {
+        for inc in &self.incset_list {
             try!(write!(f, "\n{}", inc));
         }
         Ok(())
@@ -285,7 +285,7 @@ impl Display for SignatureChain {
                     to_pretty_local(self.start_time()),
                     to_pretty_local(self.end_time()),
                     &self.fullsig.file_name));
-        for inc in self.inclist.iter() {
+        for inc in &self.inclist {
             try!(write!(f, "\n{}", inc.file_name));
         }
         Ok(())
@@ -317,7 +317,7 @@ impl CollectionsStatus {
         self.sig_chains.iter()
     }
 
-    fn compute_filename_infos<'a, T: AsRef<Path>>(filename_list: &'a [T]) -> FileNameInfos<'a> {
+    fn compute_filename_infos<T: AsRef<Path>>(filename_list: &[T]) -> FileNameInfos {
         let mut result = Vec::new();
         let parser = FileNameParser::new();
         for name in filename_list {
@@ -330,16 +330,16 @@ impl CollectionsStatus {
         result
     }
 
-    fn compute_backup_chains(&mut self, filename_list: &FileNameInfos) {
+    fn compute_backup_chains(&mut self, filename_list: &[FileNameInfo]) {
         let sets = Self::compute_backup_sets(filename_list);
         self.add_to_backup_chains(sets);
     }
 
-    fn compute_backup_sets(filename_list: &FileNameInfos) -> Vec<BackupSet> {
+    fn compute_backup_sets(filename_list: &[FileNameInfo]) -> Vec<BackupSet> {
         let mut sets = Vec::<BackupSet>::new();
         for fileinfo in filename_list.iter() {
             let mut inserted = false;
-            for set in sets.iter_mut() {
+            for set in &mut sets {
                 if set.add_filename(&fileinfo) {
                     inserted = true;
                     break;
@@ -365,7 +365,7 @@ impl CollectionsStatus {
                 }
                 FileType::Inc => {
                     let mut rejected_set = Some(set);
-                    for chain in self.backup_chains.iter_mut() {
+                    for chain in &mut self.backup_chains {
                         rejected_set = chain.add_inc(rejected_set.unwrap());
                         if rejected_set.is_none() {
                             break;
@@ -382,7 +382,7 @@ impl CollectionsStatus {
         self.backup_chains.sort_by(|a, b| a.end_time.cmp(&b.end_time));
     }
 
-    fn compute_signature_chains(&mut self, filename_list: &FileNameInfos) {
+    fn compute_signature_chains(&mut self, filename_list: &[FileNameInfo]) {
         // create a new signature chain for each fill signature
         self.sig_chains = filename_list.iter()
             .filter(|f| f.info.file_type == FileType::FullSig)
@@ -397,7 +397,7 @@ impl CollectionsStatus {
         // add the new signatures to signature chains
         for sig in new_sig.into_iter() {
             let mut added = false;
-            for chain in self.sig_chains.iter_mut() {
+            for chain in &mut self.sig_chains {
                 if chain.add_new_sig(&sig) {
                     added = true;
                     break;
