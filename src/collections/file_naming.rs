@@ -123,7 +123,7 @@ impl FileNameParser {
                         .time(time)
                         .partial(captures.name("partial").is_some()));
         }
-        return None;
+        None
     }
 
     fn check_inc(&self, filename: &str) -> Option<FileName> {
@@ -145,7 +145,7 @@ impl FileNameParser {
                         .manifest(true)
                         .partial(captures.name("partial").is_some()));
         }
-        return None;
+        None
     }
 
     fn check_sig(&self, filename: &str) -> Option<FileName> {
@@ -163,7 +163,7 @@ impl FileNameParser {
                         .end_time(end_time)
                         .partial(captures.name("partial").is_some()));
         }
-        return None;
+        None
     }
 
     fn get_vol_num(&self, s: &str) -> Option<i32> {

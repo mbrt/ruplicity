@@ -87,7 +87,7 @@ impl BackupFiles {
             // if an error occurs in the full signature exit
             let file = try!(backend.open_file(coll_chain.fullsig.file_name.as_ref()));
             try!(add_sigfile_to_chain(&mut chain, file, &coll_chain.fullsig));
-            for inc in coll_chain.inclist.iter() {
+            for inc in &coll_chain.inclist {
                 // TODO: if an error occurs here, do not exit with an error, instead
                 // break the iteration and store the error inside the chain
                 let file = try!(backend.open_file(inc.file_name.as_ref()));
