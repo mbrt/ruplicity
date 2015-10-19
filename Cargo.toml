@@ -2,6 +2,11 @@
 name = "ruplicity"
 version = "0.1.0"
 authors = ["mbrt"]
+description = "Browse duplicity backups"
+repository = "https://github.com/mbrt/ruplicity"
+readme = "README.md"
+license = "MIT"
+keywords = ["duplicity", "backup"]
 
 [features]
 default = []
@@ -15,4 +20,4 @@ try_opt = "0.1.1"
 time = "0.1.32"
 
 # optional, working only on nightly
-clippy = { git = "https://github.com/Manishearth/rust-clippy", optional = true }
+clippy = { version = "*", optional = true }
