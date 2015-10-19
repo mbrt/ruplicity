@@ -1,5 +1,4 @@
-// TODO: Make this non public
-pub mod file_naming;
+mod file_naming;
 
 use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
@@ -53,10 +52,6 @@ pub struct CollectionsStatus {
 
 /// Iterator over some kind of chain
 pub type ChainIter<'a, T> = slice::Iter<'a, T>;
-
-
-// TODO: Remove
-type FileNameInfos<'a> = Vec<FileNameInfo<'a>>;
 
 
 impl BackupSet {
@@ -317,7 +312,7 @@ impl CollectionsStatus {
         self.sig_chains.iter()
     }
 
-    fn compute_filename_infos<T: AsRef<Path>>(filename_list: &[T]) -> FileNameInfos {
+    fn compute_filename_infos<T: AsRef<Path>>(filename_list: &[T]) -> Vec<FileNameInfo> {
         let mut result = Vec::new();
         let parser = FileNameParser::new();
         for name in filename_list {

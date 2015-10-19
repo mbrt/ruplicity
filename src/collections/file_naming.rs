@@ -1,7 +1,7 @@
-use time_utils;
-use time_utils::parse_time_str;
 use regex::Regex;
 use time::Timespec;
+
+use time_utils::{self, parse_time_str};
 
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
@@ -73,8 +73,9 @@ gen_setters!(FileName,
     time: Timespec,
     start_time: Timespec,
     end_time: Timespec,
-    compressed: bool,
-    encrypted: bool,
+    // not used for now: enable if needed
+    //compressed: bool,
+    //encrypted: bool,
     partial: bool
 );
 
