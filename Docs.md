@@ -71,10 +71,10 @@ Duplicity uses md4 type signatures, because the header starts with: 0x72730136. 
 
 - Header
   - 32b magic number (0x72730136 for MD4);
-  - 32b BE block length (512 for duplicity);
+  - 32b BE block length (duplicity uses different block lengths);
   - 32b BE strong sum length (16 for native MD4, 8 for duplicity);
 - Block *
-  - 32b weak sum;
-  - [strong sum length]B strong sum;
+  - 32b BE weak sum;
+  - [strong sum length]B BE? strong sum;
 
 BE stands for Big Endian. There is only one header and then one block for each file block.
