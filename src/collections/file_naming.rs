@@ -1,7 +1,7 @@
+use chrono::DateTime;
 use regex::Regex;
-use time::Timespec;
 
-use time_utils::{self, parse_time_str};
+use time_utils::{self, parse_time_str, Timestamp};
 
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
@@ -17,9 +17,9 @@ pub struct FileName {
     pub file_type: FileType,
     pub manifest: bool,
     pub volume_number: i32,
-    pub time: Timespec,
-    pub start_time: Timespec,
-    pub end_time: Timespec,
+    pub time: Timestamp,
+    pub start_time: Timestamp,
+    pub end_time: Timestamp,
     pub compressed: bool,
     pub encrypted: bool,
     pub partial: bool
@@ -70,9 +70,9 @@ gen_setters!(FileName,
     file_type: FileType,
     manifest: bool,
     volume_number: i32,
-    time: Timespec,
-    start_time: Timespec,
-    end_time: Timespec,
+    time: Timestamp,
+    start_time: Timestamp,
+    end_time: Timestamp,
     // not used for now: enable if needed
     //compressed: bool,
     //encrypted: bool,
@@ -266,7 +266,7 @@ mod test {
         // format
         assert_eq!(strftime("%a %d/%m/%Y %H:%M:%S", &tm).unwrap(), "Sun 17/06/2015 18:25:45");
         assert_eq!(format!("{}", tm.rfc3339()), "2015-06-17T18:25:45Z");
-        // store in Timespec and restore in Tm
+        // store in Timestamp and restore in Tm
         let ts = tm.to_timespec();
         let tm1 = at_utc(ts);
         // somehow they don't have the same identical structure :(

@@ -1,10 +1,10 @@
 #![cfg_attr(feature = "unstable", feature(plugin))]
 #![cfg_attr(feature = "unstable", plugin(clippy))]
 
+extern crate chrono;
 extern crate flate2;
 extern crate regex;
 extern crate tar;
-extern crate time;
 #[macro_use]
 extern crate try_opt;
 

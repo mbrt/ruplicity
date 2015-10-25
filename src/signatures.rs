@@ -3,12 +3,13 @@ use std::iter::Iterator;
 use std::path::{Component, Path, PathBuf};
 use std::slice;
 
+use chrono::DateTime;
 use flate2::read::GzDecoder;
 use tar;
-use time::Timespec;
 
 use backend::Backend;
 use collections::{CollectionsStatus, SignatureFile};
+use time_utils::Timestamp;
 
 
 pub struct BackupFiles {
@@ -23,7 +24,7 @@ pub struct Snapshot<'a> {
 #[derive(Debug)]
 pub struct File<'a> {
     pub path: &'a Path,
-    pub last_modified: Timespec
+    pub last_modified: Timestamp
 }
 
 /// Iterator over a list of backup snapshots.
@@ -48,7 +49,7 @@ enum DiffType {
 /// Store separately informations about the signatures and informations about the paths in the
 /// signatures. This allows to reuse informations between snapshots and avoid duplicating them.
 struct Chain {
-    timestamps: Vec<Timespec>,
+    timestamps: Vec<Timestamp>,
     files: Vec<PathSnapshots>
 }
 
@@ -68,7 +69,7 @@ struct PathSnapshot {
 
 /// Informations about a path inside a snapshot.
 struct PathInfo {
-    mtime: Timespec
+    mtime: Timestamp
 }
 
 
@@ -134,7 +135,7 @@ impl<'a> Iterator for Snapshots<'a> {
 
 
 impl<'a> Snapshot<'a> {
-    pub fn time(&self) -> Timespec {
+    pub fn time(&self) -> Timestamp {
         self.chain.timestamps[self.index as usize]
     }
 
@@ -205,7 +206,7 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
             let info = match difftype {
                 DiffType::Signature | DiffType::Snapshot => {
-                    let time = Timespec::new(header.mtime().unwrap_or(0 as u64) as i64, 0);
+                    let time = header.mtime().unwrap_or(0 as u64) as i64;
                     Some(PathInfo{ mtime: time })
                 }
                 _ => None

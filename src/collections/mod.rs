@@ -4,17 +4,17 @@ use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
 use std::path::Path;
 use std::slice;
-use time::Timespec;
+use chrono::DateTime;
 
-use time_utils::{self, to_pretty_local};
+use time_utils::{self, to_pretty_local, Timestamp};
 use self::file_naming::{FileName, FileNameInfo, FileType, FileNameParser};
 
 
 pub struct BackupSet {
     pub file_type: FileType,
-    pub time: Timespec,
-    pub start_time: Timespec,
-    pub end_time: Timespec,
+    pub time: Timestamp,
+    pub start_time: Timestamp,
+    pub end_time: Timestamp,
     pub compressed: bool,
     pub encrypted: bool,
     pub partial: bool,
@@ -26,13 +26,13 @@ pub struct BackupSet {
 pub struct BackupChain {
     pub fullset: BackupSet,
     pub incset_list: Vec<BackupSet>,
-    pub start_time: Timespec,
-    pub end_time: Timespec
+    pub start_time: Timestamp,
+    pub end_time: Timestamp
 }
 
 pub struct SignatureFile {
     pub file_name: String,
-    pub time: Timespec,
+    pub time: Timestamp,
     pub compressed: bool,
     pub encrypted: bool
 }
@@ -113,7 +113,7 @@ impl BackupSet {
         !self.manifest_path.is_empty()
     }
 
-    pub fn get_time(&self) -> &Timespec {
+    pub fn get_time(&self) -> &Timestamp {
         if self.time == time_utils::DEFAULT_TIMESPEC {
             &self.end_time
         }
@@ -265,11 +265,11 @@ impl SignatureChain {
         }
     }
 
-    pub fn start_time(&self) -> Timespec {
+    pub fn start_time(&self) -> Timestamp {
         self.fullsig.time
     }
 
-    pub fn end_time(&self) -> Timespec {
+    pub fn end_time(&self) -> Timestamp {
         self.inclist.last().map_or(self.start_time(), |inc| inc.time)
     }
 }
