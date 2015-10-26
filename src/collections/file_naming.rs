@@ -4,25 +4,63 @@ use time::Timespec;
 use time_utils::{self, parse_time_str};
 
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
-pub enum FileType {
-    FullSig,
-    NewSig,
-    Inc,
-    Full
-}
+//#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+//pub enum FileType {
+//    FullSig,
+//    NewSig,
+//    Inc,
+//    Full
+//}
+//
+//#[derive(Eq, PartialEq, Debug)]
+//pub struct FileName {
+//    pub file_type: FileType,
+//    pub manifest: bool,
+//    pub volume_number: i32,
+//    pub time: Timespec,
+//    pub start_time: Timespec,
+//    pub end_time: Timespec,
+//    pub compressed: bool,
+//    pub encrypted: bool,
+//    pub partial: bool
+//}
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct FileName {
-    pub file_type: FileType,
-    pub manifest: bool,
-    pub volume_number: i32,
-    pub time: Timespec,
-    pub start_time: Timespec,
-    pub end_time: Timespec,
+    pub tp: Type,
     pub compressed: bool,
-    pub encrypted: bool,
-    pub partial: bool
+    pub encrypted: bool
+}
+
+#[derive(Eq, PartialEq, Debug)]
+pub enum Type {
+    Full{
+        time: Timespec,
+        volume_number: i32
+    },
+    FullManifest{
+        time: Timespec,
+        partial: bool
+    },
+    Inc{
+        start_time: Timespec,
+        end_time: Timespec,
+        volume_number: i32
+    },
+    IncManifest{
+        start_time: Timespec,
+        end_time: Timespec,
+        partial: bool
+    },
+    FullSig{
+        time: Timespec,
+        partial: bool
+    },
+    NewSig{
+        start_time: Timespec,
+        end_time: Timespec,
+        partial: bool
+    }
 }
 
 pub struct FileNameInfo<'a> {
@@ -48,36 +86,6 @@ impl<'a> FileNameInfo<'a> {
         }
     }
 }
-
-
-impl FileName {
-    /// Builder pattern for FileName
-    pub fn new() -> Self {
-        FileName{
-            file_type: FileType::Full,
-            manifest: false,
-            volume_number: 0,
-            time: time_utils::DEFAULT_TIMESPEC,
-            start_time: time_utils::DEFAULT_TIMESPEC,
-            end_time: time_utils::DEFAULT_TIMESPEC,
-            compressed: false,
-            encrypted: false,
-            partial: false}
-    }
-}
-
-gen_setters!(FileName,
-    file_type: FileType,
-    manifest: bool,
-    volume_number: i32,
-    time: Timespec,
-    start_time: Timespec,
-    end_time: Timespec,
-    // not used for now: enable if needed
-    //compressed: bool,
-    //encrypted: bool,
-    partial: bool
-);
 
 
 impl FileNameParser {
@@ -109,20 +117,21 @@ impl FileNameParser {
         opt_result
     }
 
-    fn check_full(&self, filename: &str) -> Option<FileName> {
+    fn check_full(&self, filename: &str) -> Option<Type> {
         if let Some(captures) = self.full_vol_re.captures(filename) {
             let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
             let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
-            return Some(FileName::new().file_type(FileType::Full)
-                        .volume_number(vol_num)
-                        .time(time));
+            return Some(Type::Full{
+                time: time,
+                volume_number: vol_num
+            });
         }
         if let Some(captures) = self.full_manifest_re.captures(filename) {
             let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
-            return Some(FileName::new().file_type(FileType::Full)
-                        .manifest(true)
-                        .time(time)
-                        .partial(captures.name("partial").is_some()));
+            return Some(Type::FullManifest{
+                time: time,
+                partial: captures.name("partial").is_some()
+            });
         }
         None
     }

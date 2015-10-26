@@ -7,7 +7,7 @@ use std::slice;
 use time::Timespec;
 
 use time_utils::{self, to_pretty_local};
-use self::file_naming::{FileName, FileNameInfo, FileType, FileNameParser};
+use self::file_naming::{FileName, FileNameInfo, FileNameParser};
 
 
 pub struct BackupSet {
