@@ -4,29 +4,31 @@ use time::Timespec;
 use time_utils::{self, parse_time_str};
 
 
-//#[derive(Eq, PartialEq, Debug, Clone, Copy)]
-//pub enum FileType {
-//    FullSig,
-//    NewSig,
-//    Inc,
-//    Full
-//}
-//
-//#[derive(Eq, PartialEq, Debug)]
-//pub struct FileName {
-//    pub file_type: FileType,
-//    pub manifest: bool,
-//    pub volume_number: i32,
-//    pub time: Timespec,
-//    pub start_time: Timespec,
-//    pub end_time: Timespec,
-//    pub compressed: bool,
-//    pub encrypted: bool,
-//    pub partial: bool
-//}
+// TODO: Remove
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+pub enum FileType {
+    FullSig,
+    NewSig,
+    Inc,
+    Full
+}
 
+// TODO: Remove
 #[derive(Eq, PartialEq, Debug)]
 pub struct FileName {
+    pub file_type: FileType,
+    pub manifest: bool,
+    pub volume_number: i32,
+    pub time: Timespec,
+    pub start_time: Timespec,
+    pub end_time: Timespec,
+    pub compressed: bool,
+    pub encrypted: bool,
+    pub partial: bool
+}
+
+#[derive(Eq, PartialEq, Debug)]
+pub struct FileName2 {
     pub tp: Type,
     pub compressed: bool,
     pub encrypted: bool
@@ -65,7 +67,7 @@ pub enum Type {
 
 pub struct FileNameInfo<'a> {
     pub file_name: &'a str,
-    pub info: FileName
+    pub info: FileName2
 }
 
 pub struct FileNameParser {
@@ -78,8 +80,41 @@ pub struct FileNameParser {
 }
 
 
+// TODO: Remove
+impl FileName {
+    /// Builder pattern for FileName
+    pub fn new() -> Self {
+        FileName{
+            file_type: FileType::Full,
+            manifest: false,
+            volume_number: 0,
+            time: time_utils::DEFAULT_TIMESPEC,
+            start_time: time_utils::DEFAULT_TIMESPEC,
+            end_time: time_utils::DEFAULT_TIMESPEC,
+            compressed: false,
+            encrypted: false,
+            partial: false
+        }
+    }
+}
+
+// TODO: Remove
+gen_setters!(FileName,
+             file_type: FileType,
+             manifest: bool,
+             volume_number: i32,
+             time: Timespec,
+             start_time: Timespec,
+             end_time: Timespec,
+             // not used for now: enable if needed
+             //compressed: bool,
+             //encrypted: bool,
+             partial: bool
+            );
+
+
 impl<'a> FileNameInfo<'a> {
-    pub fn new(name: &'a str, info: FileName) -> Self {
+    pub fn new(name: &'a str, info: FileName2) -> Self {
         FileNameInfo {
             file_name: &name,
             info: info
@@ -100,21 +135,17 @@ impl FileNameParser {
         }
     }
 
-    pub fn parse(&self, filename: &str) -> Option<FileName> {
+    pub fn parse(&self, filename: &str) -> Option<FileName2> {
         use std::ascii::AsciiExt;
 
         let lower_fname = filename.to_ascii_lowercase();
-        let mut opt_result = self.check_full(&lower_fname)
-            .or(self.check_inc(&lower_fname))
-            .or(self.check_sig(&lower_fname));
-
-        // write encrypted and compressed properties
-        // independently from the file type
-        if let Some(ref mut result) = opt_result {
-            result.compressed = self.is_compressed(lower_fname.as_ref());
-            result.encrypted = self.is_encrypted(lower_fname.as_ref());
-        }
-        opt_result
+        let opt_type = self.check_full(&lower_fname)
+                           .or(self.check_inc(&lower_fname))
+                           .or(self.check_sig(&lower_fname));
+        opt_type.map(|t| FileName2{ tp: t,
+            compressed: self.is_compressed(lower_fname.as_ref()),
+            encrypted: self.is_encrypted(lower_fname.as_ref())
+        })
     }
 
     fn check_full(&self, filename: &str) -> Option<Type> {
@@ -136,44 +167,51 @@ impl FileNameParser {
         None
     }
 
-    fn check_inc(&self, filename: &str) -> Option<FileName> {
+    fn check_inc(&self, filename: &str) -> Option<Type> {
         if let Some(captures) = self.inc_vol_re.captures(filename) {
             let start_time = try_opt!(parse_time_str(captures.name("start_time").unwrap()));
             let end_time = try_opt!(parse_time_str(captures.name("end_time").unwrap()));
             let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
-            return Some(FileName::new().file_type(FileType::Inc)
-                        .start_time(start_time)
-                        .end_time(end_time)
-                        .volume_number(vol_num));
+            Some(Type::Inc{
+                start_time: start_time,
+                end_time: end_time,
+                volume_number: vol_num
+            })
         }
-        if let Some(captures) = self.inc_manifest_re.captures(filename) {
+        else if let Some(captures) = self.inc_manifest_re.captures(filename) {
             let start_time = try_opt!(parse_time_str(captures.name("start_time").unwrap()));
             let end_time = try_opt!(parse_time_str(captures.name("end_time").unwrap()));
-            return Some(FileName::new().file_type(FileType::Inc)
-                        .start_time(start_time)
-                        .end_time(end_time)
-                        .manifest(true)
-                        .partial(captures.name("partial").is_some()));
+            Some(Type::IncManifest{
+                start_time: start_time,
+                end_time: end_time,
+                partial: captures.name("partial").is_some()
+            })
         }
-        None
+        else {
+            None
+        }
     }
 
-    fn check_sig(&self, filename: &str) -> Option<FileName> {
+    fn check_sig(&self, filename: &str) -> Option<Type> {
         if let Some(captures) = self.full_sig_re.captures(filename) {
             let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
-            return Some(FileName::new().file_type(FileType::FullSig)
-                        .time(time)
-                        .partial(captures.name("partial").is_some()));
+            Some(Type::FullSig{
+                time: time,
+                partial: captures.name("partial").is_some()
+            })
         }
-        if let Some(captures) = self.new_sig_re.captures(filename) {
+        else if let Some(captures) = self.new_sig_re.captures(filename) {
             let start_time = try_opt!(parse_time_str(captures.name("start_time").unwrap()));
             let end_time = try_opt!(parse_time_str(captures.name("end_time").unwrap()));
-            return Some(FileName::new().file_type(FileType::NewSig)
-                        .start_time(start_time)
-                        .end_time(end_time)
-                        .partial(captures.name("partial").is_some()));
+            Some(Type::NewSig{
+                start_time: start_time,
+                end_time: end_time,
+                partial: captures.name("partial").is_some()
+            })
         }
-        None
+        else {
+            None
+        }
     }
 
     fn get_vol_num(&self, s: &str) -> Option<i32> {
