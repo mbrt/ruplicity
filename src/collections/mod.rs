@@ -203,8 +203,7 @@ impl Display for BackupSet {
                 try!(write!(f, "Incremental, start time: {}, end time: {}",
                             to_pretty_local(self.start_time),
                             to_pretty_local(self.end_time)));
-            },
-            _ => { }
+            }
         }
         if self.compressed {
             try!(write!(f, ", compressed"));
@@ -322,12 +321,12 @@ impl SignatureChain {
     /// Adds the given incremental signature to the signature chain if possible,
     /// returns false otherwise.
     pub fn add_new_sig(&mut self, fname: &FileNameInfo) -> bool {
-        if fname.info.file_type != FileType::NewSig {
-            false
-        }
-        else {
+        if let fnm::Type::NewSig{ .. } = fname.info.tp {
             self.inclist.push(SignatureFile::from_filename_info(fname));
             true
+        }
+        else {
+            false
         }
     }
 
@@ -419,12 +418,12 @@ impl CollectionsStatus {
 
     fn add_to_backup_chains(&mut self, set_list: Vec<BackupSet>) {
         for set in set_list.into_iter() {
-            match set.file_type {
-                FileType::Full => {
+            match set.tp {
+                Type::Full => {
                     let new_chain = BackupChain::new(set);
                     self.backup_chains.push(new_chain);
                 }
-                FileType::Inc => {
+                Type::Inc => {
                     let mut rejected_set = Some(set);
                     for chain in &mut self.backup_chains {
                         rejected_set = chain.add_inc(rejected_set.unwrap());
@@ -436,7 +435,6 @@ impl CollectionsStatus {
                         // TODO: add to orphaned sets
                     }
                 }
-                _ => { continue; }
             }
         }
         // sort by end time
@@ -446,14 +444,14 @@ impl CollectionsStatus {
     fn compute_signature_chains(&mut self, filename_list: &[FileNameInfo]) {
         // create a new signature chain for each fill signature
         self.sig_chains = filename_list.iter()
-            .filter(|f| f.info.file_type == FileType::FullSig)
+            .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
             .map(|f| SignatureChain::from_filename_info(f))
             .collect();
         // and collect all the new signatures, sorted by start time
         let mut new_sig: Vec<_> = filename_list.iter()
-            .filter(|f| f.info.file_type == FileType::NewSig)
+            .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
             .collect();
-        new_sig.sort_by(|a, b| a.info.start_time.cmp(&b.info.start_time));
+        new_sig.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
 
         // add the new signatures to signature chains
         for sig in new_sig.into_iter() {

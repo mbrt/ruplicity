@@ -2,7 +2,7 @@
 
 /// Helper macro to generate builder pattern methods for a struct.
 ///
-/// Example:
+/// # Example
 /// ```
 /// pub struct EmitterConfig {
 ///     pub line_separator: String,
@@ -59,6 +59,27 @@ macro_rules! unwrap_opt_or_continue(
         match $e {
             Some(v) => v,
             _       => { continue; }
+        }
+    )
+);
+
+
+/// Helper macro that tests if the given expression matches a given pattern.
+///
+/// # Example
+/// ```
+/// enum E { First, Second }
+///
+/// fn foo {
+///     let v: Vec<E> = Vec::new();
+///     v.filter(|e| matches!(e, First));
+/// }
+/// ```
+macro_rules! matches(
+    ($e:expr, $p:pat) => (
+        match $e {
+            $p => true,
+            _ => false
         }
     )
 );

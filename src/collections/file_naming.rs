@@ -27,6 +27,12 @@ pub struct FileName {
     pub partial: bool
 }
 
+pub struct FileNameInfo<'a> {
+    pub file_name: &'a str,
+    pub info: FileName2
+}
+
+// TODO: Rename in FileName or simply NameInfo
 #[derive(Eq, PartialEq, Debug)]
 pub struct FileName2 {
     pub tp: Type,
@@ -63,11 +69,6 @@ pub enum Type {
         end_time: Timespec,
         partial: bool
     }
-}
-
-pub struct FileNameInfo<'a> {
-    pub file_name: &'a str,
-    pub info: FileName2
 }
 
 pub struct FileNameParser {
@@ -118,6 +119,19 @@ impl<'a> FileNameInfo<'a> {
         FileNameInfo {
             file_name: &name,
             info: info
+        }
+    }
+}
+
+impl Type {
+    pub fn time_range(&self) -> (Timespec, Timespec) {
+        match *self {
+            Type::Full{ time, .. } |
+            Type::FullSig{ time, .. } |
+            Type::FullManifest{ time, .. } => (time, time),
+            Type::Inc{ start_time, end_time, .. } |
+            Type::IncManifest{ start_time, end_time, .. } |
+            Type::NewSig{ start_time, end_time, .. } => (start_time, end_time)
         }
     }
 }
