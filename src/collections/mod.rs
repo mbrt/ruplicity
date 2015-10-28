@@ -7,7 +7,7 @@ use std::slice;
 use time::Timespec;
 
 use time_utils::{self, to_pretty_local};
-use self::file_naming::{FileName, FileName2, FileType, FileNameInfo, FileNameParser};
+use self::file_naming::{FileName2, FileNameInfo, FileNameParser};
 use self::file_naming as fnm;
 
 
@@ -134,6 +134,7 @@ impl BackupSet {
                     }
                 }
             }
+            self.fix_encrypted(pr.encrypted);
         }
         true
     }
@@ -486,7 +487,7 @@ impl Display for CollectionsStatus {
 #[cfg(test)]
 mod test {
     use super::*;
-    use super::file_naming::{FileType, FileNameInfo, FileNameParser};
+    use super::file_naming::{FileNameInfo, FileNameParser};
     use time_utils::{DEFAULT_TIMESPEC, parse_time_str};
 
     #[test]

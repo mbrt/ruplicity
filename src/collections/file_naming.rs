@@ -1,31 +1,8 @@
 use regex::Regex;
 use time::Timespec;
 
-use time_utils::{self, parse_time_str};
+use time_utils::parse_time_str;
 
-
-// TODO: Remove
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
-pub enum FileType {
-    FullSig,
-    NewSig,
-    Inc,
-    Full
-}
-
-// TODO: Remove
-#[derive(Eq, PartialEq, Debug)]
-pub struct FileName {
-    pub file_type: FileType,
-    pub manifest: bool,
-    pub volume_number: i32,
-    pub time: Timespec,
-    pub start_time: Timespec,
-    pub end_time: Timespec,
-    pub compressed: bool,
-    pub encrypted: bool,
-    pub partial: bool
-}
 
 pub struct FileNameInfo<'a> {
     pub file_name: &'a str,
@@ -79,39 +56,6 @@ pub struct FileNameParser {
     full_sig_re: Regex,
     new_sig_re: Regex
 }
-
-
-// TODO: Remove
-impl FileName {
-    /// Builder pattern for FileName
-    pub fn new() -> Self {
-        FileName{
-            file_type: FileType::Full,
-            manifest: false,
-            volume_number: 0,
-            time: time_utils::DEFAULT_TIMESPEC,
-            start_time: time_utils::DEFAULT_TIMESPEC,
-            end_time: time_utils::DEFAULT_TIMESPEC,
-            compressed: false,
-            encrypted: false,
-            partial: false
-        }
-    }
-}
-
-// TODO: Remove
-gen_setters!(FileName,
-             file_type: FileType,
-             manifest: bool,
-             volume_number: i32,
-             time: Timespec,
-             start_time: Timespec,
-             end_time: Timespec,
-             // not used for now: enable if needed
-             //compressed: bool,
-             //encrypted: bool,
-             partial: bool
-            );
 
 
 impl<'a> FileNameInfo<'a> {
