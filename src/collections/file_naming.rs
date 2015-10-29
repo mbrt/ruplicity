@@ -6,12 +6,11 @@ use time_utils::parse_time_str;
 
 pub struct FileNameInfo<'a> {
     pub file_name: &'a str,
-    pub info: FileName2
+    pub info: Info
 }
 
-// TODO: Rename in FileName or simply NameInfo
 #[derive(Eq, PartialEq, Debug)]
-pub struct FileName2 {
+pub struct Info {
     pub tp: Type,
     pub compressed: bool,
     pub encrypted: bool
@@ -59,7 +58,7 @@ pub struct FileNameParser {
 
 
 impl<'a> FileNameInfo<'a> {
-    pub fn new(name: &'a str, info: FileName2) -> Self {
+    pub fn new(name: &'a str, info: Info) -> Self {
         FileNameInfo {
             file_name: &name,
             info: info
@@ -93,14 +92,14 @@ impl FileNameParser {
         }
     }
 
-    pub fn parse(&self, filename: &str) -> Option<FileName2> {
+    pub fn parse(&self, filename: &str) -> Option<Info> {
         use std::ascii::AsciiExt;
 
         let lower_fname = filename.to_ascii_lowercase();
         let opt_type = self.check_full(&lower_fname)
                            .or(self.check_inc(&lower_fname))
                            .or(self.check_sig(&lower_fname));
-        opt_type.map(|t| FileName2{ tp: t,
+        opt_type.map(|t| Info{ tp: t,
             compressed: self.is_compressed(lower_fname.as_ref()),
             encrypted: self.is_encrypted(lower_fname.as_ref())
         })

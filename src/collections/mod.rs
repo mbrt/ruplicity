@@ -7,7 +7,7 @@ use std::slice;
 use time::Timespec;
 
 use time_utils::{self, to_pretty_local};
-use self::file_naming::{FileName2, FileNameInfo, FileNameParser};
+use self::file_naming::{Info, FileNameInfo, FileNameParser};
 use self::file_naming as fnm;
 
 
@@ -152,7 +152,7 @@ impl BackupSet {
         }
     }
 
-    fn set_info(&mut self, fname: &FileName2) {
+    fn set_info(&mut self, fname: &Info) {
         match fname.tp {
             fnm::Type::Full{ time, .. } => {
                 self.time = time;
@@ -284,7 +284,7 @@ impl Display for BackupChain {
 
 
 impl SignatureFile {
-    pub fn from_file_and_info(fname: &str, pr: &FileName2) -> Self {
+    pub fn from_file_and_info(fname: &str, pr: &Info) -> Self {
         let time = {
             match pr.tp {
                 fnm::Type::FullSig{ time, .. } => time,
@@ -308,7 +308,7 @@ impl SignatureFile {
 
 impl SignatureChain {
     /// Create a new SignatureChain starting from a full signature.
-    pub fn new(fname: &str, pr: &FileName2) -> Self {
+    pub fn new(fname: &str, pr: &Info) -> Self {
         SignatureChain {
             fullsig: SignatureFile::from_file_and_info(fname, pr),
             inclist: Vec::new()
