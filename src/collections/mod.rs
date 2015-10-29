@@ -507,7 +507,7 @@ mod test {
         assert!(set.add_filename(&manifest1));
         assert!(!set.add_filename(&inc1));
         // test results
-        assert_eq!(set.file_type, FileType::Full);
+        assert_eq!(set.tp, Type::Full);
         assert_eq!(set.time, parse_time_str("20150617t182545z").unwrap());
         assert_eq!(set.start_time, DEFAULT_TIMESPEC);
         assert_eq!(set.end_time, DEFAULT_TIMESPEC);

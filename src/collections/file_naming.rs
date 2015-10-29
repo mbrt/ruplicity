@@ -188,7 +188,7 @@ impl FileNameParser {
 #[cfg(test)]
 mod test {
     use super::*;
-    use time_utils::{parse_time_str, DEFAULT_TIMESPEC};
+    use time_utils::parse_time_str;
 
     #[test]
     fn parser_test() {
@@ -197,68 +197,43 @@ mod test {
         assert_eq!(parser.parse("invalid"), None);
         // full
         assert_eq!(parser.parse("duplicity-full.20150617T182545Z.vol1.difftar.gz"),
-                   Some(FileName{file_type: FileType::Full,
-                                 manifest: false,
-                                 volume_number: 1,
-                                 time: parse_time_str("20150617t182545z").unwrap(),
-                                 start_time: DEFAULT_TIMESPEC,
-                                 end_time: DEFAULT_TIMESPEC,
-                                 compressed: true,
-                                 encrypted: false,
-                                 partial: false}));
+                   Some(Info{ tp: Type::Full{ time: parse_time_str("20150617t182545z").unwrap(),
+                                              volume_number: 1 },
+                              compressed: true,
+                              encrypted: false }));
+        // full manifest
         assert_eq!(parser.parse("duplicity-full.20150617T182545Z.manifest"),
-                   Some(FileName{file_type: FileType::Full,
-                                 manifest: true,
-                                 volume_number: 0,
-                                 time: parse_time_str("20150617t182545z").unwrap(),
-                                 start_time: DEFAULT_TIMESPEC,
-                                 end_time: DEFAULT_TIMESPEC,
-                                 compressed: false,
-                                 encrypted: false,
-                                 partial: false}));
+                   Some(Info{ tp: Type::FullManifest{ time: parse_time_str("20150617t182545z").unwrap(),
+                                                      partial: false },
+                              compressed: false,
+                              encrypted: false }));
         // inc
         assert_eq!(parser.parse("duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz"),
-                   Some(FileName{file_type: FileType::Inc,
-                                 manifest: false,
-                                 volume_number: 1,
-                                 time: DEFAULT_TIMESPEC,
-                                 start_time: parse_time_str("20150617t182629z").unwrap(),
-                                 end_time: parse_time_str("20150617t182650z").unwrap(),
-                                 compressed: true,
-                                 encrypted: false,
-                                 partial: false}));
+                   Some(Info{ tp: Type::Inc{ start_time: parse_time_str("20150617t182629z").unwrap(),
+                                             end_time: parse_time_str("20150617t182650z").unwrap(),
+                                             volume_number: 1 },
+                              compressed: true,
+                              encrypted: false }));
+        // inc manifest
         assert_eq!(parser.parse("duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest"),
-                   Some(FileName{file_type: FileType::Inc,
-                                 manifest: true,
-                                 volume_number: 0,
-                                 time: DEFAULT_TIMESPEC,
-                                 start_time: parse_time_str("20150617t182545z").unwrap(),
-                                 end_time: parse_time_str("20150617t182629z").unwrap(),
-                                 compressed: false,
-                                 encrypted: false,
-                                 partial: false}));
+                   Some(Info{ tp: Type::IncManifest{ start_time: parse_time_str("20150617t182545z").unwrap(),
+                                                     end_time: parse_time_str("20150617t182629z").unwrap(),
+                                                     partial: false },
+                              compressed: false,
+                              encrypted: false }));
         // new sig
         assert_eq!(parser.parse("duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz"),
-                   Some(FileName{file_type: FileType::NewSig,
-                                 manifest: false,
-                                 volume_number: 0,
-                                 time: DEFAULT_TIMESPEC,
-                                 start_time: parse_time_str("20150617t182545z").unwrap(),
-                                 end_time: parse_time_str("20150617t182629z").unwrap(),
-                                 compressed: true,
-                                 encrypted: false,
-                                 partial: false}));
+                   Some(Info{ tp: Type::NewSig{ start_time: parse_time_str("20150617t182545z").unwrap(),
+                                                end_time: parse_time_str("20150617t182629z").unwrap(),
+                                                partial: false },
+                              compressed: true,
+                              encrypted: false }));
         // full sig
         assert_eq!(parser.parse("duplicity-full-signatures.20150617T182545Z.sigtar.gz"),
-                   Some(FileName{file_type: FileType::FullSig,
-                                 manifest: false,
-                                 volume_number: 0,
-                                 time: parse_time_str("20150617t182545z").unwrap(),
-                                 start_time: DEFAULT_TIMESPEC,
-                                 end_time: DEFAULT_TIMESPEC,
-                                 compressed: true,
-                                 encrypted: false,
-                                 partial: false}));
+                   Some(Info{ tp: Type::FullSig{ time: parse_time_str("20150617t182545z").unwrap(),
+                                                 partial: false },
+                              compressed: true,
+                              encrypted: false }));
     }
 
     #[test]
