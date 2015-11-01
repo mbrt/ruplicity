@@ -70,11 +70,11 @@ impl Type {
     pub fn time_range(&self) -> (Timespec, Timespec) {
         match *self {
             Type::Full{ time, .. } |
-            Type::FullSig{ time, .. } |
-            Type::FullManifest{ time, .. } => (time, time),
+                Type::FullSig{ time, .. } |
+                Type::FullManifest{ time, .. } => (time, time),
             Type::Inc{ start_time, end_time, .. } |
-            Type::IncManifest{ start_time, end_time, .. } |
-            Type::NewSig{ start_time, end_time, .. } => (start_time, end_time)
+                Type::IncManifest{ start_time, end_time, .. } |
+                Type::NewSig{ start_time, end_time, .. } => (start_time, end_time)
         }
     }
 }

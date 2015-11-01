@@ -13,9 +13,6 @@ use self::file_naming as fnm;
 
 pub struct BackupSet {
     pub tp: Type,
-    pub time: Timespec,
-    pub start_time: Timespec,
-    pub end_time: Timespec,
     pub compressed: bool,
     pub encrypted: bool,
     pub partial: bool,
@@ -53,7 +50,8 @@ pub struct CollectionsStatus {
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum Type {
-    Full, Inc
+    Full{ time: Timespec },
+    Inc{ start_time: Timespec, end_time: Timespec },
 }
 
 /// Iterator over some kind of chain
@@ -64,10 +62,7 @@ impl BackupSet {
     // TODO: remake new like BackupChain, only with the starting filename and remove info_set.
     pub fn new() -> Self {
         BackupSet{
-            tp: Type::Full,
-            time: time_utils::DEFAULT_TIMESPEC,
-            start_time: time_utils::DEFAULT_TIMESPEC,
-            end_time: time_utils::DEFAULT_TIMESPEC,
+            tp: Type::Full{ time: time_utils::DEFAULT_TIMESPEC },
             compressed: false,
             encrypted: false,
             partial: false,
@@ -88,99 +83,95 @@ impl BackupSet {
 
         if !self.info_set {
             self.set_info(&pr);
+            true
         }
         else {
-            match pr.tp {
-                fnm::Type::Full{ time, volume_number } => {
-                    // check if same backup set
-                    if self.tp != Type::Full || self.time != time {
-                        return false;
+            // check if same backup set, by looking at timestamps
+            let same_set = {
+                match self.tp {
+                    Type::Full{ time: my_time } => {
+                        match pr.tp {
+                            fnm::Type::Full{ time, .. } |
+                                fnm::Type::FullManifest{ time, .. } |
+                                fnm::Type::FullSig{ time, .. } => {
+                                    my_time == time
+                            }
+                            _ => false
+                        }
                     }
-                    self.volumes_paths.insert(volume_number, fname.to_owned());
-                }
-                fnm::Type::Inc{ start_time, end_time, volume_number } => {
-                    // check if same backup set
-                    if self.tp != Type::Inc || self.start_time != start_time ||
-                        self.end_time != end_time {
-                            return false;
-                    }
-                    self.volumes_paths.insert(volume_number, fname.to_owned());
-                }
-                fnm::Type::FullManifest{ time, .. } => {
-                    // check if same backup set
-                    if self.tp != Type::Full || self.time != time {
-                        return false;
-                    }
-                    self.manifest_path = fname.to_owned();
-                }
-                fnm::Type::IncManifest{ start_time, end_time, .. } => {
-                    // check if same backup set
-                    if self.tp != Type::Inc || self.start_time != start_time ||
-                        self.end_time != end_time {
-                            return false;
+                    Type::Inc{ start_time: my_start, end_time: my_end } => {
+                        match pr.tp {
+                            fnm::Type::Inc{ start_time, end_time, .. } |
+                                fnm::Type::IncManifest{ start_time, end_time, .. } |
+                                fnm::Type::NewSig{ start_time, end_time, .. } => {
+                                    my_start == start_time && my_end == end_time
+                            }
+                            _ => false
+                        }
                     }
                 }
-                fnm::Type::FullSig{ time, .. } => {
-                    // check if same backup set
-                    if self.tp != Type::Full || self.time != time {
-                        return false;
+            };
+            if !same_set {
+                false
+            } else {
+                // update info
+                match pr.tp {
+                    fnm::Type::Full{ volume_number, .. } |
+                        fnm::Type::Inc{ volume_number, .. } => {
+                            self.volumes_paths.insert(volume_number, fname.to_owned());
                     }
-                }
-                fnm::Type::NewSig{ start_time, end_time, .. } => {
-                    // check if same backup set
-                    if self.tp != Type::Inc || self.start_time != start_time ||
-                        self.end_time != end_time {
-                            return false;
+                    fnm::Type::FullManifest{ .. } |
+                        fnm::Type::IncManifest{ .. } => {
+                            self.manifest_path = fname.to_owned();
                     }
+                    _ => ()
                 }
+                self.fix_encrypted(pr.encrypted);
+                true
             }
-            self.fix_encrypted(pr.encrypted);
         }
-        true
     }
 
     pub fn is_complete(&self) -> bool {
         !self.manifest_path.is_empty()
     }
 
-    pub fn get_time(&self) -> &Timespec {
-        if self.time == time_utils::DEFAULT_TIMESPEC {
-            &self.end_time
-        }
-        else {
-            &self.time
+    pub fn get_time(&self) -> Timespec {
+        match self.tp {
+            Type::Full{ time } => time,
+            Type::Inc{ end_time, .. } => end_time,
         }
     }
 
     fn set_info(&mut self, fname: &Info) {
-        match fname.tp {
-            fnm::Type::Full{ time, .. } => {
-                self.time = time;
+        // set type
+        self.tp = match fname.tp {
+            fnm::Type::Full{ time, .. } |
+                fnm::Type::FullManifest{ time, .. } |
+                fnm::Type::FullSig{ time, .. } => {
+                    Type::Full{ time: time}
             }
-            fnm::Type::Inc{ start_time, end_time, .. } => {
-                self.start_time = start_time;
-                self.end_time = end_time;
+            fnm::Type::Inc{ start_time, end_time, .. } |
+                fnm::Type::IncManifest{ start_time, end_time, .. } |
+                fnm::Type::NewSig{ start_time, end_time, .. } => {
+                    Type::Inc{
+                        start_time: start_time,
+                        end_time: end_time,
+                    }
             }
-            fnm::Type::FullManifest{ time, partial } => {
-                self.time = time;
-                self.partial = partial;
+        };
+        // set partial
+        self.partial = {
+            match fname.tp {
+                fnm::Type::FullManifest{ partial, .. } |
+                    fnm::Type::IncManifest{ partial, .. } |
+                    fnm::Type::FullSig{ partial, .. } |
+                    fnm::Type::NewSig{ partial, .. } => {
+                        partial
+                }
+                _ => false
             }
-            fnm::Type::IncManifest{ start_time, end_time, partial } => {
-                self.start_time = start_time;
-                self.end_time = end_time;
-                self.partial = partial;
-            }
-            fnm::Type::FullSig{ time, partial } => {
-                self.time = time;
-                self.partial = partial;
-            }
-            fnm::Type::NewSig{ start_time, end_time, partial } => {
-                self.start_time = start_time;
-                self.end_time = end_time;
-                self.partial = partial;
-            }
-        }
-
+        };
         self.compressed = fname.compressed;
         self.encrypted = fname.encrypted;
 
@@ -197,13 +188,13 @@ impl BackupSet {
 impl Display for BackupSet {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self.tp {
-            Type::Full => {
-                try!(write!(f, "Full, time: {}", to_pretty_local(self.time)));
+            Type::Full{ time } => {
+                try!(write!(f, "Full, time: {}", to_pretty_local(time)));
             },
-            Type::Inc => {
+            Type::Inc{ start_time, end_time } => {
                 try!(write!(f, "Incremental, start time: {}, end time: {}",
-                            to_pretty_local(self.start_time),
-                            to_pretty_local(self.end_time)));
+                            to_pretty_local(start_time),
+                            to_pretty_local(end_time)));
             }
         }
         if self.compressed {
@@ -232,8 +223,13 @@ impl Display for BackupSet {
 impl BackupChain {
     /// Create a new BackupChain starting from a full backup set.
     pub fn new(fullset: BackupSet) -> Self {
-        assert_eq!(fullset.tp, Type::Full);
-        let time = fullset.time.clone();
+        let time = {
+            if let Type::Full{ time } = fullset.tp {
+                time.clone()
+            } else {
+                panic!("Unexpected incremental backup set given");
+            }
+        };
 
         BackupChain{
             fullset: fullset,
@@ -246,25 +242,30 @@ impl BackupChain {
     /// Adds the given incremental backup element to the backup chain if possible,
     /// returns it back otherwise.
     pub fn add_inc(&mut self, incset: BackupSet) -> Option<BackupSet> {
-        if self.end_time == incset.start_time {
-            self.end_time = incset.end_time.clone();
-            self.incset_list.push(incset);
-            None
-        }
-        else {
-            // replace the last element if the end time comes before
-            let replace_last = self.incset_list.last().map_or(false,
-                |last| incset.start_time == last.start_time && incset.end_time > last.end_time);
-            if replace_last {
-                self.end_time = incset.end_time.clone();
-                self.incset_list.pop();
+        if let Type::Inc{ start_time, end_time } = incset.tp {
+            if self.end_time == start_time {
+                self.end_time = end_time.clone();
                 self.incset_list.push(incset);
                 None
             }
             else {
-                // ignore the given incremental backup set
-                Some(incset)
+                // replace the last element if the end time comes before
+                let replace_last = self.incset_list.last().map_or(false,
+                    |last| start_time == last.tp.start_time() && end_time > last.tp.end_time());
+                if replace_last {
+                    self.end_time = end_time.clone();
+                    self.incset_list.pop();
+                    self.incset_list.push(incset);
+                    None
+                }
+                else {
+                    // ignore the given incremental backup set
+                    Some(incset)
+                }
             }
+        } else {
+            // ignore full sets
+            Some(incset)
         }
     }
 }
@@ -413,18 +414,18 @@ impl CollectionsStatus {
             }
         }
         // sort by time
-        sets.sort_by(|a, b| a.get_time().cmp(b.get_time()));
+        sets.sort_by(|a, b| a.get_time().cmp(&b.get_time()));
         sets
     }
 
     fn add_to_backup_chains(&mut self, set_list: Vec<BackupSet>) {
         for set in set_list.into_iter() {
             match set.tp {
-                Type::Full => {
+                Type::Full{ .. } => {
                     let new_chain = BackupChain::new(set);
                     self.backup_chains.push(new_chain);
                 }
-                Type::Inc => {
+                Type::Inc{ .. } => {
                     let mut rejected_set = Some(set);
                     for chain in &mut self.backup_chains {
                         rejected_set = chain.add_inc(rejected_set.unwrap());
@@ -484,11 +485,28 @@ impl Display for CollectionsStatus {
 }
 
 
+impl Type {
+    pub fn start_time(&self) -> Timespec {
+        match *self {
+            Type::Full{ time } => time,
+            Type::Inc{ start_time, .. } => start_time,
+        }
+    }
+
+    pub fn end_time(&self) -> Timespec {
+        match *self {
+            Type::Full{ time } => time,
+            Type::Inc{ end_time, .. } => end_time,
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
     use super::file_naming::{FileNameInfo, FileNameParser};
-    use time_utils::{DEFAULT_TIMESPEC, parse_time_str};
+    use time_utils::parse_time_str;
 
     #[test]
     fn parse_and_add() {
@@ -507,10 +525,7 @@ mod test {
         assert!(set.add_filename(&manifest1));
         assert!(!set.add_filename(&inc1));
         // test results
-        assert_eq!(set.tp, Type::Full);
-        assert_eq!(set.time, parse_time_str("20150617t182545z").unwrap());
-        assert_eq!(set.start_time, DEFAULT_TIMESPEC);
-        assert_eq!(set.end_time, DEFAULT_TIMESPEC);
+        assert_eq!(set.tp, Type::Full{ time: parse_time_str("20150617t182545z").unwrap() });
         assert!(set.compressed);
         assert!(!set.encrypted);
         assert!(!set.partial);
