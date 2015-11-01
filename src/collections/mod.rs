@@ -6,7 +6,7 @@ use std::path::Path;
 use std::slice;
 use time::Timespec;
 
-use time_utils::{self, to_pretty_local};
+use time_utils::to_pretty_local;
 use self::file_naming::{Info, FileNameInfo, FileNameParser};
 use self::file_naming as fnm;
 
@@ -18,7 +18,6 @@ pub struct BackupSet {
     pub partial: bool,
     pub manifest_path: String,
     volumes_paths: HashMap<i32, String>,
-    info_set: bool,    // true if informations are set
 }
 
 pub struct BackupChain {
@@ -59,93 +58,9 @@ pub type ChainIter<'a, T> = slice::Iter<'a, T>;
 
 
 impl BackupSet {
-    // TODO: remake new like BackupChain, only with the starting filename and remove info_set.
-    pub fn new() -> Self {
-        BackupSet{
-            tp: Type::Full{ time: time_utils::DEFAULT_TIMESPEC },
-            compressed: false,
-            encrypted: false,
-            partial: false,
-            manifest_path: String::new(),
-            volumes_paths: HashMap::new(),
-            info_set: false
-        }
-    }
-
-    /// Add a filename to given set. Return true if it fits.
-    ///
-    /// The filename will match the given set if it has the right
-    /// times and is of the right type. The information will be set
-    /// from the first filename given.
-    pub fn add_filename(&mut self, file_info: &FileNameInfo) -> bool {
-        let pr = &file_info.info;
-        let fname = file_info.file_name;
-
-        if !self.info_set {
-            self.set_info(&pr);
-            true
-        }
-        else {
-            // check if same backup set, by looking at timestamps
-            let same_set = {
-                match self.tp {
-                    Type::Full{ time: my_time } => {
-                        match pr.tp {
-                            fnm::Type::Full{ time, .. } |
-                                fnm::Type::FullManifest{ time, .. } |
-                                fnm::Type::FullSig{ time, .. } => {
-                                    my_time == time
-                            }
-                            _ => false
-                        }
-                    }
-                    Type::Inc{ start_time: my_start, end_time: my_end } => {
-                        match pr.tp {
-                            fnm::Type::Inc{ start_time, end_time, .. } |
-                                fnm::Type::IncManifest{ start_time, end_time, .. } |
-                                fnm::Type::NewSig{ start_time, end_time, .. } => {
-                                    my_start == start_time && my_end == end_time
-                            }
-                            _ => false
-                        }
-                    }
-                }
-            };
-            if !same_set {
-                false
-            } else {
-                // update info
-                match pr.tp {
-                    fnm::Type::Full{ volume_number, .. } |
-                        fnm::Type::Inc{ volume_number, .. } => {
-                            self.volumes_paths.insert(volume_number, fname.to_owned());
-                    }
-                    fnm::Type::FullManifest{ .. } |
-                        fnm::Type::IncManifest{ .. } => {
-                            self.manifest_path = fname.to_owned();
-                    }
-                    _ => ()
-                }
-                self.fix_encrypted(pr.encrypted);
-                true
-            }
-        }
-    }
-
-    pub fn is_complete(&self) -> bool {
-        !self.manifest_path.is_empty()
-    }
-
-    pub fn get_time(&self) -> Timespec {
-        match self.tp {
-            Type::Full{ time } => time,
-            Type::Inc{ end_time, .. } => end_time,
-        }
-    }
-
-    fn set_info(&mut self, fname: &Info) {
+    pub fn new(fname: &FileNameInfo) -> Self {
         // set type
-        self.tp = match fname.tp {
+        let tp = match fname.info.tp {
             fnm::Type::Full{ time, .. } |
                 fnm::Type::FullManifest{ time, .. } |
                 fnm::Type::FullSig{ time, .. } => {
@@ -161,8 +76,8 @@ impl BackupSet {
             }
         };
         // set partial
-        self.partial = {
-            match fname.tp {
+        let partial = {
+            match fname.info.tp {
                 fnm::Type::FullManifest{ partial, .. } |
                     fnm::Type::IncManifest{ partial, .. } |
                     fnm::Type::FullSig{ partial, .. } |
@@ -172,10 +87,82 @@ impl BackupSet {
                 _ => false
             }
         };
-        self.compressed = fname.compressed;
-        self.encrypted = fname.encrypted;
 
-        self.info_set = true;
+        let mut result = BackupSet{
+            tp: tp,
+            partial: partial,
+            compressed: fname.info.compressed,
+            encrypted: fname.info.encrypted,
+            manifest_path: String::new(),
+            volumes_paths: HashMap::new(),
+        };
+        result.add_filename(fname);
+        result
+    }
+
+    /// Add a filename to given set. Return true if it fits.
+    ///
+    /// The filename will match the given set if it has the right
+    /// times and is of the right type. The information will be set
+    /// from the first filename given.
+    pub fn add_filename(&mut self, file_info: &FileNameInfo) -> bool {
+        let pr = &file_info.info;
+        let fname = file_info.file_name;
+
+        // check if same backup set, by looking at timestamps
+        let same_set = {
+            match self.tp {
+                Type::Full{ time: my_time } => {
+                    match pr.tp {
+                        fnm::Type::Full{ time, .. } |
+                            fnm::Type::FullManifest{ time, .. } |
+                            fnm::Type::FullSig{ time, .. } => {
+                                my_time == time
+                            }
+                        _ => false
+                    }
+                }
+                Type::Inc{ start_time: my_start, end_time: my_end } => {
+                    match pr.tp {
+                        fnm::Type::Inc{ start_time, end_time, .. } |
+                            fnm::Type::IncManifest{ start_time, end_time, .. } |
+                            fnm::Type::NewSig{ start_time, end_time, .. } => {
+                                my_start == start_time && my_end == end_time
+                            }
+                        _ => false
+                    }
+                }
+            }
+        };
+        if !same_set {
+            false
+        } else {
+            // update info
+            match pr.tp {
+                fnm::Type::Full{ volume_number, .. } |
+                    fnm::Type::Inc{ volume_number, .. } => {
+                        self.volumes_paths.insert(volume_number, fname.to_owned());
+                    }
+                fnm::Type::FullManifest{ .. } |
+                    fnm::Type::IncManifest{ .. } => {
+                        self.manifest_path = fname.to_owned();
+                    }
+                _ => ()
+            }
+            self.fix_encrypted(pr.encrypted);
+            true
+        }
+    }
+
+    pub fn is_complete(&self) -> bool {
+        !self.manifest_path.is_empty()
+    }
+
+    pub fn get_time(&self) -> Timespec {
+        match self.tp {
+            Type::Full{ time } => time,
+            Type::Inc{ end_time, .. } => end_time,
+        }
     }
 
     fn fix_encrypted(&mut self, pr_encrypted: bool) {
@@ -408,9 +395,7 @@ impl CollectionsStatus {
                 }
             }
             if !inserted {
-                let mut new_set = BackupSet::new();
-                new_set.add_filename(&fileinfo);
-                sets.push(new_set);
+                sets.push(BackupSet::new(&fileinfo));
             }
         }
         // sort by time
@@ -519,9 +504,8 @@ mod test {
         let manifest1 = FileNameInfo::new(manifest1_name, parser.parse(manifest1_name).unwrap());
         let inc1 = FileNameInfo::new(inc1_name, parser.parse(inc1_name).unwrap());
 
-        let mut set = BackupSet::new();
+        let mut set = BackupSet::new(&full1);
         // add to set
-        assert!(set.add_filename(&full1));
         assert!(set.add_filename(&manifest1));
         assert!(!set.add_filename(&inc1));
         // test results

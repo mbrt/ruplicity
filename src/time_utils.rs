@@ -4,6 +4,7 @@ use std::fmt::{Display, Error, Formatter};
 
 
 /// Default timespec, used to signal a non initialized time.
+#[allow(dead_code)]
 pub const DEFAULT_TIMESPEC: Timespec = Timespec{ sec: 0, nsec: 0 };
 
 
