@@ -100,15 +100,15 @@ impl FileNameParser {
                            .or(self.check_inc(&lower_fname))
                            .or(self.check_sig(&lower_fname));
         opt_type.map(|t| Info{ tp: t,
-            compressed: self.is_compressed(lower_fname.as_ref()),
-            encrypted: self.is_encrypted(lower_fname.as_ref())
+            compressed: is_compressed(lower_fname.as_ref()),
+            encrypted: is_encrypted(lower_fname.as_ref())
         })
     }
 
     fn check_full(&self, filename: &str) -> Option<Type> {
         if let Some(captures) = self.full_vol_re.captures(filename) {
             let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
-            let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
+            let vol_num = try_opt!(get_vol_num(captures.name("num").unwrap()));
             return Some(Type::Full{
                 time: time,
                 volume_number: vol_num
@@ -128,7 +128,7 @@ impl FileNameParser {
         if let Some(captures) = self.inc_vol_re.captures(filename) {
             let start_time = try_opt!(parse_time_str(captures.name("start_time").unwrap()));
             let end_time = try_opt!(parse_time_str(captures.name("end_time").unwrap()));
-            let vol_num = try_opt!(self.get_vol_num(captures.name("num").unwrap()));
+            let vol_num = try_opt!(get_vol_num(captures.name("num").unwrap()));
             Some(Type::Inc{
                 start_time: start_time,
                 end_time: end_time,
@@ -170,18 +170,19 @@ impl FileNameParser {
             None
         }
     }
+}
 
-    fn get_vol_num(&self, s: &str) -> Option<i32> {
-        s.parse::<i32>().ok()
-    }
 
-    fn is_encrypted(&self, s: &str) -> bool {
-        s.ends_with(".gpg") || s.ends_with(".g")
-    }
+fn get_vol_num(s: &str) -> Option<i32> {
+    s.parse::<i32>().ok()
+}
 
-    fn is_compressed(&self, s: &str) -> bool {
-        s.ends_with(".gz") || s.ends_with(".z")
-    }
+fn is_encrypted(s: &str) -> bool {
+    s.ends_with(".gpg") || s.ends_with(".g")
+}
+
+fn is_compressed(s: &str) -> bool {
+    s.ends_with(".gz") || s.ends_with(".z")
 }
 
 
