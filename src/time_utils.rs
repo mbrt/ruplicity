@@ -5,13 +5,13 @@ use std::fmt::{Display, Error, Formatter};
 
 /// Default timespec, used to signal a non initialized time.
 #[allow(dead_code)]
-pub const DEFAULT_TIMESPEC: Timespec = Timespec{ sec: 0, nsec: 0 };
+pub const DEFAULT_TIMESPEC: Timespec = Timespec { sec: 0, nsec: 0 };
 
 
 /// Utility struct that implements Display in a pretty style
 /// for some Tm instance.
 pub struct PrettyDisplay {
-    tm: Tm
+    tm: Tm,
 }
 
 /// The format to be used to display a time.
@@ -19,7 +19,7 @@ pub struct PrettyDisplay {
 #[allow(dead_code)]
 pub enum Format {
     Local,
-    Utc
+    Utc,
 }
 
 impl Display for PrettyDisplay {
@@ -32,12 +32,12 @@ impl Display for PrettyDisplay {
 /// Returns an object implementing Display as a pretty printed UTC time.
 #[allow(dead_code)]
 pub fn to_pretty_utc(ts: Timespec) -> PrettyDisplay {
-    PrettyDisplay{ tm: time::at_utc(ts) }
+    PrettyDisplay { tm: time::at_utc(ts) }
 }
 
 /// Returns an object implementing Display as a pretty printed local time.
 pub fn to_pretty_local(ts: Timespec) -> PrettyDisplay {
-    PrettyDisplay{ tm: time::at(ts) }
+    PrettyDisplay { tm: time::at(ts) }
 }
 
 /// Returns an obejct implementing Display as a pretty printed time.
@@ -46,7 +46,7 @@ pub fn to_pretty_local(ts: Timespec) -> PrettyDisplay {
 pub fn to_pretty(ts: Timespec, format: Format) -> PrettyDisplay {
     match format {
         Format::Local => to_pretty_local(ts),
-        Format::Utc   => to_pretty_utc(ts)
+        Format::Utc => to_pretty_utc(ts),
     }
 }
 

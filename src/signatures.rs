@@ -12,63 +12,63 @@ use collections::{CollectionsStatus, SignatureFile};
 
 
 pub struct BackupFiles {
-    chains: Vec<Chain>
+    chains: Vec<Chain>,
 }
 
 pub struct Snapshot<'a> {
     index: u8,
-    chain: &'a Chain
+    chain: &'a Chain,
 }
 
 #[derive(Debug)]
 pub struct File<'a> {
     pub path: &'a Path,
-    pub last_modified: Timespec
+    pub last_modified: Timespec,
 }
 
 /// Iterator over a list of backup snapshots.
 pub struct Snapshots<'a> {
     chain_iter: slice::Iter<'a, Chain>,
     chain: Option<&'a Chain>,
-    snapshot_id: u8
+    snapshot_id: u8,
 }
 
 pub struct SnapshotFiles<'a> {
     index: u8,
-    iter: slice::Iter<'a, PathSnapshots>
+    iter: slice::Iter<'a, PathSnapshots>,
 }
 
 
 enum DiffType {
     Signature,
     Snapshot,
-    Deleted
+    Deleted,
 }
 
 /// Store separately informations about the signatures and informations about the paths in the
 /// signatures. This allows to reuse informations between snapshots and avoid duplicating them.
 struct Chain {
     timestamps: Vec<Timespec>,
-    files: Vec<PathSnapshots>
+    files: Vec<PathSnapshots>,
 }
 
 struct PathSnapshots {
     // the directory or file path
     path: PathBuf,
     // all the snapshots for this path
-    snapshots: Vec<PathSnapshot>
+    snapshots: Vec<PathSnapshot>,
 }
 
 struct PathSnapshot {
     // info are None if the snapshot has deleted this path
     info: Option<PathInfo>,
     // the index of the snapshot in the chain
-    index: u8
+    index: u8,
 }
 
 /// Informations about a path inside a snapshot.
 struct PathInfo {
-    mtime: Timespec
+    mtime: Timespec,
 }
 
 
@@ -82,7 +82,10 @@ impl BackupFiles {
         let coll_chains = collection.signature_chains();
         for coll_chain in coll_chains {
             // translate collections::SignatureChain into a Chain
-            let mut chain = Chain{ timestamps: Vec::new(), files: Vec::new() };
+            let mut chain = Chain {
+                timestamps: Vec::new(),
+                files: Vec::new(),
+            };
             // add to the chain the full signature and all the incremental signatures
             // if an error occurs in the full signature exit
             let file = try!(backend.open_file(coll_chain.fullsig.file_name.as_ref()));
@@ -95,13 +98,17 @@ impl BackupFiles {
             }
             chains.push(chain);
         }
-        Ok(BackupFiles{ chains: chains })
+        Ok(BackupFiles { chains: chains })
     }
 
     pub fn snapshots(&self) -> Snapshots {
         let mut iter = self.chains.iter();
         let first_chain = iter.next();
-        Snapshots{ chain_iter: iter, chain: first_chain, snapshot_id: 0 }
+        Snapshots {
+            chain_iter: iter,
+            chain: first_chain,
+            snapshot_id: 0,
+        }
     }
 }
 
@@ -113,20 +120,21 @@ impl<'a> Iterator for Snapshots<'a> {
         loop {
             if let Some(chain) = self.chain {
                 if let Some(_) = chain.timestamps.get(self.snapshot_id as usize) {
-                    let result = Some(Snapshot{ index: self.snapshot_id, chain: chain });
+                    let result = Some(Snapshot {
+                        index: self.snapshot_id,
+                        chain: chain,
+                    });
                     self.snapshot_id += 1;
                     return result;
-                }
-                else {
+                } else {
                     // this chain is completed
                     // go to next chain
                     self.chain = self.chain_iter.next();
                     self.snapshot_id = 0;
                 }
-            }
-            else {
+            } else {
                 // no other chains are present
-                return None
+                return None;
             }
         }
     }
@@ -139,7 +147,10 @@ impl<'a> Snapshot<'a> {
     }
 
     pub fn files(&self) -> SnapshotFiles<'a> {
-        SnapshotFiles{ index: self.index, iter: self.chain.files.iter() }
+        SnapshotFiles {
+            index: self.index,
+            iter: self.chain.files.iter(),
+        }
     }
 }
 
@@ -153,9 +164,9 @@ impl<'a> Iterator for SnapshotFiles<'a> {
                 // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
-                    return Some(File{
+                    return Some(File {
                         path: path_snapshots.path.as_ref(),
-                        last_modified: info.mtime
+                        last_modified: info.mtime,
                     });
                 }
             }
@@ -167,22 +178,21 @@ impl<'a> Iterator for SnapshotFiles<'a> {
 
 fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
                                  file: R,
-                                 sigfile: &SignatureFile) -> io::Result<()>
-{
+                                 sigfile: &SignatureFile)
+                                 -> io::Result<()> {
     let result = {
         let snapshot_id = chain.files.len() as u8;
         if sigfile.compressed {
             let gz_decoder = try!(GzDecoder::new(file));
             add_sigtar_to_snapshots(&mut chain.files, tar::Archive::new(gz_decoder), snapshot_id)
-        }
-        else {
+        } else {
             add_sigtar_to_snapshots(&mut chain.files, tar::Archive::new(file), snapshot_id)
         }
     };
     if result.is_ok() {
         // add to the list of signatures only if everything is ok
-        // we do not need to cleanup the chain if someting went wrong, because if the list of
-        // signatures is not updated, the change is not observable
+        // we do not need to cleanup the chain if someting went wrong, because if the
+        // list of signatures is not updated, the change is not observable
         chain.timestamps.push(sigfile.time);
     }
     result
@@ -190,15 +200,15 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
 
 fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
                                     mut tar: tar::Archive<R>,
-                                    snapshot_id: u8) -> io::Result<()>
-{
+                                    snapshot_id: u8)
+                                    -> io::Result<()> {
     let mut new_files: Vec<PathSnapshots> = Vec::new();
     {
         let mut old_snapshots = snapshots.iter_mut();
         for tarfile in try!(tar.files_mut()) {
             // we can ignore paths with errors
-            // the only problem here is that we miss some change in the chain, but it is better
-            // than abort the whole signature
+            // the only problem here is that we miss some change in the chain, but it is
+            // better than abort the whole signature
             let tarfile = unwrap_or_continue!(tarfile);
             let header = tarfile.header();
             let path = unwrap_or_continue!(header.path());
@@ -206,11 +216,14 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             let info = match difftype {
                 DiffType::Signature | DiffType::Snapshot => {
                     let time = Timespec::new(header.mtime().unwrap_or(0 as u64) as i64, 0);
-                    Some(PathInfo{ mtime: time })
+                    Some(PathInfo { mtime: time })
                 }
-                _ => None
+                _ => None,
             };
-            let new_snapshot = PathSnapshot{ info: info, index: snapshot_id };
+            let new_snapshot = PathSnapshot {
+                info: info,
+                index: snapshot_id,
+            };
             // find the current path in the old snapshots
             // note: they are ordered
             let position = {
@@ -222,24 +235,22 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
                     if path_snapshots.path.as_path() == path {
                         // this path is already present in old snapshots: update them
                         position = Some(path_snapshots);
-                    }
-                    else {
+                    } else {
                         // we've already reached the first item next to the current path
                         // so, the path is not present in old snapshots
                         position = None;
                     }
                     break;
-                };
+                }
                 position
             };
             if let Some(path_snapshots) = position {
                 path_snapshots.snapshots.push(new_snapshot);
-            }
-            else {
+            } else {
                 // the path is not present in the old snapshots: add to new list
-                new_files.push(PathSnapshots{
+                new_files.push(PathSnapshots {
                     path: path.to_path_buf(),
-                    snapshots: vec![new_snapshot]
+                    snapshots: vec![new_snapshot],
                 });
             }
         }
@@ -262,14 +273,15 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     if let Component::Normal(strfirst) = pfirst {
         let difftype = match strfirst.to_str() {
             Some("signature") => DiffType::Signature,
-            Some("snapshot")  => DiffType::Snapshot,
-            Some("deleted")   => DiffType::Deleted,
-            _                 => { return None; }
+            Some("snapshot") => DiffType::Snapshot,
+            Some("deleted") => DiffType::Deleted,
+            _ => {
+                return None;
+            }
         };
         let realpath = pcomps.as_path();
         Some((difftype, realpath))
-    }
-    else {
+    } else {
         None
     }
 }

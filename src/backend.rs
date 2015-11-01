@@ -30,7 +30,7 @@ pub mod local {
     /// Backend operating on the local filesystem.
     pub struct LocalBackend {
         base_path: PathBuf,
-        file_names: Vec<PathBuf>
+        file_names: Vec<PathBuf>,
     }
 
     impl LocalBackend {
@@ -44,9 +44,9 @@ pub mod local {
                 let filename: &Path = filename.as_ref();
                 filenames.push(filename.to_path_buf());
             }
-            Ok(LocalBackend{
+            Ok(LocalBackend {
                 base_path: path.as_ref().to_path_buf(),
-                file_names: filenames
+                file_names: filenames,
             })
         }
     }

@@ -7,7 +7,7 @@ use std::slice;
 use time::Timespec;
 
 use time_utils::to_pretty_local;
-use self::file_naming::{Info, FileNameInfo, FileNameParser};
+use self::file_naming::{FileNameInfo, FileNameParser, Info};
 use self::file_naming as fnm;
 
 
@@ -24,14 +24,14 @@ pub struct BackupChain {
     pub fullset: BackupSet,
     pub incset_list: Vec<BackupSet>,
     pub start_time: Timespec,
-    pub end_time: Timespec
+    pub end_time: Timespec,
 }
 
 pub struct SignatureFile {
     pub file_name: String,
     pub time: Timespec,
     pub compressed: bool,
-    pub encrypted: bool
+    pub encrypted: bool,
 }
 
 /// A chain of signature belonging to the same backup set.
@@ -39,18 +39,23 @@ pub struct SignatureChain {
     /// The file name of the full signature chain.
     pub fullsig: SignatureFile,
     /// A list of file names for incremental signatures.
-    pub inclist: Vec<SignatureFile>
+    pub inclist: Vec<SignatureFile>,
 }
 
 pub struct CollectionsStatus {
     backup_chains: Vec<BackupChain>,
-    sig_chains: Vec<SignatureChain>
+    sig_chains: Vec<SignatureChain>,
 }
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum Type {
-    Full{ time: Timespec },
-    Inc{ start_time: Timespec, end_time: Timespec },
+    Full {
+        time: Timespec,
+    },
+    Inc {
+        start_time: Timespec,
+        end_time: Timespec,
+    },
 }
 
 /// Iterator over some kind of chain
@@ -62,33 +67,33 @@ impl BackupSet {
         // set type
         let tp = match fname.info.tp {
             fnm::Type::Full{ time, .. } |
-                fnm::Type::FullManifest{ time, .. } |
-                fnm::Type::FullSig{ time, .. } => {
-                    Type::Full{ time: time}
+            fnm::Type::FullManifest{ time, .. } |
+            fnm::Type::FullSig{ time, .. } => {
+                Type::Full { time: time }
             }
             fnm::Type::Inc{ start_time, end_time, .. } |
-                fnm::Type::IncManifest{ start_time, end_time, .. } |
-                fnm::Type::NewSig{ start_time, end_time, .. } => {
-                    Type::Inc{
-                        start_time: start_time,
-                        end_time: end_time,
-                    }
+            fnm::Type::IncManifest{ start_time, end_time, .. } |
+            fnm::Type::NewSig{ start_time, end_time, .. } => {
+                Type::Inc {
+                    start_time: start_time,
+                    end_time: end_time,
+                }
             }
         };
         // set partial
         let partial = {
             match fname.info.tp {
                 fnm::Type::FullManifest{ partial, .. } |
-                    fnm::Type::IncManifest{ partial, .. } |
-                    fnm::Type::FullSig{ partial, .. } |
-                    fnm::Type::NewSig{ partial, .. } => {
-                        partial
+                fnm::Type::IncManifest{ partial, .. } |
+                fnm::Type::FullSig{ partial, .. } |
+                fnm::Type::NewSig{ partial, .. } => {
+                    partial
                 }
-                _ => false
+                _ => false,
             }
         };
 
-        let mut result = BackupSet{
+        let mut result = BackupSet {
             tp: tp,
             partial: partial,
             compressed: fname.info.compressed,
@@ -115,21 +120,21 @@ impl BackupSet {
                 Type::Full{ time: my_time } => {
                     match pr.tp {
                         fnm::Type::Full{ time, .. } |
-                            fnm::Type::FullManifest{ time, .. } |
-                            fnm::Type::FullSig{ time, .. } => {
-                                my_time == time
-                            }
-                        _ => false
+                        fnm::Type::FullManifest{ time, .. } |
+                        fnm::Type::FullSig{ time, .. } => {
+                            my_time == time
+                        }
+                        _ => false,
                     }
                 }
                 Type::Inc{ start_time: my_start, end_time: my_end } => {
                     match pr.tp {
                         fnm::Type::Inc{ start_time, end_time, .. } |
-                            fnm::Type::IncManifest{ start_time, end_time, .. } |
-                            fnm::Type::NewSig{ start_time, end_time, .. } => {
-                                my_start == start_time && my_end == end_time
-                            }
-                        _ => false
+                        fnm::Type::IncManifest{ start_time, end_time, .. } |
+                        fnm::Type::NewSig{ start_time, end_time, .. } => {
+                            my_start == start_time && my_end == end_time
+                        }
+                        _ => false,
                     }
                 }
             }
@@ -140,14 +145,14 @@ impl BackupSet {
             // update info
             match pr.tp {
                 fnm::Type::Full{ volume_number, .. } |
-                    fnm::Type::Inc{ volume_number, .. } => {
-                        self.volumes_paths.insert(volume_number, fname.to_owned());
-                    }
+                fnm::Type::Inc{ volume_number, .. } => {
+                    self.volumes_paths.insert(volume_number, fname.to_owned());
+                }
                 fnm::Type::FullManifest{ .. } |
-                    fnm::Type::IncManifest{ .. } => {
-                        self.manifest_path = fname.to_owned();
-                    }
-                _ => ()
+                fnm::Type::IncManifest{ .. } => {
+                    self.manifest_path = fname.to_owned();
+                }
+                _ => (),
             }
             self.fix_encrypted(pr.encrypted);
             true
@@ -177,9 +182,10 @@ impl Display for BackupSet {
         match self.tp {
             Type::Full{ time } => {
                 try!(write!(f, "Full, time: {}", to_pretty_local(time)));
-            },
+            }
             Type::Inc{ start_time, end_time } => {
-                try!(write!(f, "Incremental, start time: {}, end time: {}",
+                try!(write!(f,
+                            "Incremental, start time: {}, end time: {}",
                             to_pretty_local(start_time),
                             to_pretty_local(end_time)));
             }
@@ -218,11 +224,11 @@ impl BackupChain {
             }
         };
 
-        BackupChain{
+        BackupChain {
             fullset: fullset,
             incset_list: Vec::new(),
             start_time: time,
-            end_time: time
+            end_time: time,
         }
     }
 
@@ -234,18 +240,17 @@ impl BackupChain {
                 self.end_time = end_time.clone();
                 self.incset_list.push(incset);
                 None
-            }
-            else {
+            } else {
                 // replace the last element if the end time comes before
-                let replace_last = self.incset_list.last().map_or(false,
-                    |last| start_time == last.tp.start_time() && end_time > last.tp.end_time());
+                let replace_last = self.incset_list.last().map_or(false, |last| {
+                    start_time == last.tp.start_time() && end_time > last.tp.end_time()
+                });
                 if replace_last {
                     self.end_time = end_time.clone();
                     self.incset_list.pop();
                     self.incset_list.push(incset);
                     None
-                }
-                else {
+                } else {
                     // ignore the given incremental backup set
                     Some(incset)
                 }
@@ -259,7 +264,8 @@ impl BackupChain {
 
 impl Display for BackupChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        try!(write!(f, "start time: {}, end time: {}\n{}",
+        try!(write!(f,
+                    "start time: {}, end time: {}\n{}",
                     to_pretty_local(self.start_time),
                     to_pretty_local(self.end_time),
                     &self.fullset));
@@ -277,14 +283,14 @@ impl SignatureFile {
             match pr.tp {
                 fnm::Type::FullSig{ time, .. } => time,
                 fnm::Type::NewSig{ end_time, .. } => end_time,
-                _ => panic!("unexpected file given for signature")
+                _ => panic!("unexpected file given for signature"),
             }
         };
-        SignatureFile{
+        SignatureFile {
             file_name: fname.to_owned(),
             time: time,
             compressed: pr.compressed,
-            encrypted: pr.encrypted
+            encrypted: pr.encrypted,
         }
     }
 
@@ -299,7 +305,7 @@ impl SignatureChain {
     pub fn new(fname: &str, pr: &Info) -> Self {
         SignatureChain {
             fullsig: SignatureFile::from_file_and_info(fname, pr),
-            inclist: Vec::new()
+            inclist: Vec::new(),
         }
     }
 
@@ -313,8 +319,7 @@ impl SignatureChain {
         if let fnm::Type::NewSig{ .. } = fname.info.tp {
             self.inclist.push(SignatureFile::from_filename_info(fname));
             true
-        }
-        else {
+        } else {
             false
         }
     }
@@ -330,7 +335,8 @@ impl SignatureChain {
 
 impl Display for SignatureChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        try!(write!(f, "start time: {}, end time: {}\n{}",
+        try!(write!(f,
+                    "start time: {}, end time: {}\n{}",
                     to_pretty_local(self.start_time()),
                     to_pretty_local(self.end_time()),
                     &self.fullsig.file_name));
@@ -346,13 +352,13 @@ impl CollectionsStatus {
     pub fn new() -> Self {
         CollectionsStatus {
             backup_chains: Vec::new(),
-            sig_chains: Vec::new()
+            sig_chains: Vec::new(),
         }
     }
 
     pub fn from_filenames<T: AsRef<Path>>(filenames: &[T]) -> Self {
         let infos = compute_filename_infos(&filenames);
-        CollectionsStatus{
+        CollectionsStatus {
             backup_chains: compute_backup_chains(&infos),
             sig_chains: compute_signature_chains(&infos),
         }
@@ -430,13 +436,15 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
 fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
     // create a new signature chain for each fill signature
     let mut sig_chains: Vec<_> = fname_infos.iter()
-        .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
-        .map(|f| SignatureChain::from_filename_info(f))
-        .collect();
+                                            .filter(|f| {
+                                                matches!(f.info.tp, fnm::Type::FullSig{..})
+                                            })
+                                            .map(|f| SignatureChain::from_filename_info(f))
+                                            .collect();
     // and collect all the new signatures, sorted by start time
     let mut new_sig: Vec<_> = fname_infos.iter()
-        .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
-        .collect();
+                                         .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
+                                         .collect();
     new_sig.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
 
     // add the new signatures to signature chains
@@ -508,7 +516,8 @@ mod test {
         assert!(set.add_filename(&manifest1));
         assert!(!set.add_filename(&inc1));
         // test results
-        assert_eq!(set.tp, Type::Full{ time: parse_time_str("20150617t182545z").unwrap() });
+        assert_eq!(set.tp,
+                   Type::Full { time: parse_time_str("20150617t182545z").unwrap() });
         assert!(set.compressed);
         assert!(!set.encrypted);
         assert!(!set.partial);
