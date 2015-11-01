@@ -215,7 +215,7 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
             let info = match difftype {
                 DiffType::Signature | DiffType::Snapshot => {
-                    let time = Timespec::new(header.mtime().unwrap_or(0 as u64) as i64, 0);
+                    let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
                     Some(PathInfo { mtime: time })
                 }
                 _ => None,

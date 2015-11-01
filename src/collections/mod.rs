@@ -47,7 +47,7 @@ pub struct CollectionsStatus {
     sig_chains: Vec<SignatureChain>,
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Type {
     Full {
         time: Timespec,
