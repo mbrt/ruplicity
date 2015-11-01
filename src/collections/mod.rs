@@ -351,11 +351,11 @@ impl CollectionsStatus {
     }
 
     pub fn from_filenames<T: AsRef<Path>>(filenames: &[T]) -> Self {
-        let mut result = Self::new();
-        let filename_infos = Self::compute_filename_infos(&filenames);
-        result.compute_backup_chains(&filename_infos);
-        result.compute_signature_chains(&filename_infos);
-        result
+        let infos = compute_filename_infos(&filenames);
+        CollectionsStatus{
+            backup_chains: compute_backup_chains(&infos),
+            sig_chains: compute_signature_chains(&infos),
+        }
     }
 
     pub fn backup_chains(&self) -> ChainIter<BackupChain> {
@@ -366,94 +366,93 @@ impl CollectionsStatus {
         self.sig_chains.iter()
     }
 
-    fn compute_filename_infos<T: AsRef<Path>>(filename_list: &[T]) -> Vec<FileNameInfo> {
-        let mut result = Vec::new();
-        let parser = FileNameParser::new();
-        for name in filename_list {
-            if let Some(name) = name.as_ref().to_str() {
-                if let Some(info) = parser.parse(name) {
-                    result.push(FileNameInfo::new(name, info));
-                }
+}
+
+fn compute_filename_infos<T: AsRef<Path>>(filenames: &[T]) -> Vec<FileNameInfo> {
+    let mut result = Vec::new();
+    let parser = FileNameParser::new();
+    for name in filenames {
+        if let Some(name) = name.as_ref().to_str() {
+            if let Some(info) = parser.parse(name) {
+                result.push(FileNameInfo::new(name, info));
             }
         }
-        result
     }
+    result
+}
 
-    fn compute_backup_chains(&mut self, filename_list: &[FileNameInfo]) {
-        let sets = Self::compute_backup_sets(filename_list);
-        self.add_to_backup_chains(sets);
-    }
-
-    fn compute_backup_sets(filename_list: &[FileNameInfo]) -> Vec<BackupSet> {
-        let mut sets = Vec::<BackupSet>::new();
-        for fileinfo in filename_list.iter() {
-            let mut inserted = false;
-            for set in &mut sets {
-                if set.add_filename(&fileinfo) {
-                    inserted = true;
-                    break;
-                }
+fn compute_backup_chains(fname_infos: &[FileNameInfo]) -> Vec<BackupChain> {
+    let mut backup_chains: Vec<BackupChain> = Vec::new();
+    for set in compute_backup_sets(fname_infos) {
+        match set.tp {
+            Type::Full{ .. } => {
+                let new_chain = BackupChain::new(set);
+                backup_chains.push(new_chain);
             }
-            if !inserted {
-                sets.push(BackupSet::new(&fileinfo));
-            }
-        }
-        // sort by time
-        sets.sort_by(|a, b| a.get_time().cmp(&b.get_time()));
-        sets
-    }
-
-    fn add_to_backup_chains(&mut self, set_list: Vec<BackupSet>) {
-        for set in set_list.into_iter() {
-            match set.tp {
-                Type::Full{ .. } => {
-                    let new_chain = BackupChain::new(set);
-                    self.backup_chains.push(new_chain);
-                }
-                Type::Inc{ .. } => {
-                    let mut rejected_set = Some(set);
-                    for chain in &mut self.backup_chains {
-                        rejected_set = chain.add_inc(rejected_set.unwrap());
-                        if rejected_set.is_none() {
-                            break;
-                        }
-                    }
-                    if let Some(_) = rejected_set {
-                        // TODO: add to orphaned sets
+            Type::Inc{ .. } => {
+                let mut rejected_set = Some(set);
+                for chain in &mut backup_chains {
+                    rejected_set = chain.add_inc(rejected_set.unwrap());
+                    if rejected_set.is_none() {
+                        break;
                     }
                 }
-            }
-        }
-        // sort by end time
-        self.backup_chains.sort_by(|a, b| a.end_time.cmp(&b.end_time));
-    }
-
-    fn compute_signature_chains(&mut self, filename_list: &[FileNameInfo]) {
-        // create a new signature chain for each fill signature
-        self.sig_chains = filename_list.iter()
-            .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
-            .map(|f| SignatureChain::from_filename_info(f))
-            .collect();
-        // and collect all the new signatures, sorted by start time
-        let mut new_sig: Vec<_> = filename_list.iter()
-            .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
-            .collect();
-        new_sig.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
-
-        // add the new signatures to signature chains
-        for sig in new_sig.into_iter() {
-            let mut added = false;
-            for chain in &mut self.sig_chains {
-                if chain.add_new_sig(&sig) {
-                    added = true;
-                    break;
+                if let Some(_) = rejected_set {
+                    // TODO: add to orphaned sets
                 }
             }
-            if !added {
-                // TODO: add to orphaned filenames
-            }
         }
     }
+    // sort by end time
+    backup_chains.sort_by(|a, b| a.end_time.cmp(&b.end_time));
+    backup_chains
+}
+
+fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
+    let mut sets = Vec::<BackupSet>::new();
+    for fileinfo in fname_infos.iter() {
+        let mut inserted = false;
+        for set in &mut sets {
+            if set.add_filename(&fileinfo) {
+                inserted = true;
+                break;
+            }
+        }
+        if !inserted {
+            sets.push(BackupSet::new(&fileinfo));
+        }
+    }
+    // sort by time
+    sets.sort_by(|a, b| a.get_time().cmp(&b.get_time()));
+    sets
+}
+
+fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
+    // create a new signature chain for each fill signature
+    let mut sig_chains: Vec<_> = fname_infos.iter()
+        .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
+        .map(|f| SignatureChain::from_filename_info(f))
+        .collect();
+    // and collect all the new signatures, sorted by start time
+    let mut new_sig: Vec<_> = fname_infos.iter()
+        .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
+        .collect();
+    new_sig.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
+
+    // add the new signatures to signature chains
+    for sig in new_sig.into_iter() {
+        let mut added = false;
+        for chain in &mut sig_chains {
+            if chain.add_new_sig(&sig) {
+                added = true;
+                break;
+            }
+        }
+        if !added {
+            // TODO: add to orphaned filenames
+        }
+    }
+    sig_chains
 }
 
 impl Display for CollectionsStatus {
