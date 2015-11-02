@@ -56,3 +56,27 @@ pub fn to_pretty(ts: Timespec, format: Format) -> PrettyDisplay {
 pub fn parse_time_str(s: &str) -> Option<Timespec> {
     time::strptime(s, "%Y%m%dt%H%M%S%Z").ok().map(|tm| tm.to_timespec())
 }
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+
+    #[test]
+    fn parse() {
+        parse_time_str("19881211t172000z").unwrap();
+    }
+
+    #[test]
+    fn parse_display_utc() {
+        let time = parse_time_str("19881211t172000z").unwrap();
+        assert_eq!(format!("{}", to_pretty_utc(time)), "Sun, 11 Dec 1988 17:20:00 -0000");
+    }
+
+//    #[test]
+//    fn parse_display_local() {
+//        let time = parse_time_str("19881211t172000z").unwrap();
+//        assert_eq!(format!("{}", to_pretty_local(time)), "Sun, 11 Dec 1988 16:20:00 +0001");
+//    }
+}
