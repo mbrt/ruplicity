@@ -61,6 +61,8 @@ pub fn parse_time_str(s: &str) -> Option<Timespec> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::env;
+    use time;
 
 
     #[test]
@@ -70,13 +72,15 @@ mod test {
 
     #[test]
     fn parse_display_utc() {
-        let time = parse_time_str("19881211t172000z").unwrap();
-        assert_eq!(format!("{}", to_pretty_utc(time)), "Sun, 11 Dec 1988 17:20:00 -0000");
+        let time = parse_time_str("19881211t152000z").unwrap();
+        assert_eq!(format!("{}", to_pretty_utc(time)), "Sun, 11 Dec 1988 15:20:00 -0000");
     }
 
-//    #[test]
-//    fn parse_display_local() {
-//        let time = parse_time_str("19881211t172000z").unwrap();
-//        assert_eq!(format!("{}", to_pretty_local(time)), "Sun, 11 Dec 1988 16:20:00 +0001");
-//    }
+    #[test]
+    fn parse_display_local() {
+        env::set_var("TZ", "Europe/Rome");
+        time::tzset();
+        let time = parse_time_str("19881211t152000z").unwrap();
+        assert_eq!(format!("{}", to_pretty_local(time)), "Sun, 11 Dec 1988 16:20:00 +0100");
+    }
 }
