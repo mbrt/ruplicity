@@ -305,5 +305,66 @@ mod test {
                 println!("    {:?}", file);
             }
         }
+
+        // Expected output from duplicity (snapshot 1):
+        //
+        // Last full backup date: Wed Jun 17 18:25:45 2015
+        // Sat Sep 28 18:30:59 2002 .
+        // Tue Aug 28 18:23:30 2001 changeable_permission
+        // Sat Jul 27 23:00:05 2002 deleted_file
+        // Sat Jul 27 23:00:36 2002 directory_to_file
+        // Sat Jul 27 23:00:36 2002 directory_to_file/file
+        // Tue Aug 28 07:34:29 2001 executable
+        // Tue Aug 28 18:19:27 2001 executable2
+        // Tue Aug 28 07:32:46 2001 fifo
+        // Sat Jul 27 23:23:54 2002 file_to_directory
+        // Wed Jul 31 01:54:30 2002 largefile
+        // Tue Aug 28 07:30:52 2001 regular_file
+        // Thu Aug 30 00:40:37 2001 regular_file.sig
+        // Fri Nov  1 04:44:47 2002 symbolic_link
+        // Tue Aug 28 21:56:38 2001 test
+        // Tue Aug 28 07:31:42 2001 two_hardlinked_files1
+        // Tue Aug 28 07:31:42 2001 two_hardlinked_files2
+        // Tue Aug 28 22:03:47 2001 <long-list-of-unicode-chars>
+        //
+        //
+        // Expected output from duplicity (snapshot 2):
+        //
+        // Last full backup date: Wed Jun 17 18:25:45 2015
+        // Wed Jul 31 01:55:32 2002 .
+        // Tue Aug 28 18:23:30 2001 changeable_permission
+        // Sat Jul 27 23:00:48 2002 directory_to_file
+        // Tue Aug 28 07:34:29 2001 executable
+        // Sat Jul 27 23:01:33 2002 executable2
+        // Sat Jul 27 23:01:33 2002 executable2/another_file
+        // Tue Aug 28 07:32:46 2001 fifo
+        // Sat Jul 27 23:24:06 2002 file_to_directory
+        // Wed Jul 31 01:55:24 2002 largefile
+        // Sat Jul 27 23:00:18 2002 new_file
+        // Sat Jul 27 22:59:32 2002 regular_file
+        // Thu Aug 30 00:40:37 2001 regular_file.sig
+        // Sat Jul 27 22:59:46 2002 symbolic_link
+        // Tue Aug 28 21:56:38 2001 test
+        // Tue Aug 28 07:31:42 2001 two_hardlinked_files1
+        // Tue Aug 28 07:31:42 2001 two_hardlinked_files2
+        // Tue Aug 28 22:03:47 2001 <long-list-of-unicode-chars>
+        //
+        //
+        // Expected output from duplicity (snapshot 3):
+        //
+        // Last full backup date: Wed Jun 17 18:25:45 2015
+        // Sat Sep 28 18:30:59 2002 .
+        // Tue Aug 28 18:23:30 2001 changeable_permission
+        // Tue Aug 28 07:34:29 2001 executable
+        // Tue Aug 28 18:19:27 2001 executable2
+        // Tue Aug 28 07:32:46 2001 fifo
+        // Wed Jul 31 03:43:34 2002 largefile
+        // Tue Aug 28 07:30:52 2001 regular_file
+        // Thu Aug 30 00:40:37 2001 regular_file.sig
+        // Fri Nov  1 04:44:48 2002 symbolic_link
+        // Tue Aug 28 21:56:38 2001 test
+        // Tue Aug 28 07:31:42 2001 two_hardlinked_files1
+        // Tue Aug 28 07:31:42 2001 two_hardlinked_files2
+        // Tue Aug 28 22:03:47 2001 <long-list-of-unicode-chars>
     }
 }
