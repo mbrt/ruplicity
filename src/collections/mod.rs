@@ -539,5 +539,16 @@ mod test {
         ];
         let collection_status = CollectionsStatus::from_filenames(&filenames);
         println!("collection: {}", collection_status);
+
+        // Expected output from duplicity:
+        //
+        // Chain start time: Wed Jun 17 18:25:45 2015
+        // Chain end time: Wed Jun 17 18:26:50 2015
+        // Number of contained backup sets: 3
+        // Total number of contained volumes: 3
+        //  Type of backup set:                            Time:      Num volumes:
+        //                 Full         Wed Jun 17 18:25:45 2015                 1
+        //          Incremental         Wed Jun 17 18:26:29 2015                 1
+        //          Incremental         Wed Jun 17 18:26:50 2015                 1
     }
 }
