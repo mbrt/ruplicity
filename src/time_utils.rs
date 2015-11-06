@@ -65,6 +65,8 @@ pub mod test_utils {
     use std::sync::{Mutex, MutexGuard};
 
 
+    // A global mutex is needed because tests are run in parallel
+    // We need to avoid tests change time zone concurrently
     lazy_static! {
         static ref TZLOCK: Mutex<i32> = Mutex::new(0);
     }
