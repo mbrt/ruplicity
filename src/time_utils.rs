@@ -59,22 +59,24 @@ pub fn parse_time_str(s: &str) -> Option<Timespec> {
 }
 
 
-/// Change the current time zone
+/// Test utilities for time
 #[cfg(test)]
 pub mod test_utils {
+    use std::env;
     use std::sync::{Mutex, MutexGuard};
+    use time;
 
 
     // A global mutex is needed because tests are run in parallel
-    // We need to avoid tests change time zone concurrently
+    // We need to avoid tests to change time zone concurrently
     lazy_static! {
         static ref TZLOCK: Mutex<i32> = Mutex::new(0);
     }
 
+    /// Set the local time zone for the whole process to the given one.
+    ///
+    /// Returns a `MutexGuard` that avoids other threads to change the time zone concurrently.
     pub fn set_time_zone(tz: &str) -> MutexGuard<i32> {
-        use std::env;
-        use time;
-
         let lock = TZLOCK.lock();
         env::set_var("TZ", tz);
         time::tzset();
@@ -142,7 +144,7 @@ mod test {
         let tm1 = at_utc(ts);
         // somehow they don't have the same identical structure :(
         // tm_wday, tm_yday are missing. See rust-lang-deprecated/time#92
-        //assert_eq!(tm, tm1);
+        // assert_eq!(tm, tm1);
         // test equally formatted
         let format_fn = |tm: &Tm| format!("{}", tm.rfc3339());
         assert_eq!(format_fn(&tm), format_fn(&tm1));

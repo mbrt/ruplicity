@@ -22,8 +22,8 @@ pub struct Snapshot<'a> {
 
 #[derive(Debug)]
 pub struct File<'a> {
-    pub path: &'a Path,
-    pub last_modified: Timespec,
+    path: &'a Path,
+    info: &'a PathInfo,
 }
 
 /// Iterator over a list of backup snapshots.
@@ -67,8 +67,12 @@ struct PathSnapshot {
 }
 
 /// Informations about a path inside a snapshot.
+#[derive(Debug)]
 struct PathInfo {
     mtime: Timespec,
+    username: Option<String>,
+    groupname: Option<String>,
+    mode: io::Result<u32>,
 }
 
 
@@ -166,12 +170,27 @@ impl<'a> Iterator for SnapshotFiles<'a> {
                 if let Some(ref info) = s.info {
                     return Some(File {
                         path: path_snapshots.path.as_ref(),
-                        last_modified: info.mtime,
+                        info: info,
                     });
                 }
             }
         }
         None
+    }
+}
+
+
+impl<'a> File<'a> {
+    pub fn path(&self) -> &Path {
+        self.path
+    }
+
+    pub fn username(&self) -> Option<&str> {
+        self.info.username.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn groupname(&self) -> Option<&str> {
+        self.info.groupname.as_ref().map(AsRef::as_ref)
     }
 }
 
@@ -216,7 +235,12 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             let info = match difftype {
                 DiffType::Signature | DiffType::Snapshot => {
                     let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
-                    Some(PathInfo { mtime: time })
+                    Some(PathInfo {
+                        mtime: time,
+                        username: header.username().map(ToOwned::to_owned),
+                        groupname: header.groupname().map(ToOwned::to_owned),
+                        mode: header.mode(),
+                    })
                 }
                 _ => None,
             };
