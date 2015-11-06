@@ -8,12 +8,17 @@
 #![cfg_attr(feature = "unstable", feature(plugin))]
 #![cfg_attr(feature = "unstable", plugin(clippy))]
 
+#![cfg_attr(test, allow(unsafe_code))]
+
 extern crate flate2;
 extern crate regex;
 extern crate tar;
 extern crate time;
 #[macro_use]
 extern crate try_opt;
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
 
 mod macros;
 mod time_utils;

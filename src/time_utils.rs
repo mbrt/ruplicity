@@ -61,18 +61,30 @@ pub fn parse_time_str(s: &str) -> Option<Timespec> {
 
 /// Change the current time zone
 #[cfg(test)]
-pub fn set_time_zone(tz: &str) {
-    use std::env;
-    use time;
+pub mod test_utils {
+    use std::sync::{Mutex, MutexGuard};
 
-    env::set_var("TZ", tz);
-    time::tzset();
+
+    lazy_static! {
+        static ref TZLOCK: Mutex<i32> = Mutex::new(0);
+    }
+
+    pub fn set_time_zone(tz: &str) -> MutexGuard<i32> {
+        use std::env;
+        use time;
+
+        let lock = TZLOCK.lock();
+        env::set_var("TZ", tz);
+        time::tzset();
+        lock.unwrap()
+    }
 }
 
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use super::test_utils::set_time_zone;
 
 
     #[test]
@@ -81,26 +93,33 @@ mod test {
     }
 
     #[test]
-    fn parse_display_utc() {
-        set_time_zone("Europe/London");
+    fn parse_display_utc_london() {
         let time = parse_time_str("19881211t152000z").unwrap();
-        assert_eq!(format!("{}", to_pretty_utc(time)),
-                   "Sun, 11 Dec 1988 15:20:00 -0000");
-
-        set_time_zone("Europe/Rome");
+        let _lock = set_time_zone("Europe/London");
         assert_eq!(format!("{}", to_pretty_utc(time)),
                    "Sun, 11 Dec 1988 15:20:00 -0000");
     }
 
     #[test]
-    fn parse_display_local() {
-        set_time_zone("Europe/Rome");
+    fn parse_display_utc_rome() {
+        let _lock = set_time_zone("Europe/Rome");
         let time = parse_time_str("19881211t152000z").unwrap();
+        assert_eq!(format!("{}", to_pretty_utc(time)),
+                   "Sun, 11 Dec 1988 15:20:00 -0000");
+    }
 
+    #[test]
+    fn parse_display_local_rome() {
+        let _lock = set_time_zone("Europe/Rome");
+        let time = parse_time_str("19881211t152000z").unwrap();
         assert_eq!(format!("{}", to_pretty_local(time)),
                    "Sun, 11 Dec 1988 16:20:00 +0100");
+    }
 
-        set_time_zone("Europe/London");
+    #[test]
+    fn parse_display_local_london() {
+        let _lock = set_time_zone("Europe/London");
+        let time = parse_time_str("19881211t152000z").unwrap();
         assert_eq!(format!("{}", to_pretty_local(time)),
                    "Sun, 11 Dec 1988 15:20:00 -0000");
     }
@@ -109,7 +128,7 @@ mod test {
     fn time_crate() {
         use time::{Tm, at_utc, strftime, strptime};
 
-        set_time_zone("Europe/Rome");
+        let _lock = set_time_zone("Europe/Rome");
         // parse
         let tm = strptime("20150617t182545z", "%Y%m%dt%H%M%S%Z").unwrap();
         // format
