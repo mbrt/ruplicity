@@ -36,7 +36,7 @@ impl Backend for LocalBackend {
         Ok(&self.file_names)
     }
 
-    fn open_file(&self, name: &str) -> io::Result<File> {
+    fn open_file(&self, name: &Path) -> io::Result<File> {
         let mut path = self.base_path.clone();
         path.push(name);
         File::open(path)

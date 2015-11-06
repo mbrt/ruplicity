@@ -18,5 +18,5 @@ pub trait Backend {
     fn get_file_names(&self) -> io::Result<&[Self::FileName]>;
 
     /// Open a file for reading.
-    fn open_file(&self, name: &str) -> io::Result<Self::FileStream>;
+    fn open_file(&self, name: &Path) -> io::Result<Self::FileStream>;
 }
