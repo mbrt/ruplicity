@@ -336,12 +336,12 @@ impl SignatureChain {
 impl Display for SignatureChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         try!(write!(f,
-                    "start time: {}, end time: {}\n{}",
+                    "start time: {}, end time: {}\n {}",
                     to_pretty_local(self.start_time()),
                     to_pretty_local(self.end_time()),
                     &self.fullsig.file_name));
         for inc in &self.inclist {
-            try!(write!(f, "\n{}", inc.file_name));
+            try!(write!(f, "\n {}", inc.file_name));
         }
         Ok(())
     }
@@ -465,6 +465,7 @@ fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain>
 
 impl Display for CollectionsStatus {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        try!(write!(f, "backup chains:\n"));
         for backup_chain in &self.backup_chains {
             try!(backup_chain.fmt(f));
         }
@@ -498,7 +499,21 @@ impl Type {
 mod test {
     use super::*;
     use super::file_naming::{FileNameInfo, FileNameParser};
-    use time_utils::parse_time_str;
+    use time_utils::{parse_time_str, set_time_zone};
+
+    fn get_test_filenames() -> Vec<&'static str> {
+        vec![
+            "duplicity-full.20150617T182545Z.manifest",
+            "duplicity-full.20150617T182545Z.vol1.difftar.gz",
+            "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
+            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest",
+            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz",
+            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest",
+            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz",
+            "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz",
+            "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz"
+        ]
+    }
 
     #[test]
     fn parse_and_add() {
@@ -525,30 +540,49 @@ mod test {
     }
 
     #[test]
-    fn collection_status() {
-        let filenames = vec![
-            "duplicity-full.20150617T182545Z.manifest",
-            "duplicity-full.20150617T182545Z.vol1.difftar.gz",
-            "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
-            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest",
-            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz",
-            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest",
-            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz",
-            "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz",
-            "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz"
-        ];
-        let collection_status = CollectionsStatus::from_filenames(&filenames);
-        println!("collection: {}", collection_status);
+    fn collection_status_display() {
+        // avoid test differences for time zones
+        set_time_zone("Europe/London");
 
-        // Expected output from duplicity:
-        //
-        // Chain start time: Wed Jun 17 18:25:45 2015
-        // Chain end time: Wed Jun 17 18:26:50 2015
-        // Number of contained backup sets: 3
-        // Total number of contained volumes: 3
-        //  Type of backup set:                            Time:      Num volumes:
-        //                 Full         Wed Jun 17 18:25:45 2015                 1
-        //          Incremental         Wed Jun 17 18:26:29 2015                 1
-        //          Incremental         Wed Jun 17 18:26:50 2015                 1
+        let filenames = get_test_filenames();
+        let collection_status = CollectionsStatus::from_filenames(&filenames);
+        let display = format!("{}\n", collection_status);
+        let expected = include_str!("../../tests/backups/single_vol/collections_display.txt");
+        println!("collection status:\n{}\n", display);
+        assert_eq!(display, expected);
+    }
+
+    #[test]
+    fn collection_status() {
+        // avoid test differences for time zones
+        set_time_zone("Europe/London");
+
+        let filenames = get_test_filenames();
+        let collection_status = CollectionsStatus::from_filenames(&filenames);
+        assert_eq!(collection_status.backup_chains().count(), 1);
+        assert_eq!(collection_status.signature_chains().count(), 1);
+        // backup chain
+        let backup_chain = collection_status.backup_chains().next().unwrap();
+        assert_eq!(backup_chain.incset_list.len(), 2);
+        assert_eq!(backup_chain.start_time, parse_time_str("20150617t182545z").unwrap());
+        assert_eq!(backup_chain.end_time, parse_time_str("20150617t182650z").unwrap());
+        // full backup
+        let full = &backup_chain.fullset;
+        assert_eq!(full.tp, Type::Full { time: parse_time_str("20150617t182545z").unwrap() });
+        // inc backups
+        {
+            let inc = &backup_chain.incset_list[0];
+            assert_eq!(inc.tp, Type::Inc {
+                start_time: parse_time_str("20150617t182545z").unwrap(),
+                end_time: parse_time_str("20150617t182629z").unwrap(),
+            });
+        }
+        {
+            let inc = &backup_chain.incset_list[1];
+            assert_eq!(inc.tp, Type::Inc {
+                start_time: parse_time_str("20150617t182629z").unwrap(),
+                end_time: parse_time_str("20150617t182650z").unwrap(),
+            });
+        }
     }
 }

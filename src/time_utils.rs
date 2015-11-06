@@ -51,6 +51,7 @@ pub fn to_pretty(ts: Timespec, format: Format) -> PrettyDisplay {
 }
 
 
+
 /// Parse a string representing a duplicity timestamp and returns a Timespec
 /// if all goes well.
 pub fn parse_time_str(s: &str) -> Option<Timespec> {
@@ -58,11 +59,20 @@ pub fn parse_time_str(s: &str) -> Option<Timespec> {
 }
 
 
+/// Change the current time zone
+#[cfg(test)]
+pub fn set_time_zone(tz: &str) {
+    use std::env;
+    use time;
+
+    env::set_var("TZ", tz);
+    time::tzset();
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::env;
-    use time;
 
 
     #[test]
@@ -74,13 +84,19 @@ mod test {
     fn parse_display_utc() {
         let time = parse_time_str("19881211t152000z").unwrap();
         assert_eq!(format!("{}", to_pretty_utc(time)), "Sun, 11 Dec 1988 15:20:00 -0000");
+
+        set_time_zone("Europe/Rome");
+        assert_eq!(format!("{}", to_pretty_utc(time)), "Sun, 11 Dec 1988 15:20:00 -0000");
     }
 
     #[test]
     fn parse_display_local() {
-        env::set_var("TZ", "Europe/Rome");
-        time::tzset();
         let time = parse_time_str("19881211t152000z").unwrap();
+
+        set_time_zone("Europe/Rome");
         assert_eq!(format!("{}", to_pretty_local(time)), "Sun, 11 Dec 1988 16:20:00 +0100");
+
+        set_time_zone("Europe/London");
+        assert_eq!(format!("{}", to_pretty_local(time)), "Sun, 11 Dec 1988 15:20:00 -0000");
     }
 }
