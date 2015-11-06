@@ -21,3 +21,6 @@ time = "0.1.33"
 
 # optional, working only on nightly
 clippy = { version = "*", optional = true }
+
+[dev-dependencies]
+lazy_static = "0.1.15"
