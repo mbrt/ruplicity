@@ -543,6 +543,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn collection_status_display() {
         // avoid test differences for time zones
         set_time_zone("Europe/London");
