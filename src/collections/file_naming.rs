@@ -112,19 +112,19 @@ impl FileNameParser {
         if let Some(captures) = self.full_vol_re.captures(filename) {
             let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
             let vol_num = try_opt!(get_vol_num(captures.name("num").unwrap()));
-            return Some(Type::Full {
+            Some(Type::Full {
                 time: time,
                 volume_number: vol_num,
-            });
-        }
-        if let Some(captures) = self.full_manifest_re.captures(filename) {
+            })
+        } else if let Some(captures) = self.full_manifest_re.captures(filename) {
             let time = try_opt!(parse_time_str(captures.name("time").unwrap()));
-            return Some(Type::FullManifest {
+            Some(Type::FullManifest {
                 time: time,
                 partial: captures.name("partial").is_some(),
-            });
+            })
+        } else {
+            None
         }
-        None
     }
 
     fn check_inc(&self, filename: &str) -> Option<Type> {
@@ -250,25 +250,5 @@ mod test {
                        compressed: true,
                        encrypted: false,
                    }));
-    }
-
-    #[test]
-    fn time_test() {
-        use time::{Tm, at_utc, strftime, strptime};
-
-        // parse
-        let tm = strptime("20150617t182545Z", "%Y%m%dt%H%M%S%Z").unwrap();
-        // format
-        assert_eq!(strftime("%a %d/%m/%Y %H:%M:%S", &tm).unwrap(),
-                   "Sun 17/06/2015 18:25:45");
-        assert_eq!(format!("{}", tm.rfc3339()), "2015-06-17T18:25:45Z");
-        // store in Timespec and restore in Tm
-        let ts = tm.to_timespec();
-        let tm1 = at_utc(ts);
-        // somehow they don't have the same identical structure :(
-        // assert_eq!(tm, tm1);
-        // test equally formatted
-        let format_fn = |tm: &Tm| format!("{}", tm.rfc3339());
-        assert_eq!(format_fn(&tm), format_fn(&tm1));
     }
 }
