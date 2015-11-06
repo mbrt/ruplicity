@@ -11,6 +11,7 @@ use self::file_naming::{FileNameInfo, FileNameParser, Info};
 use self::file_naming as fnm;
 
 
+#[derive(Debug)]
 pub struct BackupSet {
     pub tp: Type,
     pub compressed: bool,
@@ -20,6 +21,7 @@ pub struct BackupSet {
     volumes_paths: HashMap<i32, String>,
 }
 
+#[derive(Debug)]
 pub struct BackupChain {
     pub fullset: BackupSet,
     pub incset_list: Vec<BackupSet>,
@@ -27,6 +29,7 @@ pub struct BackupChain {
     pub end_time: Timespec,
 }
 
+#[derive(Debug)]
 pub struct SignatureFile {
     pub file_name: String,
     pub time: Timespec,
@@ -35,6 +38,7 @@ pub struct SignatureFile {
 }
 
 /// A chain of signature belonging to the same backup set.
+#[derive(Debug)]
 pub struct SignatureChain {
     /// The file name of the full signature chain.
     pub fullsig: SignatureFile,
@@ -42,6 +46,7 @@ pub struct SignatureChain {
     pub inclist: Vec<SignatureFile>,
 }
 
+#[derive(Debug)]
 pub struct CollectionsStatus {
     backup_chains: Vec<BackupChain>,
     sig_chains: Vec<SignatureChain>,
@@ -546,6 +551,7 @@ mod test {
         let collection_status = CollectionsStatus::from_filenames(&filenames);
         let display = format!("{}\n", collection_status);
         let expected = include_str!("../../tests/backups/single_vol/collections_display.txt");
+        println!("debug:\n{:?}\n", collection_status);
         println!("collection status:\n{}\n", display);
         assert_eq!(display, expected);
     }
