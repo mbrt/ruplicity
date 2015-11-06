@@ -502,17 +502,15 @@ mod test {
     use time_utils::{parse_time_str, set_time_zone};
 
     fn get_test_filenames() -> Vec<&'static str> {
-        vec![
-            "duplicity-full.20150617T182545Z.manifest",
-            "duplicity-full.20150617T182545Z.vol1.difftar.gz",
-            "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
-            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest",
-            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz",
-            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest",
-            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz",
-            "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz",
-            "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz"
-        ]
+        vec!["duplicity-full.20150617T182545Z.manifest",
+             "duplicity-full.20150617T182545Z.vol1.difftar.gz",
+             "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
+             "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest",
+             "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz",
+             "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest",
+             "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz",
+             "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz",
+             "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz"]
     }
 
     #[test]
@@ -564,25 +562,30 @@ mod test {
         // backup chain
         let backup_chain = collection_status.backup_chains().next().unwrap();
         assert_eq!(backup_chain.incset_list.len(), 2);
-        assert_eq!(backup_chain.start_time, parse_time_str("20150617t182545z").unwrap());
-        assert_eq!(backup_chain.end_time, parse_time_str("20150617t182650z").unwrap());
+        assert_eq!(backup_chain.start_time,
+                   parse_time_str("20150617t182545z").unwrap());
+        assert_eq!(backup_chain.end_time,
+                   parse_time_str("20150617t182650z").unwrap());
         // full backup
         let full = &backup_chain.fullset;
-        assert_eq!(full.tp, Type::Full { time: parse_time_str("20150617t182545z").unwrap() });
+        assert_eq!(full.tp,
+                   Type::Full { time: parse_time_str("20150617t182545z").unwrap() });
         // inc backups
         {
             let inc = &backup_chain.incset_list[0];
-            assert_eq!(inc.tp, Type::Inc {
-                start_time: parse_time_str("20150617t182545z").unwrap(),
-                end_time: parse_time_str("20150617t182629z").unwrap(),
-            });
+            assert_eq!(inc.tp,
+                       Type::Inc {
+                           start_time: parse_time_str("20150617t182545z").unwrap(),
+                           end_time: parse_time_str("20150617t182629z").unwrap(),
+                       });
         }
         {
             let inc = &backup_chain.incset_list[1];
-            assert_eq!(inc.tp, Type::Inc {
-                start_time: parse_time_str("20150617t182629z").unwrap(),
-                end_time: parse_time_str("20150617t182650z").unwrap(),
-            });
+            assert_eq!(inc.tp,
+                       Type::Inc {
+                           start_time: parse_time_str("20150617t182629z").unwrap(),
+                           end_time: parse_time_str("20150617t182650z").unwrap(),
+                       });
         }
     }
 }

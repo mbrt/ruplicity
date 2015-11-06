@@ -83,10 +83,12 @@ mod test {
     #[test]
     fn parse_display_utc() {
         let time = parse_time_str("19881211t152000z").unwrap();
-        assert_eq!(format!("{}", to_pretty_utc(time)), "Sun, 11 Dec 1988 15:20:00 -0000");
+        assert_eq!(format!("{}", to_pretty_utc(time)),
+                   "Sun, 11 Dec 1988 15:20:00 -0000");
 
         set_time_zone("Europe/Rome");
-        assert_eq!(format!("{}", to_pretty_utc(time)), "Sun, 11 Dec 1988 15:20:00 -0000");
+        assert_eq!(format!("{}", to_pretty_utc(time)),
+                   "Sun, 11 Dec 1988 15:20:00 -0000");
     }
 
     #[test]
@@ -94,9 +96,11 @@ mod test {
         let time = parse_time_str("19881211t152000z").unwrap();
 
         set_time_zone("Europe/Rome");
-        assert_eq!(format!("{}", to_pretty_local(time)), "Sun, 11 Dec 1988 16:20:00 +0100");
+        assert_eq!(format!("{}", to_pretty_local(time)),
+                   "Sun, 11 Dec 1988 16:20:00 +0100");
 
         set_time_zone("Europe/London");
-        assert_eq!(format!("{}", to_pretty_local(time)), "Sun, 11 Dec 1988 15:20:00 -0000");
+        assert_eq!(format!("{}", to_pretty_local(time)),
+                   "Sun, 11 Dec 1988 15:20:00 -0000");
     }
 }
