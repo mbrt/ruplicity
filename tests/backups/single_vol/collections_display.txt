@@ -1,19 +1,8 @@
-backup chains:
-start time: Wed, 17 Jun 2015 19:25:45 +0100, end time: Wed, 17 Jun 2015 19:26:50 +0100
-Full, time: Wed, 17 Jun 2015 19:25:45 +0100
- manifest: duplicity-full.20150617T182545Z.manifest
- volumes:
- duplicity-full.20150617T182545Z.vol1.difftar.gz
-Incremental, start time: Wed, 17 Jun 2015 19:25:45 +0100, end time: Wed, 17 Jun 2015 19:26:29 +0100
- manifest: duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest
- volumes:
- duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz
-Incremental, start time: Wed, 17 Jun 2015 19:26:29 +0100, end time: Wed, 17 Jun 2015 19:26:50 +0100
- manifest: duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest
- volumes:
- duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz
-signature chains:
-start time: Wed, 17 Jun 2015 19:25:45 +0100, end time: Wed, 17 Jun 2015 19:26:50 +0100
- duplicity-full-signatures.20150617T182545Z.sigtar.gz
- duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz
- duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz
+Chain start time: Wed, 17 Jun 2015 19:25:45 +0100
+Chain end time: Wed, 17 Jun 2015 19:26:50 +0100
+Number of contained backup sets: 3
+Total number of contained volumes: 3
+Type of backup set:  Time:                             Num volumes:
+Full                 Wed, 17 Jun 2015 19:25:45 +0100              1
+Incremental          Wed, 17 Jun 2015 19:26:29 +0100              1
+Incremental          Wed, 17 Jun 2015 19:26:50 +0100              1

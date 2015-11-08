@@ -184,36 +184,16 @@ impl BackupSet {
 
 impl Display for BackupSet {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self.tp {
-            Type::Full{ time } => {
-                try!(write!(f, "Full, time: {}", to_pretty_local(time)));
-            }
-            Type::Inc{ start_time, end_time } => {
-                try!(write!(f,
-                            "Incremental, start time: {}, end time: {}",
-                            to_pretty_local(start_time),
-                            to_pretty_local(end_time)));
-            }
-        }
-        if self.compressed {
-            try!(write!(f, ", compressed"));
-        }
-        if self.encrypted {
-            try!(write!(f, ", encrypted"));
-        }
-        if self.partial {
-            try!(write!(f, ", partial"));
-        }
-        if !self.manifest_path.is_empty() {
-            try!(write!(f, "\n manifest: {}", self.manifest_path));
-        }
-        if !self.volumes_paths.is_empty() {
-            try!(write!(f, "\n volumes:\n"));
-            for (_, vol) in &self.volumes_paths {
-                try!(write!(f, " {}", vol));
-            }
-        }
-        Ok(())
+        let tp = match self.tp {
+            Type::Full{ .. } => "Full",
+            Type::Inc{ .. } => "Incremental",
+        };
+        write!(f, "{:<20} {:<33} {:>12}", tp,
+               // FIXME: Workaround for rust <= 1.4
+               // Alignment is ignored by custom formatters
+               // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
+               format!("{}", to_pretty_local(self.get_time())),
+               self.volumes_paths.len())
     }
 }
 
@@ -269,11 +249,23 @@ impl BackupChain {
 
 impl Display for BackupChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        let num_vol = self.fullset.volumes_paths.len() +
+                      self.incset_list.iter().map(|i| i.volumes_paths.len())
+                                             .fold(0, |a, i| a + i);
         try!(write!(f,
-                    "start time: {}, end time: {}\n{}",
+                    "Chain start time: {}\n\
+                    Chain end time: {}\n\
+                    Number of contained backup sets: {}\n\
+                    Total number of contained volumes: {}\n",
                     to_pretty_local(self.start_time),
                     to_pretty_local(self.end_time),
-                    &self.fullset));
+                    self.incset_list.len() + 1,
+                    num_vol));
+        try!(write!(f, "{:<20} {:<33} {:>12}",
+                    "Type of backup set:",
+                    "Time:",
+                    "Num volumes:"));
+        try!(write!(f, "\n{}", self.fullset));
         for inc in &self.incset_list {
             try!(write!(f, "\n{}", inc));
         }
@@ -470,13 +462,8 @@ fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain>
 
 impl Display for CollectionsStatus {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        try!(write!(f, "backup chains:\n"));
         for backup_chain in &self.backup_chains {
             try!(backup_chain.fmt(f));
-        }
-        try!(write!(f, "\nsignature chains:\n"));
-        for signature_chain in &self.sig_chains {
-            try!(signature_chain.fmt(f));
         }
         Ok(())
     }
