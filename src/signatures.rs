@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::fmt::{Display, Error, Formatter};
 use std::io::{self, Read};
 use std::iter::Iterator;
 use std::path::{Component, Path, PathBuf};
@@ -9,21 +11,26 @@ use time::Timespec;
 
 use backend::Backend;
 use collections::{CollectionsStatus, SignatureFile};
+use time_utils::to_pretty_local;
 
 
 pub struct BackupFiles {
     chains: Vec<Chain>,
+    ug_cache: UserGroupNameCache,
 }
 
 pub struct Snapshot<'a> {
     index: u8,
     chain: &'a Chain,
+    ug_cache: &'a UserGroupNameCache,
 }
 
+/// Informations about a file inside a backup snapshot.
 #[derive(Debug)]
 pub struct File<'a> {
     path: &'a Path,
     info: &'a PathInfo,
+    ug_cache: &'a UserGroupNameCache,
 }
 
 /// Iterator over a list of backup snapshots.
@@ -31,11 +38,13 @@ pub struct Snapshots<'a> {
     chain_iter: slice::Iter<'a, Chain>,
     chain: Option<&'a Chain>,
     snapshot_id: u8,
+    ug_cache: &'a UserGroupNameCache,
 }
 
 pub struct SnapshotFiles<'a> {
     index: u8,
     iter: slice::Iter<'a, PathSnapshots>,
+    ug_cache: &'a UserGroupNameCache,
 }
 
 
@@ -66,13 +75,18 @@ struct PathSnapshot {
     index: u8,
 }
 
-/// Informations about a path inside a snapshot.
 #[derive(Debug)]
 struct PathInfo {
     mtime: Timespec,
-    username: Option<String>,
-    groupname: Option<String>,
-    mode: io::Result<u32>,
+    uid: Option<u32>,
+    gid: Option<u32>,
+    mode: Option<u32>,
+}
+
+#[derive(Debug)]
+struct UserGroupNameCache {
+    uid_map: HashMap<u32, String>,
+    gid_map: HashMap<u32, String>,
 }
 
 
@@ -83,6 +97,7 @@ impl BackupFiles {
             CollectionsStatus::from_filenames(&filenames)
         };
         let mut chains: Vec<Chain> = Vec::new();
+        let mut ug_cache = UserGroupNameCache::new();
         let coll_chains = collection.signature_chains();
         for coll_chain in coll_chains {
             // translate collections::SignatureChain into a Chain
@@ -93,16 +108,19 @@ impl BackupFiles {
             // add to the chain the full signature and all the incremental signatures
             // if an error occurs in the full signature exit
             let file = try!(backend.open_file(coll_chain.fullsig.file_name.as_ref()));
-            try!(add_sigfile_to_chain(&mut chain, file, &coll_chain.fullsig));
+            try!(add_sigfile_to_chain(&mut chain, &mut ug_cache, file, &coll_chain.fullsig));
             for inc in &coll_chain.inclist {
                 // TODO: if an error occurs here, do not exit with an error, instead
                 // break the iteration and store the error inside the chain
                 let file = try!(backend.open_file(inc.file_name.as_ref()));
-                try!(add_sigfile_to_chain(&mut chain, file, &inc));
+                try!(add_sigfile_to_chain(&mut chain, &mut ug_cache, file, &inc));
             }
             chains.push(chain);
         }
-        Ok(BackupFiles { chains: chains })
+        Ok(BackupFiles {
+            chains: chains,
+            ug_cache: ug_cache,
+        })
     }
 
     pub fn snapshots(&self) -> Snapshots {
@@ -112,6 +130,7 @@ impl BackupFiles {
             chain_iter: iter,
             chain: first_chain,
             snapshot_id: 0,
+            ug_cache: &self.ug_cache,
         }
     }
 }
@@ -127,6 +146,7 @@ impl<'a> Iterator for Snapshots<'a> {
                     let result = Some(Snapshot {
                         index: self.snapshot_id,
                         chain: chain,
+                        ug_cache: self.ug_cache,
                     });
                     self.snapshot_id += 1;
                     return result;
@@ -154,6 +174,7 @@ impl<'a> Snapshot<'a> {
         SnapshotFiles {
             index: self.index,
             iter: self.chain.files.iter(),
+            ug_cache: self.ug_cache,
         }
     }
 }
@@ -171,6 +192,7 @@ impl<'a> Iterator for SnapshotFiles<'a> {
                     return Some(File {
                         path: path_snapshots.path.as_ref(),
                         info: info,
+                        ug_cache: self.ug_cache,
                     });
                 }
             }
@@ -185,17 +207,85 @@ impl<'a> File<'a> {
         self.path
     }
 
+    pub fn userid(&self) -> Option<u32> {
+        self.info.uid
+    }
+
+    pub fn groupid(&self) -> Option<u32> {
+        self.info.gid
+    }
+
+    pub fn mode(&self) -> Option<u32> {
+        self.info.mode
+    }
+
     pub fn username(&self) -> Option<&str> {
-        self.info.username.as_ref().map(AsRef::as_ref)
+        self.info.uid.and_then(|uid| self.ug_cache.get_user_name(uid))
     }
 
     pub fn groupname(&self) -> Option<&str> {
-        self.info.groupname.as_ref().map(AsRef::as_ref)
+        self.info.gid.and_then(|gid| self.ug_cache.get_group_name(gid))
+    }
+
+    pub fn mtime(&self) -> Timespec {
+        self.info.mtime
+    }
+}
+
+impl<'a> Display for File<'a> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f,
+               "{:<4} {:<10} {:<10} {} {}",
+               self.mode().unwrap_or(0),
+               self.username().unwrap_or("?"),
+               self.groupname().unwrap_or("?"),
+               // FIXME: Workaround for rust <= 1.4
+               // Alignment is ignored by custom formatters
+               // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
+               format!("{}", to_pretty_local(self.mtime())),
+               // handle special case for the root:
+               // the path is empty, return "." instead
+               self.path()
+                   .to_str()
+                   .map_or("?", |p| {
+                       if p.is_empty() {
+                           "."
+                       } else {
+                           p
+                       }
+                   }))
+    }
+}
+
+
+impl UserGroupNameCache {
+    pub fn new() -> Self {
+        UserGroupNameCache {
+            uid_map: HashMap::new(),
+            gid_map: HashMap::new(),
+        }
+    }
+
+    pub fn add_user(&mut self, uid: u32, name: String) -> bool {
+        self.uid_map.insert(uid, name).is_none()
+    }
+
+    pub fn add_group(&mut self, gid: u32, name: String) -> bool {
+        self.gid_map.insert(gid, name).is_none()
+    }
+
+    pub fn get_user_name(&self, uid: u32) -> Option<&str> {
+        self.uid_map.get(&uid).map(AsRef::as_ref)
+    }
+
+    pub fn get_group_name(&self, gid: u32) -> Option<&str> {
+        self.gid_map.get(&gid).map(AsRef::as_ref)
     }
 }
 
 
 fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
+                                 ug_cache: &mut UserGroupNameCache,
                                  file: R,
                                  sigfile: &SignatureFile)
                                  -> io::Result<()> {
@@ -203,9 +293,15 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
         let snapshot_id = chain.files.len() as u8;
         if sigfile.compressed {
             let gz_decoder = try!(GzDecoder::new(file));
-            add_sigtar_to_snapshots(&mut chain.files, tar::Archive::new(gz_decoder), snapshot_id)
+            add_sigtar_to_snapshots(&mut chain.files,
+                                    ug_cache,
+                                    tar::Archive::new(gz_decoder),
+                                    snapshot_id)
         } else {
-            add_sigtar_to_snapshots(&mut chain.files, tar::Archive::new(file), snapshot_id)
+            add_sigtar_to_snapshots(&mut chain.files,
+                                    ug_cache,
+                                    tar::Archive::new(file),
+                                    snapshot_id)
         }
     };
     if result.is_ok() {
@@ -218,6 +314,7 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
 }
 
 fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
+                                    ug_cache: &mut UserGroupNameCache,
                                     mut tar: tar::Archive<R>,
                                     snapshot_id: u8)
                                     -> io::Result<()> {
@@ -235,11 +332,17 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             let info = match difftype {
                 DiffType::Signature | DiffType::Snapshot => {
                     let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
+                    if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
+                        ug_cache.add_user(uid, name.to_owned());
+                    }
+                    if let (Ok(gid), Some(name)) = (header.gid(), header.groupname()) {
+                        ug_cache.add_group(gid, name.to_owned());
+                    }
                     Some(PathInfo {
                         mtime: time,
-                        username: header.username().map(ToOwned::to_owned),
-                        groupname: header.groupname().map(ToOwned::to_owned),
-                        mode: header.mode(),
+                        uid: header.uid().ok(),
+                        gid: header.gid().ok(),
+                        mode: header.mode().ok(),
                     })
                 }
                 _ => None,
@@ -316,17 +419,21 @@ mod test {
     use super::*;
     use backend::local::LocalBackend;
     use time_utils::to_pretty_local;
+    use time_utils::test_utils::set_time_zone;
 
 
     #[test]
-    fn open_from_local() {
+    fn display() {
+        // avoid test differences for time zones
+        let _lock = set_time_zone("Europe/Rome");
+
         let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
         let files = BackupFiles::new(&backend).unwrap();
         println!("Backup snapshots:");
         for snapshot in files.snapshots() {
             println!("Snapshot {}", to_pretty_local(snapshot.time()));
             for file in snapshot.files() {
-                println!("    {:?}", file);
+                println!("{}", file);
             }
         }
     }

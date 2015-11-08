@@ -188,7 +188,9 @@ impl Display for BackupSet {
             Type::Full{ .. } => "Full",
             Type::Inc{ .. } => "Incremental",
         };
-        write!(f, "{:<20} {:<33} {:>12}", tp,
+        write!(f,
+               "{:<20} {:<33} {:>12}",
+               tp,
                // FIXME: Workaround for rust <= 1.4
                // Alignment is ignored by custom formatters
                // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
@@ -250,8 +252,10 @@ impl BackupChain {
 impl Display for BackupChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         let num_vol = self.fullset.volumes_paths.len() +
-                      self.incset_list.iter().map(|i| i.volumes_paths.len())
-                                             .fold(0, |a, i| a + i);
+                      self.incset_list
+                          .iter()
+                          .map(|i| i.volumes_paths.len())
+                          .fold(0, |a, i| a + i);
         try!(write!(f,
                     "Chain start time: {}\n\
                     Chain end time: {}\n\
@@ -261,7 +265,8 @@ impl Display for BackupChain {
                     to_pretty_local(self.end_time),
                     self.incset_list.len() + 1,
                     num_vol));
-        try!(write!(f, "{:<20} {:<33} {:>12}",
+        try!(write!(f,
+                    "{:<20} {:<33} {:>12}",
                     "Type of backup set:",
                     "Time:",
                     "Num volumes:"));
