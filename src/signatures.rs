@@ -203,7 +203,7 @@ impl<'a> Iterator for SnapshotFiles<'a> {
 
 
 impl<'a> File<'a> {
-    pub fn path(&self) -> &Path {
+    pub fn path(&self) -> &'a Path {
         self.path
     }
 
@@ -219,11 +219,11 @@ impl<'a> File<'a> {
         self.info.mode
     }
 
-    pub fn username(&self) -> Option<&str> {
+    pub fn username(&self) -> Option<&'a str> {
         self.info.uid.and_then(|uid| self.ug_cache.get_user_name(uid))
     }
 
-    pub fn groupname(&self) -> Option<&str> {
+    pub fn groupname(&self) -> Option<&'a str> {
         self.info.gid.and_then(|gid| self.ug_cache.get_group_name(gid))
     }
 
@@ -418,8 +418,94 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
 mod test {
     use super::*;
     use backend::local::LocalBackend;
-    use time_utils::to_pretty_local;
+    use time_utils::{parse_time_str, to_pretty_local};
     use time_utils::test_utils::set_time_zone;
+
+    use std::path::Path;
+    use time::Timespec;
+
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct FileTest<'a>
+    {
+        path: &'a Path,
+        mtime: Timespec,
+        uname: &'a str,
+        gname: &'a str,
+    }
+
+    impl<'a> FileTest<'a> {
+        pub fn from_file(file: &File<'a>) -> Self {
+            FileTest {
+                path: file.path(),
+                mtime: file.mtime(),
+                uname: file.username().unwrap(),
+                gname: file.groupname().unwrap(),
+            }
+        }
+
+        pub fn from_info(path: &'a Path,
+                         mtime: &'a str,
+                         uname: &'a str,
+                         gname: &'a str)
+                         -> Self {
+            FileTest {
+                path: path,
+                mtime: parse_time_str(mtime).unwrap(),
+                uname: uname,
+                gname: gname,
+            }
+        }
+    }
+
+    fn get_single_vol_files() -> Vec<Vec<FileTest<'static>>> {
+        // snapshot 1
+        vec![vec![FileTest::from_info(Path::new(""), "20020928t183059z", "michele", "michele"),
+                  FileTest::from_info(Path::new("changeable_permission"), "20010828t182330z", "michele", "michele"),
+                  FileTest::from_info(Path::new("deleted_file"), "20020727t230005z", "michele", "michele"),
+                  FileTest::from_info(Path::new("directory_to_file"), "20020727t230036z", "michele", "michele"),
+                  FileTest::from_info(Path::new("directory_to_file/file"), "20020727t230036z", "michele", "michele"),
+                  FileTest::from_info(Path::new("executable"), "20010828t073429z", "michele", "michele"),
+                  FileTest::from_info(Path::new("executable2"), "20010828t181927z", "michele", "michele"),
+                  FileTest::from_info(Path::new("fifo"), "20010828t073246z", "michele", "michele"),
+                  FileTest::from_info(Path::new("file_to_directory"), "20020727t232354z", "michele", "michele"),
+                  FileTest::from_info(Path::new("largefile"), "20020731t015430z", "michele", "michele"),
+                  FileTest::from_info(Path::new("regular_file"), "20010828t073052z", "michele", "michele"),
+                  FileTest::from_info(Path::new("regular_file.sig"), "20010830t004037z", "michele", "michele"),
+                  FileTest::from_info(Path::new("symbolic_link"), "20021101t044447z", "michele", "michele"),
+                  FileTest::from_info(Path::new("test"), "20010828t215638z", "michele", "michele"),
+                  FileTest::from_info(Path::new("two_hardlinked_files1"), "20010828t073142z", "michele", "michele"),
+                  FileTest::from_info(Path::new("two_hardlinked_files2"), "20010828t073142z", "michele", "michele"),
+                  FileTest::from_info(Path::new("\u{62b}\u{fffd}Wb\u{fffd}\u{fffd}]\
+                                                \u{fffd}\u{fffd}\u{15}v*\u{fffd}\u{f}\
+                                                !\u{fffd}>\u{fffd}Y\u{fffd}\u{fffd}\
+                                                \u{fffd}\u{fffd}p\u{fffd}\u{fffd}\
+                                                \u{13}k\u{1d}\u{fffd}\u{fffd}\u{fffd}\
+                                                e\u{fffd}U\u{fffd}\u{fffd}UV\u{fffd}\
+                                                \u{fffd}\u{fffd}4\u{fffd}\u{fffd}X\
+                                                \u{3}\u{fffd}\u{7}s\u{39e}\u{fffd}\
+                                                \u{fffd}4\u{4}\u{fffd}\u{17} \u{fffd}\
+                                                \u{fffd}\u{fffd}\u{fffd}\u{62c}\u{685}\
+                                                \u{fffd}KvC\u{fffd}#\u{fffd}\u{fffd}\
+                                                \u{fffd}\u{277}\u{fffd}_\u{f}\u{fffd}g\
+                                                \u{fffd}B\u{11}<"), "20010828t220347z", "michele", "michele")]]
+    }
+
+    #[test]
+    #[ignore]
+    fn file_list() {
+        let expected_files = get_single_vol_files();
+        let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
+        let files = BackupFiles::new(&backend).unwrap();
+        assert_eq!(files.snapshots().count(), 3);
+        let files_1: Vec<_> = files.snapshots()
+                                   .next()
+                                   .unwrap()
+                                   .files()
+                                   .map(|f| FileTest::from_file(&f))
+                                   .collect();
+        assert_eq!(files_1, expected_files[0]);
+    }
 
 
     #[test]
