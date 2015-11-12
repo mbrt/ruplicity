@@ -552,7 +552,7 @@ mod test {
         let expected_files = get_single_vol_files();
         let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
         let files = BackupFiles::new(&backend).unwrap();
-        println!("debug files\n---------\n{:?}\n----------", files);
+        println!("debug files\n---------\n{:#?}\n----------", files);
         assert_eq!(files.snapshots().count(), 3);
         let actual_files = files.snapshots().map(|s| {
             let f: Vec<_> = s.files()
