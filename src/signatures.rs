@@ -14,6 +14,7 @@ use collections::{CollectionsStatus, SignatureFile};
 use time_utils::to_pretty_local;
 
 
+#[derive(Debug)]
 pub struct BackupFiles {
     chains: Vec<Chain>,
     ug_cache: UserGroupNameCache,
@@ -56,11 +57,13 @@ enum DiffType {
 
 /// Store separately informations about the signatures and informations about the paths in the
 /// signatures. This allows to reuse informations between snapshots and avoid duplicating them.
+#[derive(Debug)]
 struct Chain {
     timestamps: Vec<Timespec>,
     files: Vec<PathSnapshots>,
 }
 
+#[derive(Debug)]
 struct PathSnapshots {
     // the directory or file path
     path: PathBuf,
@@ -68,6 +71,7 @@ struct PathSnapshots {
     snapshots: Vec<PathSnapshot>,
 }
 
+#[derive(Debug)]
 struct PathSnapshot {
     // info are None if the snapshot has deleted this path
     info: Option<PathInfo>,
@@ -548,6 +552,7 @@ mod test {
         let expected_files = get_single_vol_files();
         let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
         let files = BackupFiles::new(&backend).unwrap();
+        println!("debug files\n---------\n{:?}\n----------", files);
         assert_eq!(files.snapshots().count(), 3);
         let actual_files = files.snapshots().map(|s| {
             let f: Vec<_> = s.files()
