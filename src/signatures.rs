@@ -324,7 +324,7 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
                                     -> io::Result<()> {
     let mut new_files: Vec<PathSnapshots> = Vec::new();
     {
-        let mut old_snapshots = snapshots.iter_mut();
+        let mut old_snapshots = snapshots.iter_mut().peekable();
         for tarfile in try!(tar.files_mut()) {
             // we can ignore paths with errors
             // the only problem here is that we miss some change in the chain, but it is
@@ -359,19 +359,30 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             // note: they are ordered
             let position = {
                 let mut position: Option<&mut PathSnapshots> = None;
-                while let Some(path_snapshots) = old_snapshots.next() {
-                    if path_snapshots.path.as_path() < path {
-                        continue;
+                loop {
+                    let mut found = false;
+                    if let Some(path_snapshots) = old_snapshots.peek() {
+                        let old_path = path_snapshots.path.as_path();
+                        if old_path == path {
+                            // this path is already present in old snapshots: update them
+                            found = true;
+                        } else if old_path > path {
+                            // we've already reached the first item next to the current path
+                            // so, the path is not present in old snapshots
+                            break;
+                        }
                     }
-                    if path_snapshots.path.as_path() == path {
-                        // this path is already present in old snapshots: update them
+                    if found {
+                        let path_snapshots = old_snapshots.next().unwrap();
                         position = Some(path_snapshots);
                     } else {
-                        // we've already reached the first item next to the current path
-                        // so, the path is not present in old snapshots
-                        position = None;
+                        // we have not found the element, so 'old_path < path' or there are no
+                        // more paths to check:
+                        // continue the loop if there are more elements
+                        if !old_snapshots.next().is_some() {
+                            break;
+                        }
                     }
-                    break;
                 }
                 position
             };
