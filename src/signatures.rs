@@ -14,6 +14,7 @@ use collections::{CollectionsStatus, SignatureFile};
 use time_utils::to_pretty_local;
 
 
+#[derive(Debug)]
 pub struct BackupFiles {
     chains: Vec<Chain>,
     ug_cache: UserGroupNameCache,
@@ -56,11 +57,13 @@ enum DiffType {
 
 /// Store separately informations about the signatures and informations about the paths in the
 /// signatures. This allows to reuse informations between snapshots and avoid duplicating them.
+#[derive(Debug)]
 struct Chain {
     timestamps: Vec<Timespec>,
     files: Vec<PathSnapshots>,
 }
 
+#[derive(Debug)]
 struct PathSnapshots {
     // the directory or file path
     path: PathBuf,
@@ -68,6 +71,7 @@ struct PathSnapshots {
     snapshots: Vec<PathSnapshot>,
 }
 
+#[derive(Debug)]
 struct PathSnapshot {
     // info are None if the snapshot has deleted this path
     info: Option<PathInfo>,
@@ -290,7 +294,7 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
                                  sigfile: &SignatureFile)
                                  -> io::Result<()> {
     let result = {
-        let snapshot_id = chain.files.len() as u8;
+        let snapshot_id = chain.timestamps.len() as u8;
         if sigfile.compressed {
             let gz_decoder = try!(GzDecoder::new(file));
             add_sigtar_to_snapshots(&mut chain.files,
@@ -320,7 +324,7 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
                                     -> io::Result<()> {
     let mut new_files: Vec<PathSnapshots> = Vec::new();
     {
-        let mut old_snapshots = snapshots.iter_mut();
+        let mut old_snapshots = snapshots.iter_mut().peekable();
         for tarfile in try!(tar.files_mut()) {
             // we can ignore paths with errors
             // the only problem here is that we miss some change in the chain, but it is
@@ -355,19 +359,30 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             // note: they are ordered
             let position = {
                 let mut position: Option<&mut PathSnapshots> = None;
-                while let Some(path_snapshots) = old_snapshots.next() {
-                    if path_snapshots.path.as_path() < path {
-                        continue;
+                loop {
+                    let mut found = false;
+                    if let Some(path_snapshots) = old_snapshots.peek() {
+                        let old_path = path_snapshots.path.as_path();
+                        if old_path == path {
+                            // this path is already present in old snapshots: update them
+                            found = true;
+                        } else if old_path > path {
+                            // we've already reached the first item next to the current path
+                            // so, the path is not present in old snapshots
+                            break;
+                        }
                     }
-                    if path_snapshots.path.as_path() == path {
-                        // this path is already present in old snapshots: update them
+                    if found {
+                        let path_snapshots = old_snapshots.next().unwrap();
                         position = Some(path_snapshots);
                     } else {
-                        // we've already reached the first item next to the current path
-                        // so, the path is not present in old snapshots
-                        position = None;
+                        // we have not found the element, so 'old_path < path' or there are no
+                        // more paths to check:
+                        // continue the loop if there are more elements
+                        if !old_snapshots.next().is_some() {
+                            break;
+                        }
                     }
-                    break;
                 }
                 position
             };
@@ -453,92 +468,48 @@ mod test {
         }
     }
 
+    fn make_ftest<'a>(path: &'a str, time: &'a str) -> FileTest<'a> {
+        FileTest::from_info(Path::new(path), time, "michele", "michele")
+    }
+
     fn get_single_vol_files() -> Vec<Vec<FileTest<'static>>> {
         // the utf-8 invalid path name is apparently not testable
         // so, we are going to ignore it
         //
         // snapshot 1
-        let s1 = vec![FileTest::from_info(Path::new(""), "20020928t183059z", "michele", "michele"),
-                      FileTest::from_info(Path::new("changeable_permission"),
-                                          "20010828t182330z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("deleted_file"),
-                                          "20020727t230005z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("directory_to_file"),
-                                          "20020727t230036z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("directory_to_file/file"),
-                                          "20020727t230036z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("executable"),
-                                          "20010828t073429z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("executable2"),
-                                          "20010828t181927z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("fifo"),
-                                          "20010828t073246z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("file_to_directory"),
-                                          "20020727t232354z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("largefile"),
-                                          "20020731t015430z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("regular_file"),
-                                          "20010828t073052z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("regular_file.sig"),
-                                          "20010830t004037z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("symbolic_link"),
-                                          "20021101t044447z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("test"),
-                                          "20010828t215638z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("two_hardlinked_files1"),
-                                          "20010828t073142z",
-                                          "michele",
-                                          "michele"),
-                      FileTest::from_info(Path::new("two_hardlinked_files2"),
-                                          "20010828t073142z",
-                                          "michele",
-                                          "michele")];
+        let s1 = vec![make_ftest("", "20020928t183059z"),
+                      make_ftest("changeable_permission", "20010828t182330z"),
+                      make_ftest("deleted_file", "20020727t230005z"),
+                      make_ftest("directory_to_file", "20020727t230036z"),
+                      make_ftest("directory_to_file/file", "20020727t230036z"),
+                      make_ftest("executable", "20010828t073429z"),
+                      make_ftest("executable2", "20010828t181927z"),
+                      make_ftest("fifo", "20010828t073246z"),
+                      make_ftest("file_to_directory", "20020727t232354z"),
+                      make_ftest("largefile", "20020731t015430z"),
+                      make_ftest("regular_file", "20010828t073052z"),
+                      make_ftest("regular_file.sig", "20010830t004037z"),
+                      make_ftest("symbolic_link", "20021101t044447z"),
+                      make_ftest("test", "20010828t215638z"),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
         // snapshot 2
-        let mut s2 = s1.clone();
-        // .
-        s2[0].mtime = parse_time_str("20020731t015532z").unwrap();
-        s2.remove(2);   // deleted_file
-        s2.remove(3);   // directory_to_file/file
-        // executable2
-        s2[4].mtime = parse_time_str("20020731t230133z").unwrap();
-        s2.insert(5,
-                  FileTest::from_info(Path::new("executable2/another_file"),
-                                      "20020727t230033z",
-                                      "michele",
-                                      "michele"));
-        s2.insert(9,
-                  FileTest::from_info(Path::new("new_file"),
-                                      "20020727t230018z",
-                                      "michele",
-                                      "michele"));
-        // symbolic_link
-        s2[12].mtime = parse_time_str("20020727t225946z").unwrap();
+        let s2 = vec![make_ftest("", "20020731t015532z"),
+                      make_ftest("changeable_permission", "20010828t182330z"),
+                      make_ftest("directory_to_file", "20020727t230048z"),
+                      make_ftest("executable", "20010828t073429z"),
+                      make_ftest("executable2", "20020727t230133z"),
+                      make_ftest("executable2/another_file", "20020727t230133z"),
+                      make_ftest("fifo", "20010828t073246z"),
+                      make_ftest("file_to_directory", "20020727t232406z"),
+                      make_ftest("largefile", "20020731t015524z"),
+                      make_ftest("new_file", "20020727t230018z"),
+                      make_ftest("regular_file", "20020727t225932z"),
+                      make_ftest("regular_file.sig", "20010830t004037z"),
+                      make_ftest("symbolic_link", "20020727t225946z"),
+                      make_ftest("test", "20010828t215638z"),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
 
         vec![s1, s2]
     }
@@ -548,15 +519,16 @@ mod test {
         let expected_files = get_single_vol_files();
         let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
         let files = BackupFiles::new(&backend).unwrap();
+        // println!("debug files\n---------\n{:#?}\n----------", files);
         assert_eq!(files.snapshots().count(), 3);
         let actual_files = files.snapshots().map(|s| {
-            let f: Vec<_> = s.files()
-                             .map(|f| FileTest::from_file(&f))
-                             .filter(|f| f.path.to_str().is_some())
-                             .collect();
-            f
+            s.files()
+             .map(|f| FileTest::from_file(&f))
+             .filter(|f| f.path.to_str().is_some())
+             .collect::<Vec<_>>()
         });
         for (actual, expected) in actual_files.zip(expected_files) {
+            // println!("\nExpected:\n{:#?}\nActual:\n{:#?}", expected, actual);
             assert_eq!(actual, expected);
         }
     }
