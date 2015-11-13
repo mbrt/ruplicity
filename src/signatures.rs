@@ -294,7 +294,7 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
                                  sigfile: &SignatureFile)
                                  -> io::Result<()> {
     let result = {
-        let snapshot_id = chain.files.len() as u8;
+        let snapshot_id = chain.timestamps.len() as u8;
         if sigfile.compressed {
             let gz_decoder = try!(GzDecoder::new(file));
             add_sigtar_to_snapshots(&mut chain.files,
