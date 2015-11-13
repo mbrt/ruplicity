@@ -535,25 +535,67 @@ mod test {
                                           "michele",
                                           "michele")];
         // snapshot 2
-        let mut s2 = s1.clone();
-        // .
-        s2[0].mtime = parse_time_str("20020731t015532z").unwrap();
-        s2.remove(2);   // deleted_file
-        s2.remove(3);   // directory_to_file/file
-        // executable2
-        s2[4].mtime = parse_time_str("20020731t230133z").unwrap();
-        s2.insert(5,
-                  FileTest::from_info(Path::new("executable2/another_file"),
-                                      "20020727t230033z",
-                                      "michele",
-                                      "michele"));
-        s2.insert(9,
-                  FileTest::from_info(Path::new("new_file"),
-                                      "20020727t230018z",
-                                      "michele",
-                                      "michele"));
-        // symbolic_link
-        s2[12].mtime = parse_time_str("20020727t225946z").unwrap();
+        let s2 = vec![FileTest::from_info(Path::new(""), "20020731t015532z", "michele", "michele"),
+                      FileTest::from_info(Path::new("changeable_permission"),
+                                          "20010828t182330z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("directory_to_file"),
+                                          "20020727t230048z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("executable"),
+                                          "20010828t073429z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("executable2"),
+                                          "20020727t230133z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("executable2/another_file"),
+                                          "20020727t230133z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("fifo"),
+                                          "20010828t073246z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("file_to_directory"),
+                                          "20020727t232406z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("largefile"),
+                                          "20020731t015524z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("new_file"),
+                                          "20020727t230018z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("regular_file"),
+                                          "20020727t225932z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("regular_file.sig"),
+                                          "20010830t004037z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("symbolic_link"),
+                                          "20020727t225946z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("test"),
+                                          "20010828t215638z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("two_hardlinked_files1"),
+                                          "20010828t073142z",
+                                          "michele",
+                                          "michele"),
+                      FileTest::from_info(Path::new("two_hardlinked_files2"),
+                                          "20010828t073142z",
+                                          "michele",
+                                          "michele")];
 
         vec![s1, s2]
     }
@@ -563,16 +605,16 @@ mod test {
         let expected_files = get_single_vol_files();
         let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
         let files = BackupFiles::new(&backend).unwrap();
-        println!("debug files\n---------\n{:#?}\n----------", files);
+        // println!("debug files\n---------\n{:#?}\n----------", files);
         assert_eq!(files.snapshots().count(), 3);
         let actual_files = files.snapshots().map(|s| {
-            let f: Vec<_> = s.files()
-                             .map(|f| FileTest::from_file(&f))
-                             .filter(|f| f.path.to_str().is_some())
-                             .collect();
-            f
+            s.files()
+             .map(|f| FileTest::from_file(&f))
+             .filter(|f| f.path.to_str().is_some())
+             .collect::<Vec<_>>()
         });
         for (actual, expected) in actual_files.zip(expected_files) {
+            // println!("\nExpected:\n{:#?}\nActual:\n{:#?}", expected, actual);
             assert_eq!(actual, expected);
         }
     }
