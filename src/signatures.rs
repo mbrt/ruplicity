@@ -209,6 +209,7 @@ impl<'a> Iterator for SnapshotFiles<'a> {
 
 
 impl<'a> File<'a> {
+    /// Returns the full path of the file.
     pub fn path(&self) -> &'a Path {
         self.path
     }
@@ -225,16 +226,24 @@ impl<'a> File<'a> {
         self.info.mode
     }
 
+    /// Returns the name of the owner user.
     pub fn username(&self) -> Option<&'a str> {
         self.info.uid.and_then(|uid| self.ug_cache.get_user_name(uid))
     }
 
+    /// Returns the name of the group.
     pub fn groupname(&self) -> Option<&'a str> {
         self.info.gid.and_then(|gid| self.ug_cache.get_group_name(gid))
     }
 
+    /// Returns the time of the last modification.
     pub fn mtime(&self) -> Timespec {
         self.info.mtime
+    }
+
+    /// Returns a lower and upper bound in bytes on the file size.
+    pub fn size_hint(&self) -> Option<(usize, usize)> {
+        self.info.size_hint
     }
 }
 
