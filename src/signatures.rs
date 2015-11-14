@@ -85,6 +85,7 @@ struct PathInfo {
     uid: Option<u32>,
     gid: Option<u32>,
     mode: Option<u32>,
+    size_hint: Option<(usize, usize)>,
 }
 
 #[derive(Debug)]
@@ -329,7 +330,8 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             // we can ignore paths with errors
             // the only problem here is that we miss some change in the chain, but it is
             // better than abort the whole signature
-            let tarfile = unwrap_or_continue!(tarfile);
+            let mut tarfile = unwrap_or_continue!(tarfile);
+            let size_hint = compute_size_hint(&mut tarfile);
             let header = tarfile.header();
             let path = unwrap_or_continue!(header.path());
             let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
@@ -347,6 +349,7 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
                         uid: header.uid().ok(),
                         gid: header.gid().ok(),
                         mode: header.mode().ok(),
+                        size_hint: size_hint,
                     })
                 }
                 _ => None,
@@ -428,7 +431,7 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     }
 }
 
-fn size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
@@ -439,14 +442,12 @@ fn size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
         // read the header
         let file_block_len_bytes = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
         let ss_len = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
+        let sign_block_len_bytes = 4 + ss_len;
         // the remaining part of the file are blocks
         let num_blocks = file.bytes().count() / sign_block_len_bytes;
 
-        let sign_block_len_bytes = 4 + ss_len;
         let max_file_len = file_block_len_bytes * num_blocks;
-        if max_file_len % file_block_len_bytes == 0 {
-            Some((max_file_len, max_file_len))
-        } else if max_file_len > file_block_len_bytes {
+        if max_file_len > file_block_len_bytes {
             Some((max_file_len - file_block_len_bytes, max_file_len))
         } else {
             // avoid underflow
