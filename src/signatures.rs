@@ -332,10 +332,9 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             // the only problem here is that we miss some change in the chain, but it is
             // better than abort the whole signature
             let mut tarfile = unwrap_or_continue!(tarfile);
-            let difftype = unwrap_opt_or_continue!(difftype(&tarfile));
-            let size_hint = compute_size_hint(&mut tarfile, difftype);
+            let size_hint = compute_size_hint(&mut tarfile);
             let path = unwrap_or_continue!(tarfile.header().path());
-            let path = unwrap_opt_or_continue!(actual_path(&path));
+            let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
             let info = match difftype {
                 DiffType::Signature | DiffType::Snapshot => {
                     let header = tarfile.header();
@@ -412,17 +411,6 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
     Ok(())
 }
 
-fn difftype<R: Read>(tarfile: &tar::File<R>) -> Option<DiffType> {
-    let path = try_opt!(tarfile.header().path().ok());
-    parse_snapshot_path(&path).map(|info| info.0)
-}
-
-// Returns the file path, by removing the difftype directory
-// in front of the tar file path.
-fn actual_path(complete_path: &Path) -> Option<&Path> {
-    parse_snapshot_path(&complete_path).map(|info| info.1)
-}
-
 fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     // split the path in (first directory, the remaining path)
     // the first is the type, the remaining is the real path
@@ -444,9 +432,12 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     }
 }
 
-fn compute_size_hint<R: Read>(file: &mut tar::File<R>,
-                              difftype: DiffType)
-                              -> Option<(usize, usize)> {
+fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+    let difftype = {
+        let path = try_opt!(file.header().path().ok());
+        let (difftype, _) = try_opt!(parse_snapshot_path(&path));
+        difftype
+    };
     match difftype {
         DiffType::Signature => compute_size_hint_signature(file),
         DiffType::Snapshot => compute_size_hint_snapshot(file),
