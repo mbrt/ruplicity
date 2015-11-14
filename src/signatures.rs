@@ -428,6 +428,33 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     }
 }
 
+fn size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+    use byteorder::{BigEndian, ReadBytesExt};
+
+    // for signature file format see Docs.md
+    let magic = try_opt!(file.read_u32::<BigEndian>().ok());
+    if magic != 0x72730136 {
+        None
+    } else {
+        // read the header
+        let file_block_len_bytes = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
+        let ss_len = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
+        // the remaining part of the file are blocks
+        let num_blocks = file.bytes().count() / sign_block_len_bytes;
+
+        let sign_block_len_bytes = 4 + ss_len;
+        let max_file_len = file_block_len_bytes * num_blocks;
+        if max_file_len % file_block_len_bytes == 0 {
+            Some((max_file_len, max_file_len))
+        } else if max_file_len > file_block_len_bytes {
+            Some((max_file_len - file_block_len_bytes, max_file_len))
+        } else {
+            // avoid underflow
+            Some((0, max_file_len))
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod test {
