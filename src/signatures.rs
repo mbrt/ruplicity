@@ -49,6 +49,7 @@ pub struct SnapshotFiles<'a> {
 }
 
 
+#[derive(Copy, Clone, Debug)]
 enum DiffType {
     Signature,
     Snapshot,
@@ -331,12 +332,13 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             // the only problem here is that we miss some change in the chain, but it is
             // better than abort the whole signature
             let mut tarfile = unwrap_or_continue!(tarfile);
-            let size_hint = compute_size_hint(&mut tarfile);
-            let header = tarfile.header();
-            let path = unwrap_or_continue!(header.path());
-            let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
+            let difftype = unwrap_opt_or_continue!(difftype(&tarfile));
+            let size_hint = compute_size_hint(&mut tarfile, difftype);
+            let path = unwrap_or_continue!(tarfile.header().path());
+            let path = unwrap_opt_or_continue!(actual_path(&path));
             let info = match difftype {
                 DiffType::Signature | DiffType::Snapshot => {
+                    let header = tarfile.header();
                     let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
                     if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
                         ug_cache.add_user(uid, name.to_owned());
@@ -410,6 +412,17 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
     Ok(())
 }
 
+fn difftype<R: Read>(tarfile: &tar::File<R>) -> Option<DiffType> {
+    let path = try_opt!(tarfile.header().path().ok());
+    parse_snapshot_path(&path).map(|info| info.0)
+}
+
+// Returns the file path, by removing the difftype directory
+// in front of the tar file path.
+fn actual_path(complete_path: &Path) -> Option<&Path> {
+    parse_snapshot_path(&complete_path).map(|info| info.1)
+}
+
 fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     // split the path in (first directory, the remaining path)
     // the first is the type, the remaining is the real path
@@ -431,7 +444,17 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     }
 }
 
-fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+fn compute_size_hint<R: Read>(file: &mut tar::File<R>,
+                              difftype: DiffType)
+                              -> Option<(usize, usize)> {
+    match difftype {
+        DiffType::Signature => compute_size_hint_signature(file),
+        DiffType::Snapshot => compute_size_hint_snapshot(file),
+        _ => None,
+    }
+}
+
+fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
@@ -448,12 +471,17 @@ fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)>
 
         let max_file_len = file_block_len_bytes * num_blocks;
         if max_file_len > file_block_len_bytes {
-            Some((max_file_len - file_block_len_bytes, max_file_len))
+            Some((max_file_len - file_block_len_bytes + 1, max_file_len))
         } else {
             // avoid underflow
             Some((0, max_file_len))
         }
     }
+}
+
+fn compute_size_hint_snapshot<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+    let bytes = file.bytes().count();
+    Some((bytes, bytes))
 }
 
 
