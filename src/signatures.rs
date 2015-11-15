@@ -454,7 +454,24 @@ fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)>
     }
 }
 
-fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+/// Gives a hint on the file size, computing it from the signature file.
+///
+/// This function returns the lower and upper bound of the file size in bytes. On error returns
+/// `None`.
+///
+/// # Examples
+///
+/// ```rust
+/// use std::io::Cursor;
+/// use ruplicity::signatures::compute_size_hint_signature;
+///
+/// let bytes = vec![0x72, 0x73, 0x01, 0x36, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x08,
+///                  0xaf, 0xb8, 0x99, 0x27, 0x6f, 0x3a, 0x17, 0xc2, 0xc1, 0x4e, 0x76, 0x83];
+/// let mut cursor = Cursor::new(bytes);
+/// let computed = compute_size_hint_signature(&mut cursor);
+/// assert_eq!(computed, Some((0, 512)));
+/// ```
+pub fn compute_size_hint_signature<R: Read>(file: &mut R) -> Option<(usize, usize)> {
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
@@ -479,7 +496,7 @@ fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(usiz
     }
 }
 
-fn compute_size_hint_snapshot<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+fn compute_size_hint_snapshot<R: Read>(file: &mut R) -> Option<(usize, usize)> {
     let bytes = file.bytes().count();
     Some((bytes, bytes))
 }
@@ -570,6 +587,16 @@ mod test {
         vec![s1, s2]
     }
 
+    fn get_single_vol_sizes() -> Vec<Vec<usize>> {
+        // note that `ls -l` returns 4096 for directory size, but we consider directories to be
+        // null sized.
+        // note also that symbolic links are considered to be null sized. This is an open question
+        // if it is correct or not.
+        vec![vec![0, 0, 0, 0, 0, 30, 30, 0, 456, 3500000, 75650, 456, 0, 0, 11, 11, 0],
+             vec![0, 0, 456, 30, 0, 13, 0, 0, 3500001, 6, 75656, 456, 0, 0, 11, 11, 0],
+             vec![0, 0, 30, 30, 0, 3500000, 75650, 456, 0, 0, 11, 11, 0]]
+    }
+
     #[test]
     fn file_list() {
         let expected_files = get_single_vol_files();
@@ -589,6 +616,31 @@ mod test {
         }
     }
 
+    #[test]
+    fn size_hint() {
+        let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
+        let files = BackupFiles::new(&backend).unwrap();
+        let actual_sizes = files.snapshots().map(|s| {
+            s.files()
+             .map(|f| f.size_hint().unwrap())
+             .collect::<Vec<_>>()
+        });
+        let expected_sizes = get_single_vol_sizes();
+
+        // iterate all over the snapshots
+        for (actual, expected) in actual_sizes.zip(expected_sizes) {
+            assert_eq!(actual.len(), expected.len());
+            println!("debug {:?}", actual);
+            // iterate all the files
+            for (actual, expected) in actual.iter().zip(expected) {
+                assert!(actual.0 <= expected && actual.1 >= expected,
+                        "failed: valid interval: [{} - {}], real value: {}",
+                        actual.0,
+                        actual.1,
+                        expected);
+            }
+        }
+    }
 
     #[test]
     fn display() {

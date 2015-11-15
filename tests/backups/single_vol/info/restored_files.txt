@@ -1,0 +1,57 @@
+File list
+
+Snapshot 1:
+drwxr-xr-x 3 michele michele    4096 set 28  2002 .
+drwxrwxr-x 5 michele michele    4096 nov 15 12:09 ..
+-rw-r--r-- 1 michele michele       0 ago 28  2001 changeable_permission
+-rw-r--r-- 1 michele michele       0 lug 28  2002 deleted_file
+drwxr-xr-x 2 michele michele    4096 lug 28  2002 directory_to_file
+-rw-r--r-- 1 michele michele       0 lug 28  2002 directory_to_file/file
+-rwxr-xr-x 1 michele michele      30 ago 28  2001 executable
+-rwx------ 1 michele michele      30 ago 28  2001 executable2
+prw-r--r-- 1 michele michele       0 ago 28  2001 fifo
+-rw-r--r-- 1 michele michele     456 lug 28  2002 file_to_directory
+-rw-r--r-- 1 michele michele 3500000 lug 31  2002 largefile
+-rw-r--r-- 1 michele michele   75650 ago 28  2001 regular_file
+-rw-r--r-- 1 michele michele     456 ago 30  2001 regular_file.sig
+lrwxrwxrwx 1 michele michele      12 nov 15 12:08 symbolic_link -> regular_file
+-rw-r--r-- 1 michele michele       0 ago 28  2001 test
+-rw-r----- 1 michele michele      11 ago 28  2001 two_hardlinked_files1
+-rw-r----- 1 michele michele      11 ago 28  2001 two_hardlinked_files2
+-rw-r--r-- 1 michele michele       0 ago 29  2001 ث?Wb??]???v*??!?>?Y????p???k????e?U??UV???4??X???sΞ??4??? ??????جڅ?KvC?#???ɷ?_??g?B?<=^?M??c??|*"\'^$@#!(){}?+ ~` 
+
+Snapshot 2:
+drwxr-xr-x 5 michele michele    4096 lug 31  2002 .
+drwxrwxr-x 5 michele michele    4096 nov 15 12:09 ..
+-rw----r-- 1 michele michele       0 ago 28  2001 changeable_permission
+-rw-r--r-- 1 michele michele     456 lug 28  2002 directory_to_file
+-rwxr-xr-x 1 michele michele      30 ago 28  2001 executable
+drwxr-xr-x 2 michele michele    4096 lug 28  2002 executable2
+-rw-r--r-- 1 michele michele      13 lug 28  2002 executable2/another_file
+prw-r--r-- 1 michele michele       0 ago 28  2001 fifo
+drwxr-xr-x 2 michele michele    4096 lug 28  2002 file_to_directory
+-rw-r--r-- 1 michele michele 3500001 lug 31  2002 largefile
+-rw-r--r-- 1 michele michele       6 lug 28  2002 new_file
+-rw-r--r-- 1 michele michele   75656 lug 28  2002 regular_file
+-rw-r--r-- 1 michele michele     456 ago 30  2001 regular_file.sig
+drwxr-xr-x 2 michele michele    4096 lug 28  2002 symbolic_link
+-rw-r--r-- 1 michele michele       0 ago 28  2001 test
+-rw-r----- 1 michele michele      11 ago 28  2001 two_hardlinked_files1
+-rw-r----- 1 michele michele      11 ago 28  2001 two_hardlinked_files2
+-rw-r--r-- 1 michele michele       0 ago 29  2001 ث?Wb??]???v*??!?>?Y????p???k????e?U??UV???4??X???sΞ??4??? ??????جڅ?KvC?#???ɷ?_??g?B?<=^?M??c??|*"\'^$@#!(){}?+ ~` 
+
+Snapshot 3:
+drwxr-xr-x 2 michele michele    4096 set 28  2002 .
+drwxrwxr-x 5 michele michele    4096 nov 15 12:09 ..
+-rw-r--r-- 1 michele michele       0 ago 28  2001 changeable_permission
+-rwxr-xr-x 1 michele michele      30 ago 28  2001 executable
+-rwx------ 1 michele michele      30 ago 28  2001 executable2
+prw-r--r-- 1 michele michele       0 ago 28  2001 fifo
+-rw-r--r-- 1 michele michele 3500000 lug 31  2002 largefile
+-rw-r--r-- 1 michele michele   75650 ago 28  2001 regular_file
+-rw-r--r-- 1 michele michele     456 ago 30  2001 regular_file.sig
+lrwxrwxrwx 1 michele michele      12 nov 15 12:09 symbolic_link -> regular_file
+-rw-r--r-- 1 michele michele       0 ago 28  2001 test
+-rw-r----- 1 michele michele      11 ago 28  2001 two_hardlinked_files1
+-rw-r----- 1 michele michele      11 ago 28  2001 two_hardlinked_files2
+-rw-r--r-- 1 michele michele       0 ago 29  2001 ث?Wb??]???v*??!?>?Y????p???k????e?U??UV???4??X???sΞ??4??? ??????جڅ?KvC?#???ɷ?_??g?B?<=^?M??c??|*"\'^$@#!(){}?+ ~` 
