@@ -543,7 +543,7 @@ mod test {
         let filenames = get_test_filenames();
         let collection_status = CollectionsStatus::from_filenames(&filenames);
         let display = format!("{}\n", collection_status);
-        let expected = include_str!("../../tests/backups/single_vol/collections_display.txt");
+        let expected = include_str!("../../tests/backups/single_vol/info/collections_display.txt");
         // println!("debug:\n{:?}\n", collection_status);
         // println!("collection status:\n{}\n", display);
         assert_eq!(display, expected);
