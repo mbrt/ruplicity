@@ -49,6 +49,7 @@ pub struct SnapshotFiles<'a> {
 }
 
 
+#[derive(Copy, Clone, Debug)]
 enum DiffType {
     Signature,
     Snapshot,
@@ -85,6 +86,7 @@ struct PathInfo {
     uid: Option<u32>,
     gid: Option<u32>,
     mode: Option<u32>,
+    size_hint: Option<(usize, usize)>,
 }
 
 #[derive(Debug)]
@@ -207,6 +209,7 @@ impl<'a> Iterator for SnapshotFiles<'a> {
 
 
 impl<'a> File<'a> {
+    /// Returns the full path of the file.
     pub fn path(&self) -> &'a Path {
         self.path
     }
@@ -223,16 +226,24 @@ impl<'a> File<'a> {
         self.info.mode
     }
 
+    /// Returns the name of the owner user.
     pub fn username(&self) -> Option<&'a str> {
         self.info.uid.and_then(|uid| self.ug_cache.get_user_name(uid))
     }
 
+    /// Returns the name of the group.
     pub fn groupname(&self) -> Option<&'a str> {
         self.info.gid.and_then(|gid| self.ug_cache.get_group_name(gid))
     }
 
+    /// Returns the time of the last modification.
     pub fn mtime(&self) -> Timespec {
         self.info.mtime
+    }
+
+    /// Returns a lower and upper bound in bytes on the file size.
+    pub fn size_hint(&self) -> Option<(usize, usize)> {
+        self.info.size_hint
     }
 }
 
@@ -329,12 +340,13 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
             // we can ignore paths with errors
             // the only problem here is that we miss some change in the chain, but it is
             // better than abort the whole signature
-            let tarfile = unwrap_or_continue!(tarfile);
-            let header = tarfile.header();
-            let path = unwrap_or_continue!(header.path());
+            let mut tarfile = unwrap_or_continue!(tarfile);
+            let size_hint = compute_size_hint(&mut tarfile);
+            let path = unwrap_or_continue!(tarfile.header().path());
             let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
             let info = match difftype {
                 DiffType::Signature | DiffType::Snapshot => {
+                    let header = tarfile.header();
                     let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
                     if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
                         ug_cache.add_user(uid, name.to_owned());
@@ -347,6 +359,7 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
                         uid: header.uid().ok(),
                         gid: header.gid().ok(),
                         mode: header.mode().ok(),
+                        size_hint: size_hint,
                     })
                 }
                 _ => None,
@@ -426,6 +439,66 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     } else {
         None
     }
+}
+
+fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+    let difftype = {
+        let path = try_opt!(file.header().path().ok());
+        let (difftype, _) = try_opt!(parse_snapshot_path(&path));
+        difftype
+    };
+    match difftype {
+        DiffType::Signature => compute_size_hint_signature(file),
+        DiffType::Snapshot => compute_size_hint_snapshot(file),
+        _ => None,
+    }
+}
+
+/// Gives a hint on the file size, computing it from the signature file.
+///
+/// This function returns the lower and upper bound of the file size in bytes. On error returns
+/// `None`.
+///
+/// # Examples
+///
+/// ```rust
+/// use std::io::Cursor;
+/// use ruplicity::signatures::compute_size_hint_signature;
+///
+/// let bytes = vec![0x72, 0x73, 0x01, 0x36, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x08,
+///                  0xaf, 0xb8, 0x99, 0x27, 0x6f, 0x3a, 0x17, 0xc2, 0xc1, 0x4e, 0x76, 0x83];
+/// let mut cursor = Cursor::new(bytes);
+/// let computed = compute_size_hint_signature(&mut cursor);
+/// assert_eq!(computed, Some((0, 512)));
+/// ```
+pub fn compute_size_hint_signature<R: Read>(file: &mut R) -> Option<(usize, usize)> {
+    use byteorder::{BigEndian, ReadBytesExt};
+
+    // for signature file format see Docs.md
+    let magic = try_opt!(file.read_u32::<BigEndian>().ok());
+    if magic != 0x72730136 {
+        None
+    } else {
+        // read the header
+        let file_block_len_bytes = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
+        let ss_len = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
+        let sign_block_len_bytes = 4 + ss_len;
+        // the remaining part of the file are blocks
+        let num_blocks = file.bytes().count() / sign_block_len_bytes;
+
+        let max_file_len = file_block_len_bytes * num_blocks;
+        if max_file_len > file_block_len_bytes {
+            Some((max_file_len - file_block_len_bytes + 1, max_file_len))
+        } else {
+            // avoid underflow
+            Some((0, max_file_len))
+        }
+    }
+}
+
+fn compute_size_hint_snapshot<R: Read>(file: &mut R) -> Option<(usize, usize)> {
+    let bytes = file.bytes().count();
+    Some((bytes, bytes))
 }
 
 
@@ -514,6 +587,16 @@ mod test {
         vec![s1, s2]
     }
 
+    fn get_single_vol_sizes() -> Vec<Vec<usize>> {
+        // note that `ls -l` returns 4096 for directory size, but we consider directories to be
+        // null sized.
+        // note also that symbolic links are considered to be null sized. This is an open question
+        // if it is correct or not.
+        vec![vec![0, 0, 0, 0, 0, 30, 30, 0, 456, 3500000, 75650, 456, 0, 0, 11, 11, 0],
+             vec![0, 0, 456, 30, 0, 13, 0, 0, 3500001, 6, 75656, 456, 0, 0, 11, 11, 0],
+             vec![0, 0, 30, 30, 0, 3500000, 75650, 456, 0, 0, 11, 11, 0]]
+    }
+
     #[test]
     fn file_list() {
         let expected_files = get_single_vol_files();
@@ -533,6 +616,31 @@ mod test {
         }
     }
 
+    #[test]
+    fn size_hint() {
+        let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
+        let files = BackupFiles::new(&backend).unwrap();
+        let actual_sizes = files.snapshots().map(|s| {
+            s.files()
+             .map(|f| f.size_hint().unwrap())
+             .collect::<Vec<_>>()
+        });
+        let expected_sizes = get_single_vol_sizes();
+
+        // iterate all over the snapshots
+        for (actual, expected) in actual_sizes.zip(expected_sizes) {
+            assert_eq!(actual.len(), expected.len());
+            println!("debug {:?}", actual);
+            // iterate all the files
+            for (actual, expected) in actual.iter().zip(expected) {
+                assert!(actual.0 <= expected && actual.1 >= expected,
+                        "failed: valid interval: [{} - {}], real value: {}",
+                        actual.0,
+                        actual.1,
+                        expected);
+            }
+        }
+    }
 
     #[test]
     fn display() {

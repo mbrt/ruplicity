@@ -10,6 +10,7 @@
 
 #![cfg_attr(test, allow(unsafe_code))]
 
+extern crate byteorder;
 extern crate flate2;
 extern crate regex;
 extern crate tar;

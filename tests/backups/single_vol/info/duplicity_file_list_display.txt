@@ -1,3 +1,4 @@
+> duplicity list-current-files --no-encryption --time 2015-06-17T20:25:46+02:00 file://`pwd`
 Expected output from duplicity (snapshot 1):
 
 Last full backup date: Wed Jun 17 18:25:45 2015
@@ -17,9 +18,10 @@ Fri Nov  1 04:44:47 2002 symbolic_link
 Tue Aug 28 21:56:38 2001 test
 Tue Aug 28 07:31:42 2001 two_hardlinked_files1
 Tue Aug 28 07:31:42 2001 two_hardlinked_files2
-Tue Aug 28 22:03:47 2001 <long-list-of-unicode-chars>
+Tue Aug 28 22:03:47 2001 ث�Wb��]��v*�!�>�Y����p��k���e�U��UV���4��X�sΞ��4� ����جڅ�KvC�#���ɷ�_�g�B<=^�M�c��|*"\'^$@#!(){}?+ ~` 
 
 
+> duplicity list-current-files --no-encryption --time 2015-06-17T20:26:30+02:00 file://`pwd`
 Expected output from duplicity (snapshot 2):
 
 Last full backup date: Wed Jun 17 18:25:45 2015
@@ -39,9 +41,10 @@ Sat Jul 27 22:59:46 2002 symbolic_link
 Tue Aug 28 21:56:38 2001 test
 Tue Aug 28 07:31:42 2001 two_hardlinked_files1
 Tue Aug 28 07:31:42 2001 two_hardlinked_files2
-Tue Aug 28 22:03:47 2001 <long-list-of-unicode-chars>
+Tue Aug 28 22:03:47 2001 ث�Wb��]��v*�!�>�Y����p��k���e�U��UV���4��X�sΞ��4� ����جڅ�KvC�#���ɷ�_�g�B<=^�M�c��|*"\'^$@#!(){}?+ ~` 
 
 
+> duplicity list-current-files --no-encryption --time 2015-06-17T20:26:51+02:00 file://`pwd`
 Expected output from duplicity (snapshot 3):
 
 Last full backup date: Wed Jun 17 18:25:45 2015
@@ -57,4 +60,4 @@ Fri Nov  1 04:44:48 2002 symbolic_link
 Tue Aug 28 21:56:38 2001 test
 Tue Aug 28 07:31:42 2001 two_hardlinked_files1
 Tue Aug 28 07:31:42 2001 two_hardlinked_files2
-Tue Aug 28 22:03:47 2001 <long-list-of-unicode-chars>
+Tue Aug 28 22:03:47 2001 ث�Wb��]��v*�!�>�Y����p��k���e�U��UV���4��X�sΞ��4� ����جڅ�KvC�#���ɷ�_�g�B<=^�M�c��|*"\'^$@#!(){}?+ ~` 
