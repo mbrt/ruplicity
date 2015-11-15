@@ -583,8 +583,21 @@ mod test {
                       make_ftest("test", "20010828t215638z"),
                       make_ftest("two_hardlinked_files1", "20010828t073142z"),
                       make_ftest("two_hardlinked_files2", "20010828t073142z")];
+        // snapshot 3
+        let s3 = vec![make_ftest("", "20020928t183059z"),
+                      make_ftest("changeable_permission", "20010828t182330z"),
+                      make_ftest("executable", "20010828t073429z"),
+                      make_ftest("executable2", "20010828t181927z"),
+                      make_ftest("fifo", "20010828t073246z"),
+                      make_ftest("largefile", "20020731t034334z"),
+                      make_ftest("regular_file", "20010828t073052z"),
+                      make_ftest("regular_file.sig", "20010830t004037z"),
+                      make_ftest("symbolic_link", "20021101t044448z"),
+                      make_ftest("test", "20010828t215638z"),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
 
-        vec![s1, s2]
+        vec![s1, s2, s3]
     }
 
     fn get_single_vol_sizes() -> Vec<Vec<usize>> {
@@ -603,13 +616,13 @@ mod test {
         let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
         let files = BackupFiles::new(&backend).unwrap();
         // println!("debug files\n---------\n{:#?}\n----------", files);
-        assert_eq!(files.snapshots().count(), 3);
         let actual_files = files.snapshots().map(|s| {
             s.files()
              .map(|f| FileTest::from_file(&f))
              .filter(|f| f.path.to_str().is_some())
              .collect::<Vec<_>>()
         });
+        assert_eq!(files.snapshots().count(), 3);
         for (actual, expected) in actual_files.zip(expected_files) {
             // println!("\nExpected:\n{:#?}\nActual:\n{:#?}", expected, actual);
             assert_eq!(actual, expected);
