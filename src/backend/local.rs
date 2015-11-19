@@ -2,6 +2,7 @@ use super::Backend;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::slice;
 
 
 /// Backend operating on the local filesystem.
@@ -28,12 +29,13 @@ impl LocalBackend {
     }
 }
 
-impl Backend for LocalBackend {
-    type FileName = PathBuf;
+impl<'a> Backend<'a> for LocalBackend {
+    type FileName = &'a PathBuf;
+    type FileNameIter = slice::Iter<'a, PathBuf>;
     type FileStream = File;
 
-    fn get_file_names(&self) -> io::Result<&[PathBuf]> {
-        Ok(&self.file_names)
+    fn get_file_names(&'a self) -> io::Result<Self::FileNameIter> {
+        Ok(self.file_names.iter())
     }
 
     fn open_file(&self, name: &Path) -> io::Result<File> {
