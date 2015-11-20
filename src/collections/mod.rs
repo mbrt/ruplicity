@@ -358,11 +358,22 @@ impl CollectionsStatus {
         }
     }
 
-    pub fn from_filenames<I, E>(filenames: I) -> Self
-        where I: Iterator<Item = E>,
-              E: AsRef<Path>
+    pub fn from_filenames<'a, I, E>(filenames: I) -> Self
+        where I: IntoIterator<Item = &'a E>,
+              E: AsRef<Path> + 'a
     {
-        let infos = compute_filename_infos(filenames);
+        let infos = {
+            let mut infos = Vec::new();
+            let parser = FileNameParser::new();
+            for name in filenames {
+                if let Some(name) = name.as_ref().to_str() {
+                    if let Some(info) = parser.parse(name) {
+                        infos.push(FileNameInfo::new(name, info));
+                    }
+                }
+            }
+            infos
+        };
         CollectionsStatus {
             backup_chains: compute_backup_chains(&infos),
             sig_chains: compute_signature_chains(&infos),
@@ -380,7 +391,7 @@ impl CollectionsStatus {
 }
 
 fn compute_filename_infos<'a, I, E>(filenames: I) -> Vec<FileNameInfo<'a>>
-    where I: Iterator<Item = E>,
+    where I: IntoIterator<Item = &'a E>,
           E: AsRef<Path> + 'a
 {
     let mut result = Vec::new();
