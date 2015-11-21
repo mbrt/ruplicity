@@ -15,7 +15,7 @@ pub trait Backend {
 
     /// Returns a list of available file names.
     /// The file names returned should have an extension, and not a path.
-    fn get_file_names(&self) -> io::Result<&[Self::FileName]>;
+    fn get_file_names(&self) -> io::Result<Vec<Self::FileName>>;
 
     /// Open a file for reading.
     fn open_file(&self, name: &Path) -> io::Result<Self::FileStream>;
