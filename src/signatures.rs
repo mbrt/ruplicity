@@ -97,10 +97,10 @@ struct UserGroupNameCache {
 
 
 impl BackupFiles {
-    pub fn new<'a, B: Backend<'a>>(backend: &'a B) -> io::Result<BackupFiles> {
+    pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
         let collection = {
             let filenames = try!(backend.get_file_names());
-            CollectionsStatus::from_filenames(filenames)
+            CollectionsStatus::from_filenames(&filenames)
         };
         let mut chains: Vec<Chain> = Vec::new();
         let mut ug_cache = UserGroupNameCache::new();
