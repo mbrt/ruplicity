@@ -18,9 +18,10 @@ impl LocalBackend {
 
 impl Backend for LocalBackend {
     type FileName = PathBuf;
+    type FileNameIter = Vec<PathBuf>;
     type FileStream = File;
 
-    fn get_file_names(&self) -> io::Result<Vec<Self::FileName>> {
+    fn get_file_names(&self) -> io::Result<Self::FileNameIter> {
         let dir = try!(fs::read_dir(self.base_path.as_path()));
         let paths = dir.filter(|entry| entry.is_ok())
                        .map(|entry| {

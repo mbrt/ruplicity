@@ -358,8 +358,12 @@ impl CollectionsStatus {
         }
     }
 
-    pub fn from_filenames<P: AsRef<Path>>(filenames: &[P]) -> Self {
-        let infos = compute_filename_infos(filenames);
+    pub fn from_filenames<I>(filenames: I) -> Self
+        where I: IntoIterator,
+              I::Item: AsRef<Path>
+    {
+        let fnames_vec: Vec<_> = filenames.into_iter().collect();
+        let infos = compute_filename_infos(&fnames_vec);
         CollectionsStatus {
             backup_chains: compute_backup_chains(&infos),
             sig_chains: compute_signature_chains(&infos),
