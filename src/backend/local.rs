@@ -11,8 +11,8 @@ pub struct LocalBackend {
 
 impl LocalBackend {
     /// Create a new LocalBackend that operates on the given directory.
-    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        Ok(LocalBackend { base_path: path.as_ref().to_path_buf() })
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+        LocalBackend { base_path: path.as_ref().to_path_buf() }
     }
 }
 
