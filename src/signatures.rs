@@ -613,7 +613,7 @@ mod test {
     #[test]
     fn file_list() {
         let expected_files = get_single_vol_files();
-        let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
+        let backend = LocalBackend::new("tests/backups/single_vol");
         let files = BackupFiles::new(&backend).unwrap();
         // println!("debug files\n---------\n{:#?}\n----------", files);
         let actual_files = files.snapshots().map(|s| {
@@ -631,7 +631,7 @@ mod test {
 
     #[test]
     fn size_hint() {
-        let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
+        let backend = LocalBackend::new("tests/backups/single_vol");
         let files = BackupFiles::new(&backend).unwrap();
         let actual_sizes = files.snapshots().map(|s| {
             s.files()
@@ -660,7 +660,7 @@ mod test {
         // avoid test differences for time zones
         let _lock = set_time_zone("Europe/Rome");
 
-        let backend = LocalBackend::new("tests/backups/single_vol").unwrap();
+        let backend = LocalBackend::new("tests/backups/single_vol");
         let files = BackupFiles::new(&backend).unwrap();
         println!("Backup snapshots:");
         for snapshot in files.snapshots() {
