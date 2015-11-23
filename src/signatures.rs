@@ -190,8 +190,9 @@ impl<'a> Iterator for SnapshotFiles<'a> {
     type Item = File<'a>;
 
     fn next(&mut self) -> Option<File<'a>> {
-        while let Some(path_snapshots) = self.iter.next() {
-            if let Some(s) = path_snapshots.snapshots.iter().rev().find(|s| s.index <= self.index) {
+        let index = self.index;     // prevents borrow checker complains
+        for path_snapshots in &mut self.iter {
+            if let Some(s) = path_snapshots.snapshots.iter().rev().find(|s| s.index <= index) {
                 // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
