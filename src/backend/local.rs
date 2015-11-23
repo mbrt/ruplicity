@@ -42,7 +42,7 @@ impl Iterator for FileNameIterator {
     type Item = OsString;
 
     fn next(&mut self) -> Option<OsString> {
-        while let Some(entry) = self.0.next() {
+        for entry in &mut self.0 {
             if let Ok(entry) = entry {
                 return Some(entry.file_name());
             }
