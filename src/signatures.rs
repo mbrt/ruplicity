@@ -17,13 +17,13 @@ use time_utils::to_pretty_local;
 #[derive(Debug)]
 pub struct BackupFiles {
     chains: Vec<Chain>,
-    ug_cache: UserGroupNameCache,
+    ug_map: UserGroupMap,
 }
 
 pub struct Snapshot<'a> {
     index: u8,
     chain: &'a Chain,
-    ug_cache: &'a UserGroupNameCache,
+    backup: &'a BackupFiles,
 }
 
 /// Informations about a file inside a backup snapshot.
@@ -31,7 +31,7 @@ pub struct Snapshot<'a> {
 pub struct File<'a> {
     path: &'a Path,
     info: &'a PathInfo,
-    ug_cache: &'a UserGroupNameCache,
+    ug_map: &'a UserGroupMap,
 }
 
 /// Iterator over a list of backup snapshots.
@@ -39,13 +39,13 @@ pub struct Snapshots<'a> {
     chain_iter: slice::Iter<'a, Chain>,
     chain: Option<&'a Chain>,
     snapshot_id: u8,
-    ug_cache: &'a UserGroupNameCache,
+    backup: &'a BackupFiles,
 }
 
 pub struct SnapshotFiles<'a> {
     index: u8,
     iter: slice::Iter<'a, PathSnapshots>,
-    ug_cache: &'a UserGroupNameCache,
+    backup: &'a BackupFiles,
 }
 
 
@@ -90,7 +90,7 @@ struct PathInfo {
 }
 
 #[derive(Debug)]
-struct UserGroupNameCache {
+struct UserGroupMap {
     uid_map: HashMap<u32, String>,
     gid_map: HashMap<u32, String>,
 }
@@ -106,7 +106,7 @@ impl BackupFiles {
             CollectionsStatus::from_filenames(filenames)
         };
         let mut chains: Vec<Chain> = Vec::new();
-        let mut ug_cache = UserGroupNameCache::new();
+        let mut ug_map = UserGroupMap::new();
         let coll_chains = collection.signature_chains();
         for coll_chain in coll_chains {
             // translate collections::SignatureChain into a Chain
@@ -117,18 +117,18 @@ impl BackupFiles {
             // add to the chain the full signature and all the incremental signatures
             // if an error occurs in the full signature exit
             let file = try!(backend.open_file(coll_chain.fullsig.file_name.as_ref()));
-            try!(add_sigfile_to_chain(&mut chain, &mut ug_cache, file, &coll_chain.fullsig));
+            try!(add_sigfile_to_chain(&mut chain, &mut ug_map, file, &coll_chain.fullsig));
             for inc in &coll_chain.inclist {
                 // TODO: if an error occurs here, do not exit with an error, instead
                 // break the iteration and store the error inside the chain
                 let file = try!(backend.open_file(inc.file_name.as_ref()));
-                try!(add_sigfile_to_chain(&mut chain, &mut ug_cache, file, &inc));
+                try!(add_sigfile_to_chain(&mut chain, &mut ug_map, file, &inc));
             }
             chains.push(chain);
         }
         Ok(BackupFiles {
             chains: chains,
-            ug_cache: ug_cache,
+            ug_map: ug_map,
         })
     }
 
@@ -139,7 +139,7 @@ impl BackupFiles {
             chain_iter: iter,
             chain: first_chain,
             snapshot_id: 0,
-            ug_cache: &self.ug_cache,
+            backup: &self,
         }
     }
 }
@@ -155,7 +155,7 @@ impl<'a> Iterator for Snapshots<'a> {
                     let result = Some(Snapshot {
                         index: self.snapshot_id,
                         chain: chain,
-                        ug_cache: self.ug_cache,
+                        backup: self.backup,
                     });
                     self.snapshot_id += 1;
                     return result;
@@ -183,7 +183,7 @@ impl<'a> Snapshot<'a> {
         SnapshotFiles {
             index: self.index,
             iter: self.chain.files.iter(),
-            ug_cache: self.ug_cache,
+            backup: self.backup,
         }
     }
 }
@@ -202,7 +202,7 @@ impl<'a> Iterator for SnapshotFiles<'a> {
                     return Some(File {
                         path: path_snapshots.path.as_ref(),
                         info: info,
-                        ug_cache: self.ug_cache,
+                        ug_map: &self.backup.ug_map,
                     });
                 }
             }
@@ -232,12 +232,12 @@ impl<'a> File<'a> {
 
     /// Returns the name of the owner user.
     pub fn username(&self) -> Option<&'a str> {
-        self.info.uid.and_then(|uid| self.ug_cache.get_user_name(uid))
+        self.info.uid.and_then(|uid| self.ug_map.get_user_name(uid))
     }
 
     /// Returns the name of the group.
     pub fn groupname(&self) -> Option<&'a str> {
-        self.info.gid.and_then(|gid| self.ug_cache.get_group_name(gid))
+        self.info.gid.and_then(|gid| self.ug_map.get_group_name(gid))
     }
 
     /// Returns the time of the last modification.
@@ -277,9 +277,9 @@ impl<'a> Display for File<'a> {
 }
 
 
-impl UserGroupNameCache {
+impl UserGroupMap {
     pub fn new() -> Self {
-        UserGroupNameCache {
+        UserGroupMap {
             uid_map: HashMap::new(),
             gid_map: HashMap::new(),
         }
@@ -323,7 +323,7 @@ impl Display for ModeDisplay {
 
 
 fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
-                                 ug_cache: &mut UserGroupNameCache,
+                                 ug_map: &mut UserGroupMap,
                                  file: R,
                                  sigfile: &SignatureFile)
                                  -> io::Result<()> {
@@ -332,12 +332,12 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
         if sigfile.compressed {
             let gz_decoder = try!(GzDecoder::new(file));
             add_sigtar_to_snapshots(&mut chain.files,
-                                    ug_cache,
+                                    ug_map,
                                     tar::Archive::new(gz_decoder),
                                     snapshot_id)
         } else {
             add_sigtar_to_snapshots(&mut chain.files,
-                                    ug_cache,
+                                    ug_map,
                                     tar::Archive::new(file),
                                     snapshot_id)
         }
@@ -352,7 +352,7 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
 }
 
 fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
-                                    ug_cache: &mut UserGroupNameCache,
+                                    ug_map: &mut UserGroupMap,
                                     mut tar: tar::Archive<R>,
                                     snapshot_id: u8)
                                     -> io::Result<()> {
@@ -372,10 +372,10 @@ fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
                     let header = tarfile.header();
                     let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
                     if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
-                        ug_cache.add_user(uid, name.to_owned());
+                        ug_map.add_user(uid, name.to_owned());
                     }
                     if let (Ok(gid), Some(name)) = (header.gid(), header.groupname()) {
-                        ug_cache.add_group(gid, name.to_owned());
+                        ug_map.add_group(gid, name.to_owned());
                     }
                     Some(PathInfo {
                         mtime: time,
