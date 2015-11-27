@@ -95,6 +95,9 @@ struct UserGroupNameCache {
     gid_map: HashMap<u32, String>,
 }
 
+#[derive(Debug)]
+struct ModeDisplay(Option<u32>);
+
 
 impl BackupFiles {
     pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
@@ -252,7 +255,7 @@ impl<'a> Display for File<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f,
                "{:<4} {:<10} {:<10} {} {}",
-               self.mode().unwrap_or(0),
+               ModeDisplay(self.mode()),
                self.username().unwrap_or("?"),
                self.groupname().unwrap_or("?"),
                // FIXME: Workaround for rust <= 1.4
@@ -296,6 +299,25 @@ impl UserGroupNameCache {
 
     pub fn get_group_name(&self, gid: u32) -> Option<&str> {
         self.gid_map.get(&gid).map(AsRef::as_ref)
+    }
+}
+
+
+impl Display for ModeDisplay {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        // from octal permissions to rwx ls style
+        if let Some(mode) = self.0 {
+            for i in (0..3).rev() {
+                let curr = mode >> (i * 3);
+                try!(write!(f, "{}{}{}",
+                            if curr & 0b100 > 0 { "r"} else { "-" },
+                            if curr & 0b010 > 0 { "w"} else { "-" },
+                            if curr & 0b001 > 0 { "x"} else { "-" },));
+            }
+            Ok(())
+        } else {
+            write!(f, "?")
+        }
     }
 }
 
@@ -644,7 +666,7 @@ mod test {
         // iterate all over the snapshots
         for (actual, expected) in actual_sizes.zip(expected_sizes) {
             assert_eq!(actual.len(), expected.len());
-            println!("debug {:?}", actual);
+            // println!("debug {:?}", actual);
             // iterate all the files
             for (actual, expected) in actual.iter().zip(expected) {
                 assert!(actual.0 <= expected && actual.1 >= expected,
