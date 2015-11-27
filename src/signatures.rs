@@ -307,12 +307,21 @@ impl Display for ModeDisplay {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         // from octal permissions to rwx ls style
         if let Some(mode) = self.0 {
+            let special = mode >> 9;
+            let special = [special & 0b001 > 0,
+                           special & 0b010 > 0,
+                           special & 0b100 > 0];
             for i in (0..3).rev() {
                 let curr = mode >> (i * 3);
-                try!(write!(f, "{}{}{}",
-                            if curr & 0b100 > 0 { "r"} else { "-" },
-                            if curr & 0b010 > 0 { "w"} else { "-" },
-                            if curr & 0b001 > 0 { "x"} else { "-" },));
+                let r = if curr & 0b100 > 0 { "r" } else { "-" };
+                let w = if curr & 0b010 > 0 { "w" } else { "-" };
+                let x = match (curr & 0b001 > 0, special[i]) {
+                    (true, false) => "x",
+                    (false, false) => "-",
+                    (true, true) => if i == 0 { "t" } else { "s" },
+                    (false, true) => if i == 0 { "T" } else { "S" },
+                };
+                try!(write!(f, "{}{}{}", r, w, x));
             }
             Ok(())
         } else {
@@ -524,6 +533,13 @@ fn compute_size_hint_snapshot<R: Read>(file: &mut R) -> Option<(usize, usize)> {
     Some((bytes, bytes))
 }
 
+// used for tests only
+#[cfg(test)]
+#[doc(hidden)]
+pub fn _mode_display(mode: Option<u32>) -> String {
+    format!("{}", ModeDisplay(mode))
+}
+
 
 #[cfg(test)]
 mod test {
@@ -692,5 +708,21 @@ mod test {
                 println!("{}", file);
             }
         }
+    }
+
+    #[test]
+    fn mode_display() {
+        // see http://permissions-calculator.org/symbolic/
+        // for help on permissions
+        assert_eq!(_mode_display(None), "?");
+        assert_eq!(_mode_display(Some(0o777)), "rwxrwxrwx");
+        assert_eq!(_mode_display(Some(0o000)), "---------");
+        assert_eq!(_mode_display(Some(0o444)), "r--r--r--");
+        assert_eq!(_mode_display(Some(0o700)), "rwx------");
+        assert_eq!(_mode_display(Some(0o542)), "r-xr---w-");
+        assert_eq!(_mode_display(Some(0o4100)), "--s------");
+        assert_eq!(_mode_display(Some(0o4000)), "--S------");
+        assert_eq!(_mode_display(Some(0o7000)), "--S--S--T");
+        assert_eq!(_mode_display(Some(0o7111)), "--s--s--t");
     }
 }
