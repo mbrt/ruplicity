@@ -304,18 +304,18 @@ impl UserGroupMap {
 
 
 impl Display for ModeDisplay {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         // from octal permissions to rwx ls style
         if let Some(mode) = self.0 {
             let special = mode >> 9;
-            let special = [special & 0b001 > 0,
-                           special & 0b010 > 0,
-                           special & 0b100 > 0];
+            // index iterates over user, group, other
             for i in (0..3).rev() {
                 let curr = mode >> (i * 3);
                 let r = if curr & 0b100 > 0 { "r" } else { "-" };
                 let w = if curr & 0b010 > 0 { "w" } else { "-" };
-                let x = match (curr & 0b001 > 0, special[i]) {
+                // executable must handle the special permissions
+                let x = match (curr & 0b001 > 0, special & (1 << i) > 0) {
                     (true, false) => "x",
                     (false, false) => "-",
                     (true, true) => if i == 0 { "t" } else { "s" },
