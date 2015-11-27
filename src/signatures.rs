@@ -254,14 +254,11 @@ impl<'a> File<'a> {
 impl<'a> Display for File<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f,
-               "{:<4} {:<10} {:<10} {} {}",
+               "{}\t{}\t{}\t{}\t{}",
                ModeDisplay(self.mode()),
                self.username().unwrap_or("?"),
                self.groupname().unwrap_or("?"),
-               // FIXME: Workaround for rust <= 1.4
-               // Alignment is ignored by custom formatters
-               // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
-               format!("{}", to_pretty_local(self.mtime())),
+               to_pretty_local(self.mtime()),
                // handle special case for the root:
                // the path is empty, return "." instead
                self.path()
@@ -680,6 +677,9 @@ mod test {
 
     #[test]
     fn display() {
+        use std::io::Write;
+        use tabwriter::TabWriter;
+
         // avoid test differences for time zones
         let _lock = set_time_zone("Europe/Rome");
 
@@ -688,9 +688,13 @@ mod test {
         println!("Backup snapshots:");
         for snapshot in files.snapshots() {
             println!("Snapshot {}", to_pretty_local(snapshot.time()));
+            let mut tw = TabWriter::new(Vec::new());
             for file in snapshot.files() {
-                println!("{}", file);
+                write!(&mut tw, "{}\n", file).unwrap();
             }
+            tw.flush().unwrap();
+            let written = String::from_utf8(tw.unwrap()).unwrap();
+            println!("{}", written);
         }
     }
 }
