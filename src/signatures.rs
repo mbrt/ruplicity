@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::{Display, Error, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::io::{self, Read};
 use std::iter::Iterator;
 use std::path::{Component, Path, PathBuf};
@@ -34,7 +34,7 @@ pub struct File<'a> {
     ug_cache: &'a UserGroupNameCache,
 }
 
-/// Iterator over a list of backup snapshots.
+/// A series of backup snapshots, in creation order.
 pub struct Snapshots<'a> {
     chain_iter: slice::Iter<'a, Chain>,
     chain: Option<&'a Chain>,
@@ -42,11 +42,16 @@ pub struct Snapshots<'a> {
     ug_cache: &'a UserGroupNameCache,
 }
 
+/// Files inside a backup snapshot.
+#[derive(Clone)]
 pub struct SnapshotFiles<'a> {
     index: u8,
     iter: slice::Iter<'a, PathSnapshots>,
     ug_cache: &'a UserGroupNameCache,
 }
+
+/// Allows to display files of a snapshot, in a `ls -s` unix command style.
+pub struct SnapshotFilesDisplay<'a>(SnapshotFiles<'a>);
 
 
 #[derive(Copy, Clone, Debug)]
@@ -189,6 +194,16 @@ impl<'a> Snapshot<'a> {
 }
 
 
+impl<'a> SnapshotFiles<'a> {
+    /// Returns a displayable struct for the files.
+    ///
+    /// Needs to consume `self`, because it has to iterate over all the files before displaying
+    /// them, because alignment information is needed.
+    pub fn to_display(self) -> SnapshotFilesDisplay<'a> {
+        SnapshotFilesDisplay(self)
+    }
+}
+
 impl<'a> Iterator for SnapshotFiles<'a> {
     type Item = File<'a>;
 
@@ -208,6 +223,21 @@ impl<'a> Iterator for SnapshotFiles<'a> {
             }
         }
         None
+    }
+}
+
+impl<'a> Display for SnapshotFilesDisplay<'a> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        use std::io::Write;
+        use tabwriter::TabWriter;
+
+        let mut tw = TabWriter::new(Vec::new());
+        for file in self.0.clone() {
+            try_or_fmt_err!(write!(&mut tw, "{}\n", file));
+        }
+        try_or_fmt_err!(tw.flush());
+        let written = try_or_fmt_err!(String::from_utf8(tw.unwrap()));
+        write!(f, "{}", written)
     }
 }
 
@@ -252,7 +282,7 @@ impl<'a> File<'a> {
 }
 
 impl<'a> Display for File<'a> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f,
                "{}\t{}\t{}\t{}\t{}",
                ModeDisplay(self.mode()),
@@ -301,7 +331,7 @@ impl UserGroupNameCache {
 
 
 impl Display for ModeDisplay {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         // from octal permissions to rwx ls style
         if let Some(mode) = self.0 {
             for i in (0..3).rev() {
@@ -677,9 +707,6 @@ mod test {
 
     #[test]
     fn display() {
-        use std::io::Write;
-        use tabwriter::TabWriter;
-
         // avoid test differences for time zones
         let _lock = set_time_zone("Europe/Rome");
 
@@ -687,14 +714,9 @@ mod test {
         let files = BackupFiles::new(&backend).unwrap();
         println!("Backup snapshots:");
         for snapshot in files.snapshots() {
-            println!("Snapshot {}", to_pretty_local(snapshot.time()));
-            let mut tw = TabWriter::new(Vec::new());
-            for file in snapshot.files() {
-                write!(&mut tw, "{}\n", file).unwrap();
-            }
-            tw.flush().unwrap();
-            let written = String::from_utf8(tw.unwrap()).unwrap();
-            println!("{}", written);
+            println!("Snapshot {}\n{}",
+                     to_pretty_local(snapshot.time()),
+                     snapshot.files().to_display());
         }
     }
 }

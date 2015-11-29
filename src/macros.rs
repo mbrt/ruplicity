@@ -47,7 +47,7 @@ macro_rules! unwrap_or_continue(
     ($e:expr) => (
         match $e {
             Ok(v) => v,
-            _     => { continue; }
+            _ => { continue; }
         }
     )
 );
@@ -58,10 +58,27 @@ macro_rules! unwrap_opt_or_continue(
     ($e:expr) => (
         match $e {
             Some(v) => v,
-            _       => { continue; }
+            _ => { continue; }
         }
     )
 );
+
+
+/// Helper macro for unwrapping a Result if possible, returns the given error otherwise.
+macro_rules! try_or(
+    ($e:expr, $err:expr) => (
+        match $e {
+            Ok(v) => v,
+            _ => { return $err; }
+        }
+    )
+);
+
+/// Helper macro for unwrapping a Result if possible, returns an `fmt::Error` otherwise.
+macro_rules! try_or_fmt_err(
+    ($e:expr) => (try_or!($e, Err(fmt::Error)))
+);
+
 
 
 /// Helper macro that tests if the given expression matches a given pattern.
