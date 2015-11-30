@@ -13,6 +13,7 @@
 extern crate byteorder;
 extern crate flate2;
 extern crate regex;
+extern crate tabwriter;
 extern crate tar;
 extern crate time;
 #[macro_use]
