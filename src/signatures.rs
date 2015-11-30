@@ -194,6 +194,15 @@ impl<'a> Snapshot<'a> {
 }
 
 
+impl<'a> Display for Snapshot<'a> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Backup time: {}\n{}",
+               to_pretty_local(self.time()),
+               self.files().to_display())
+    }
+}
+
+
 impl<'a> SnapshotFiles<'a> {
     /// Returns a displayable struct for the files.
     ///

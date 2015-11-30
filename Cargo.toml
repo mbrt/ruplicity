@@ -21,6 +21,9 @@ time = "0.1"
 byteorder = "0.4"
 tabwriter = "0.1"
 
+# bin dependencies
+clap = "1.5"
+
 # optional, working only on nightly
 clippy = { version = "*", optional = true }
 
