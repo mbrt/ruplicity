@@ -7,7 +7,7 @@ use std::process;
 
 use ruplicity::backend::Backend;
 use ruplicity::backend::local::LocalBackend;
-use ruplicity::collections::CollectionsStatus;
+use ruplicity::collections::Collections;
 use ruplicity::signatures::BackupFiles;
 
 
@@ -31,7 +31,7 @@ fn main() {
         // calling unwrap is safe here, because INPUT is required
         let path = matches.value_of("INPUT").unwrap();
         let backend = LocalBackend::new(path);
-        let collection = CollectionsStatus::from_filenames(ordie(backend.get_file_names()));
+        let collection = Collections::from_filenames(ordie(backend.get_file_names()));
         println!("{}", collection);
     } else if let Some(matches) = matches.subcommand_matches("ls") {
         // calling unwrap is safe here, because INPUT is required

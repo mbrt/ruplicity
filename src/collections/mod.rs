@@ -7,8 +7,8 @@ use std::slice;
 use time::Timespec;
 
 use time_utils::to_pretty_local;
-use self::file_naming::{FileNameInfo, FileNameParser, Info};
 use self::file_naming as fnm;
+use self::file_naming::{FileNameInfo, FileNameParser};
 
 
 #[derive(Debug)]
@@ -18,7 +18,7 @@ pub struct BackupSet {
     pub encrypted: bool,
     pub partial: bool,
     pub manifest_path: String,
-    volumes_paths: HashMap<i32, String>,
+    pub volumes_paths: HashMap<i32, String>,
 }
 
 #[derive(Debug)]
@@ -47,7 +47,7 @@ pub struct SignatureChain {
 }
 
 #[derive(Debug)]
-pub struct CollectionsStatus {
+pub struct Collections {
     backup_chains: Vec<BackupChain>,
     sig_chains: Vec<SignatureChain>,
 }
@@ -68,14 +68,13 @@ pub type ChainIter<'a, T> = slice::Iter<'a, T>;
 
 
 impl BackupSet {
+    /// Creates a new `BackupSet`, starting from file name informations.
     pub fn new(fname: &FileNameInfo) -> Self {
         // set type
         let tp = match fname.info.tp {
             fnm::Type::Full{ time, .. } |
             fnm::Type::FullManifest{ time, .. } |
-            fnm::Type::FullSig{ time, .. } => {
-                Type::Full { time: time }
-            }
+            fnm::Type::FullSig{ time, .. } => Type::Full { time: time },
             fnm::Type::Inc{ start_time, end_time, .. } |
             fnm::Type::IncManifest{ start_time, end_time, .. } |
             fnm::Type::NewSig{ start_time, end_time, .. } => {
@@ -91,9 +90,7 @@ impl BackupSet {
                 fnm::Type::FullManifest{ partial, .. } |
                 fnm::Type::IncManifest{ partial, .. } |
                 fnm::Type::FullSig{ partial, .. } |
-                fnm::Type::NewSig{ partial, .. } => {
-                    partial
-                }
+                fnm::Type::NewSig{ partial, .. } => partial,
                 _ => false,
             }
         };
@@ -119,32 +116,7 @@ impl BackupSet {
         let pr = &file_info.info;
         let fname = file_info.file_name;
 
-        // check if same backup set, by looking at timestamps
-        let same_set = {
-            match self.tp {
-                Type::Full{ time: my_time } => {
-                    match pr.tp {
-                        fnm::Type::Full{ time, .. } |
-                        fnm::Type::FullManifest{ time, .. } |
-                        fnm::Type::FullSig{ time, .. } => {
-                            my_time == time
-                        }
-                        _ => false,
-                    }
-                }
-                Type::Inc{ start_time: my_start, end_time: my_end } => {
-                    match pr.tp {
-                        fnm::Type::Inc{ start_time, end_time, .. } |
-                        fnm::Type::IncManifest{ start_time, end_time, .. } |
-                        fnm::Type::NewSig{ start_time, end_time, .. } => {
-                            my_start == start_time && my_end == end_time
-                        }
-                        _ => false,
-                    }
-                }
-            }
-        };
-        if !same_set {
+        if !self.is_same_set(&pr) {
             false
         } else {
             // update info
@@ -168,10 +140,34 @@ impl BackupSet {
         !self.manifest_path.is_empty()
     }
 
-    pub fn get_time(&self) -> Timespec {
+    pub fn time(&self) -> Timespec {
         match self.tp {
             Type::Full{ time } => time,
             Type::Inc{ end_time, .. } => end_time,
+        }
+    }
+
+    /// Checks if the given file belongs to the same backup set, by looking at timestamps.
+    pub fn is_same_set(&self, pr: &fnm::Info) -> bool {
+        match self.tp {
+            Type::Full{ time: my_time } => {
+                match pr.tp {
+                    fnm::Type::Full{ time, .. } |
+                    fnm::Type::FullManifest{ time, .. } |
+                    fnm::Type::FullSig{ time, .. } => my_time == time,
+                    _ => false,
+                }
+            }
+            Type::Inc{ start_time: my_start, end_time: my_end } => {
+                match pr.tp {
+                    fnm::Type::Inc{ start_time, end_time, .. } |
+                    fnm::Type::IncManifest{ start_time, end_time, .. } |
+                    fnm::Type::NewSig{ start_time, end_time, .. } => {
+                        my_start == start_time && my_end == end_time
+                    }
+                    _ => false,
+                }
+            }
         }
     }
 
@@ -194,7 +190,7 @@ impl Display for BackupSet {
                // FIXME: Workaround for rust <= 1.4
                // Alignment is ignored by custom formatters
                // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
-               format!("{}", to_pretty_local(self.get_time())),
+               format!("{}", to_pretty_local(self.time())),
                self.volumes_paths.len())
     }
 }
@@ -280,7 +276,7 @@ impl Display for BackupChain {
 
 
 impl SignatureFile {
-    pub fn from_file_and_info(fname: &str, pr: &Info) -> Self {
+    pub fn from_file_and_info(fname: &str, pr: &fnm::Info) -> Self {
         let time = {
             match pr.tp {
                 fnm::Type::FullSig{ time, .. } => time,
@@ -304,7 +300,7 @@ impl SignatureFile {
 
 impl SignatureChain {
     /// Create a new SignatureChain starting from a full signature.
-    pub fn new(fname: &str, pr: &Info) -> Self {
+    pub fn new(fname: &str, pr: &fnm::Info) -> Self {
         SignatureChain {
             fullsig: SignatureFile::from_file_and_info(fname, pr),
             inclist: Vec::new(),
@@ -350,9 +346,9 @@ impl Display for SignatureChain {
 }
 
 
-impl CollectionsStatus {
+impl Collections {
     pub fn new() -> Self {
-        CollectionsStatus {
+        Collections {
             backup_chains: Vec::new(),
             sig_chains: Vec::new(),
         }
@@ -364,7 +360,7 @@ impl CollectionsStatus {
     {
         let fnames_vec: Vec<_> = filenames.into_iter().collect();
         let infos = compute_filename_infos(&fnames_vec);
-        CollectionsStatus {
+        Collections {
             backup_chains: compute_backup_chains(&infos),
             sig_chains: compute_signature_chains(&infos),
         }
@@ -438,7 +434,7 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
         }
     }
     // sort by time
-    sets.sort_by(|a, b| a.get_time().cmp(&b.get_time()));
+    sets.sort_by(|a, b| a.time().cmp(&b.time()));
     sets
 }
 
@@ -472,7 +468,7 @@ fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain>
     sig_chains
 }
 
-impl Display for CollectionsStatus {
+impl Display for Collections {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         for backup_chain in &self.backup_chains {
             try!(backup_chain.fmt(f));
@@ -548,7 +544,7 @@ mod test {
         let _lock = set_time_zone("Europe/London");
 
         let filenames = get_test_filenames();
-        let collection_status = CollectionsStatus::from_filenames(&filenames);
+        let collection_status = Collections::from_filenames(&filenames);
         let display = format!("{}\n", collection_status);
         let expected = include_str!("../../tests/backups/single_vol/info/collections_display.txt");
         // println!("debug:\n{:?}\n", collection_status);
@@ -562,7 +558,7 @@ mod test {
         let _lock = set_time_zone("Europe/London");
 
         let filenames = get_test_filenames();
-        let collection_status = CollectionsStatus::from_filenames(&filenames);
+        let collection_status = Collections::from_filenames(&filenames);
         assert_eq!(collection_status.backup_chains().count(), 1);
         assert_eq!(collection_status.signature_chains().count(), 1);
         // backup chain

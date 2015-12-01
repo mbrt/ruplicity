@@ -10,7 +10,7 @@ use tar;
 use time::Timespec;
 
 use backend::Backend;
-use collections::{CollectionsStatus, SignatureFile};
+use collections::{Collections, SignatureFile};
 use time_utils::to_pretty_local;
 
 
@@ -108,7 +108,7 @@ impl BackupFiles {
     pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
         let collection = {
             let filenames = try!(backend.get_file_names());
-            CollectionsStatus::from_filenames(filenames)
+            Collections::from_filenames(filenames)
         };
         let mut chains: Vec<Chain> = Vec::new();
         let mut ug_map = UserGroupMap::new();
