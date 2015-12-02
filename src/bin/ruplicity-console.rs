@@ -47,7 +47,7 @@ fn main() {
         };
         match snapshot {
             Some(snapshot) => {
-                println!("{}", snapshot.files().to_display());
+                println!("{}", snapshot.files().into_display());
             }
             None => {
                 let _ = write!(&mut io::stderr(), "Cannot find the desired snapshot in the backup\n");

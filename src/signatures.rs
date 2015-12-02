@@ -196,9 +196,10 @@ impl<'a> Snapshot<'a> {
 
 impl<'a> Display for Snapshot<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Backup time: {}\n{}",
+        write!(f,
+               "Backup time: {}\n{}",
                to_pretty_local(self.time()),
-               self.files().to_display())
+               self.files().into_display())
     }
 }
 
@@ -208,7 +209,7 @@ impl<'a> SnapshotFiles<'a> {
     ///
     /// Needs to consume `self`, because it has to iterate over all the files before displaying
     /// them, because alignment information is needed.
-    pub fn to_display(self) -> SnapshotFilesDisplay<'a> {
+    pub fn into_display(self) -> SnapshotFilesDisplay<'a> {
         SnapshotFilesDisplay(self)
     }
 }
@@ -302,13 +303,7 @@ impl<'a> Display for File<'a> {
                // the path is empty, return "." instead
                self.path()
                    .to_str()
-                   .map_or("?", |p| {
-                       if p.is_empty() {
-                           "."
-                       } else {
-                           p
-                       }
-                   }))
+                   .map_or("?", |p| if p.is_empty() { "." } else { p }))
     }
 }
 
@@ -340,7 +335,6 @@ impl UserGroupMap {
 
 
 impl Display for ModeDisplay {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         // from octal permissions to rwx ls style
         if let Some(mode) = self.0 {
@@ -741,7 +735,7 @@ mod test {
         for snapshot in files.snapshots() {
             println!("Snapshot {}\n{}",
                      to_pretty_local(snapshot.time()),
-                     snapshot.files().to_display());
+                     snapshot.files().into_display());
         }
     }
 
