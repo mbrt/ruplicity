@@ -205,11 +205,11 @@ impl BackupSet {
     }
 
     pub fn is_full(&self) -> bool {
-        matches!(&self.tp, &Type::Full{..})
+        matches!(self.tp, Type::Full{..})
     }
 
     pub fn is_incremental(&self) -> bool {
-        matches!(&self.tp, &Type::Inc{..})
+        matches!(self.tp, Type::Inc{..})
     }
 
     fn fix_encrypted(&mut self, pr_encrypted: bool) {
