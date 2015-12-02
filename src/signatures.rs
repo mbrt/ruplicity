@@ -199,7 +199,7 @@ impl<'a> Display for Snapshot<'a> {
         write!(f,
                "Backup time: {}\n{}",
                to_pretty_local(self.time()),
-               self.files().to_display())
+               self.files().into_display())
     }
 }
 
@@ -209,7 +209,7 @@ impl<'a> SnapshotFiles<'a> {
     ///
     /// Needs to consume `self`, because it has to iterate over all the files before displaying
     /// them, because alignment information is needed.
-    pub fn to_display(self) -> SnapshotFilesDisplay<'a> {
+    pub fn into_display(self) -> SnapshotFilesDisplay<'a> {
         SnapshotFilesDisplay(self)
     }
 }
@@ -735,7 +735,7 @@ mod test {
         for snapshot in files.snapshots() {
             println!("Snapshot {}\n{}",
                      to_pretty_local(snapshot.time()),
-                     snapshot.files().to_display());
+                     snapshot.files().into_display());
         }
     }
 
