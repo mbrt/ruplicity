@@ -196,7 +196,8 @@ impl<'a> Snapshot<'a> {
 
 impl<'a> Display for Snapshot<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Backup time: {}\n{}",
+        write!(f,
+               "Backup time: {}\n{}",
                to_pretty_local(self.time()),
                self.files().to_display())
     }
@@ -302,13 +303,7 @@ impl<'a> Display for File<'a> {
                // the path is empty, return "." instead
                self.path()
                    .to_str()
-                   .map_or("?", |p| {
-                       if p.is_empty() {
-                           "."
-                       } else {
-                           p
-                       }
-                   }))
+                   .map_or("?", |p| if p.is_empty() { "." } else { p }))
     }
 }
 
@@ -340,7 +335,6 @@ impl UserGroupMap {
 
 
 impl Display for ModeDisplay {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         // from octal permissions to rwx ls style
         if let Some(mode) = self.0 {
