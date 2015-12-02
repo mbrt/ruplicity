@@ -35,12 +35,12 @@ pub struct SignatureChain {
 
 #[derive(Debug)]
 pub struct BackupSet {
-    pub tp: Type,
-    pub compressed: bool,
-    pub encrypted: bool,
-    pub partial: bool,
-    pub manifest_path: String,
-    pub volumes_paths: HashMap<i32, String>,
+    tp: Type,
+    compressed: bool,
+    encrypted: bool,
+    partial: bool,
+    manifest_path: String,
+    volumes_paths: HashMap<i32, String>,
 }
 
 #[derive(Debug)]
@@ -51,18 +51,6 @@ pub struct SignatureFile {
     pub encrypted: bool,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum Type {
-    Full {
-        time: Timespec,
-    },
-    Inc {
-        start_time: Timespec,
-        end_time: Timespec,
-    },
-}
-
-
 /// Iterator over some kind of chain.
 pub type ChainIter<'a, T> = slice::Iter<'a, T>;
 
@@ -71,6 +59,18 @@ pub type BackupSetIter<'a> = slice::Iter<'a, BackupSet>;
 
 /// Iterator over `SignatureFile`s.
 pub type SignatureFileIter<'a> = slice::Iter<'a, SignatureFile>;
+
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum Type {
+    Full {
+        time: Timespec,
+    },
+    Inc {
+        start_time: Timespec,
+        end_time: Timespec,
+    },
+}
 
 
 impl BackupSet {
@@ -146,11 +146,38 @@ impl BackupSet {
         !self.manifest_path.is_empty()
     }
 
-    pub fn time(&self) -> Timespec {
+    pub fn start_time(&self) -> Timespec {
+        match self.tp {
+            Type::Full{ time } => time,
+            Type::Inc{ start_time, .. } => start_time,
+        }
+    }
+
+    pub fn end_time(&self) -> Timespec {
         match self.tp {
             Type::Full{ time } => time,
             Type::Inc{ end_time, .. } => end_time,
         }
+    }
+
+    pub fn is_compressed(&self) -> bool {
+        self.compressed
+    }
+
+    pub fn is_encrypted(&self) -> bool {
+        self.encrypted
+    }
+
+    pub fn is_partial(&self) -> bool {
+        self.partial
+    }
+
+    pub fn manifest_path(&self) -> &str {
+        self.manifest_path.as_ref()
+    }
+
+    pub fn volume_path(&self, volume_num: i32) -> Option<&str> {
+        self.volumes_paths.get(&volume_num).map(AsRef::as_ref)
     }
 
     /// Checks if the given file belongs to the same backup set, by looking at timestamps.
@@ -177,6 +204,14 @@ impl BackupSet {
         }
     }
 
+    pub fn is_full(&self) -> bool {
+        matches!(&self.tp, &Type::Full{..})
+    }
+
+    pub fn is_incremental(&self) -> bool {
+        matches!(&self.tp, &Type::Inc{..})
+    }
+
     fn fix_encrypted(&mut self, pr_encrypted: bool) {
         if self.encrypted != pr_encrypted && self.partial && pr_encrypted {
             self.encrypted = pr_encrypted;
@@ -196,7 +231,7 @@ impl Display for BackupSet {
                // FIXME: Workaround for rust <= 1.4
                // Alignment is ignored by custom formatters
                // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
-               format!("{}", to_pretty_local(self.time())),
+               format!("{}", to_pretty_local(self.end_time())),
                self.volumes_paths.len())
     }
 }
@@ -466,7 +501,7 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
         }
     }
     // sort by time
-    sets.sort_by(|a, b| a.time().cmp(&b.time()));
+    sets.sort_by(|a, b| a.end_time().cmp(&b.end_time()));
     sets
 }
 
@@ -562,8 +597,8 @@ mod test {
         assert!(set.add_filename(&manifest1));
         assert!(!set.add_filename(&inc1));
         // test results
-        assert_eq!(set.tp,
-                   Type::Full { time: parse_time_str("20150617t182545z").unwrap() });
+        assert!(set.is_full());
+        assert_eq!(set.end_time(), parse_time_str("20150617t182545z").unwrap());
         assert!(set.compressed);
         assert!(!set.encrypted);
         assert!(!set.partial);
@@ -602,24 +637,20 @@ mod test {
                    parse_time_str("20150617t182650z").unwrap());
         // full backup
         let full = &backup_chain.fullset;
-        assert_eq!(full.tp,
-                   Type::Full { time: parse_time_str("20150617t182545z").unwrap() });
+        assert!(full.is_full());
+        assert_eq!(full.end_time(), parse_time_str("20150617t182545z").unwrap());
         // inc backups
         {
             let inc = &backup_chain.incsets[0];
-            assert_eq!(inc.tp,
-                       Type::Inc {
-                           start_time: parse_time_str("20150617t182545z").unwrap(),
-                           end_time: parse_time_str("20150617t182629z").unwrap(),
-                       });
+            assert!(inc.is_incremental());
+            assert_eq!(inc.start_time(), parse_time_str("20150617t182545z").unwrap());
+            assert_eq!(inc.end_time(), parse_time_str("20150617t182629z").unwrap());
         }
         {
             let inc = &backup_chain.incsets[1];
-            assert_eq!(inc.tp,
-                       Type::Inc {
-                           start_time: parse_time_str("20150617t182629z").unwrap(),
-                           end_time: parse_time_str("20150617t182650z").unwrap(),
-                       });
+            assert!(inc.is_incremental());
+            assert_eq!(inc.start_time(), parse_time_str("20150617t182629z").unwrap());
+            assert_eq!(inc.end_time(), parse_time_str("20150617t182650z").unwrap());
         }
     }
 }
