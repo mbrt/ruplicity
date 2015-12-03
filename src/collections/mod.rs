@@ -643,13 +643,15 @@ mod test {
         {
             let inc = &backup_chain.incsets[0];
             assert!(inc.is_incremental());
-            assert_eq!(inc.start_time(), parse_time_str("20150617t182545z").unwrap());
+            assert_eq!(inc.start_time(),
+                       parse_time_str("20150617t182545z").unwrap());
             assert_eq!(inc.end_time(), parse_time_str("20150617t182629z").unwrap());
         }
         {
             let inc = &backup_chain.incsets[1];
             assert!(inc.is_incremental());
-            assert_eq!(inc.start_time(), parse_time_str("20150617t182629z").unwrap());
+            assert_eq!(inc.start_time(),
+                       parse_time_str("20150617t182629z").unwrap());
             assert_eq!(inc.end_time(), parse_time_str("20150617t182650z").unwrap());
         }
     }
