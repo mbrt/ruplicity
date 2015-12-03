@@ -27,3 +27,35 @@ mod time_utils;
 pub mod backend;
 pub mod collections;
 pub mod signatures;
+
+use std::cell::RefCell;
+
+
+pub struct Backup {
+    collections: RefCell<Option<collections::CollectionsStatus>>,
+    signatures: RefCell<Option<signatures::BackupFiles>>,
+}
+
+impl Backup {
+    pub fn new() -> Self {
+        Backup {
+            collections: RefCell::new(None),
+            signatures: RefCell::new(None),
+        }
+    }
+
+    pub fn collections(&self) -> &collections::CollectionsStatus {
+//        {
+//            // check if there is a cached collections value
+//            let mut coll = self.collections.borrow_mut();
+//            if coll.is_some() {
+//                return coll.as_ref().unwrap()
+//            }
+//            // compute collections now
+//        }
+
+        // recursive call to return the just cached value
+        // need to close previous scope
+        self.collections()
+    }
+}
