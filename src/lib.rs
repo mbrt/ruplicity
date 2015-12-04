@@ -28,34 +28,45 @@ pub mod backend;
 pub mod collections;
 pub mod signatures;
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
+use std::io;
+
+use backend::Backend;
+use collections::Collections;
+use signatures::BackupFiles;
 
 
-pub struct Backup {
-    collections: RefCell<Option<collections::CollectionsStatus>>,
-    signatures: RefCell<Option<signatures::BackupFiles>>,
+pub struct Backup<'a, B: Backend + 'a> {
+    backend: &'a B,
+    collections: RefCell<Option<Collections>>,
+    signatures: RefCell<Option<BackupFiles>>,
 }
 
-impl Backup {
-    pub fn new() -> Self {
+pub struct Snapshots<'a>(Ref<'a, Option<Collections>>);
+
+
+impl<'a, B: Backend> Backup<'a, B> {
+    pub fn new(backend: &'a B) -> Self {
         Backup {
+            backend: backend,
             collections: RefCell::new(None),
             signatures: RefCell::new(None),
         }
     }
 
-    pub fn collections(&self) -> &collections::CollectionsStatus {
-//        {
-//            // check if there is a cached collections value
-//            let mut coll = self.collections.borrow_mut();
-//            if coll.is_some() {
-//                return coll.as_ref().unwrap()
-//            }
-//            // compute collections now
-//        }
+    pub fn collections(&self) -> io::Result<Snapshots> {
+        {
+            // check if there is a cached collections value
+            let mut coll = self.collections.borrow_mut();
+            if coll.is_none() {
+                // compute collections now
+                let filenames = try!(self.backend.get_file_names());
+                *coll = Some(Collections::from_filenames(filenames));
+            }
+        }
 
-        // recursive call to return the just cached value
-        // need to close previous scope
-        self.collections()
+        // need to close previous scope to borrow again
+        // return the cached value
+        Ok(Snapshots(self.collections.borrow()))
     }
 }
