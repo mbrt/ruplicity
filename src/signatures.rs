@@ -110,6 +110,10 @@ impl BackupFiles {
             let filenames = try!(backend.get_file_names());
             Collections::from_filenames(filenames)
         };
+        Self::from_collection(&collection, backend)
+    }
+
+    pub fn from_collection<B: Backend>(collection: &Collections, backend: &B) -> io::Result<Self> {
         let mut chains: Vec<Chain> = Vec::new();
         let mut ug_map = UserGroupMap::new();
         let coll_chains = collection.signature_chains();

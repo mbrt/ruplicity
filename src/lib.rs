@@ -54,7 +54,7 @@ impl<'a, B: Backend> Backup<'a, B> {
         }
     }
 
-    pub fn collections(&self) -> io::Result<Snapshots> {
+    pub fn snapshots(&self) -> io::Result<Snapshots> {
         {
             // check if there is a cached collections value
             let mut coll = self.collections.borrow_mut();
@@ -68,5 +68,12 @@ impl<'a, B: Backend> Backup<'a, B> {
         // need to close previous scope to borrow again
         // return the cached value
         Ok(Snapshots(self.collections.borrow()))
+    }
+}
+
+
+impl<'a> AsRef<Collections> for Snapshots<'a> {
+    fn as_ref(&self) -> &Collections {
+        self.0.as_ref().unwrap()
     }
 }
