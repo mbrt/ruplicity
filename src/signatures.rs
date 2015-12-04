@@ -10,7 +10,7 @@ use tar;
 use time::Timespec;
 
 use backend::Backend;
-use collections::{CollectionsStatus, SignatureFile};
+use collections::{Collections, SignatureFile};
 use time_utils::to_pretty_local;
 
 
@@ -108,7 +108,7 @@ impl BackupFiles {
     pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
         let collection = {
             let filenames = try!(backend.get_file_names());
-            CollectionsStatus::from_filenames(filenames)
+            Collections::from_filenames(filenames)
         };
         let mut chains: Vec<Chain> = Vec::new();
         let mut ug_map = UserGroupMap::new();
@@ -121,10 +121,10 @@ impl BackupFiles {
             };
             // add to the chain the full signature and all the incremental signatures
             // if an error occurs in the full signature exit
-            let file = try!(backend.open_file(coll_chain.fullsig.file_name.as_ref()));
-            try!(add_sigfile_to_chain(&mut chain, &mut ug_map, file, &coll_chain.fullsig));
-            for inc in &coll_chain.inclist {
-                // TODO: if an error occurs here, do not exit with an error, instead
+            let file = try!(backend.open_file(coll_chain.full_signature().file_name.as_ref()));
+            try!(add_sigfile_to_chain(&mut chain, &mut ug_map, file, coll_chain.full_signature()));
+            for inc in coll_chain.inc_signatures() {
+                // TODO(#4): if an error occurs here, do not exit with an error, instead
                 // break the iteration and store the error inside the chain
                 let file = try!(backend.open_file(inc.file_name.as_ref()));
                 try!(add_sigfile_to_chain(&mut chain, &mut ug_map, file, &inc));
