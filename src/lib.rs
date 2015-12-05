@@ -31,22 +31,27 @@ pub mod signatures;
 use std::cell::{Ref, RefCell};
 use std::io;
 
+use time::Timespec;
+
 use backend::Backend;
 use collections::Collections;
 use signatures::BackupFiles;
 
 
-pub struct Backup<'a, B: Backend + 'a> {
-    backend: &'a B,
+pub struct Backup<B> {
+    backend: B,
     collections: RefCell<Option<Collections>>,
     signatures: RefCell<Option<BackupFiles>>,
 }
 
-pub struct Snapshots<'a>(Ref<'a, Option<Collections>>);
+pub struct Snapshots<'a, B: 'a> {
+    collections: Ref<'a, Option<Collections>>,
+    backup: &'a Backup<B>,
+}
 
 
-impl<'a, B: Backend> Backup<'a, B> {
-    pub fn new(backend: &'a B) -> Self {
+impl<B: Backend> Backup<B> {
+    pub fn new(backend: B) -> Self {
         Backup {
             backend: backend,
             collections: RefCell::new(None),
@@ -54,7 +59,7 @@ impl<'a, B: Backend> Backup<'a, B> {
         }
     }
 
-    pub fn snapshots(&self) -> io::Result<Snapshots> {
+    pub fn snapshots(&self) -> io::Result<Snapshots<B>> {
         {
             // check if there is a cached collections value
             let mut coll = self.collections.borrow_mut();
@@ -67,13 +72,16 @@ impl<'a, B: Backend> Backup<'a, B> {
 
         // need to close previous scope to borrow again
         // return the cached value
-        Ok(Snapshots(self.collections.borrow()))
+        Ok(Snapshots{
+            collections: self.collections.borrow(),
+            backup: &self,
+        })
     }
 }
 
 
-impl<'a> AsRef<Collections> for Snapshots<'a> {
+impl<'a, B> AsRef<Collections> for Snapshots<'a, B> {
     fn as_ref(&self) -> &Collections {
-        self.0.as_ref().unwrap()
+        self.collections.as_ref().unwrap()
     }
 }
