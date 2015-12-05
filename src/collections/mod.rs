@@ -567,7 +567,6 @@ mod test {
     use super::*;
     use super::file_naming::{FileNameInfo, FileNameParser};
     use time_utils::parse_time_str;
-    use time_utils::test_utils::set_time_zone;
 
     fn get_test_filenames() -> Vec<&'static str> {
         vec!["duplicity-full.20150617T182545Z.manifest",
@@ -606,10 +605,8 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn collection_status_display() {
-        // avoid test differences for time zones
-        let _lock = set_time_zone("Europe/London");
-
         let filenames = get_test_filenames();
         let collection_status = Collections::from_filenames(&filenames);
         let display = format!("{}\n", collection_status);
@@ -621,9 +618,6 @@ mod test {
 
     #[test]
     fn collection_status() {
-        // avoid test differences for time zones
-        let _lock = set_time_zone("Europe/London");
-
         let filenames = get_test_filenames();
         let collection_status = Collections::from_filenames(&filenames);
         assert_eq!(collection_status.backup_chains().count(), 1);
