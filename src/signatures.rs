@@ -11,7 +11,7 @@ use time::Timespec;
 
 use backend::Backend;
 use collections::{Collections, SignatureFile};
-use time_utils::to_pretty_local;
+use time_utils::TimeDisplay;
 
 
 #[derive(Debug)]
@@ -202,7 +202,7 @@ impl<'a> Display for Snapshot<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f,
                "Backup time: {}\n{}",
-               to_pretty_local(self.time()),
+               self.time().into_local_display(),
                self.files().into_display())
     }
 }
@@ -302,7 +302,7 @@ impl<'a> Display for File<'a> {
                ModeDisplay(self.mode()),
                self.username().unwrap_or("?"),
                self.groupname().unwrap_or("?"),
-               to_pretty_local(self.mtime()),
+               self.mtime().into_local_display(),
                // handle special case for the root:
                // the path is empty, return "." instead
                self.path()
@@ -579,8 +579,7 @@ pub fn _mode_display(mode: Option<u32>) -> String {
 mod test {
     use super::*;
     use backend::local::LocalBackend;
-    use time_utils::{parse_time_str, to_pretty_local};
-    use time_utils::test_utils::set_time_zone;
+    use time_utils::{parse_time_str, TimeDisplay};
 
     use std::path::Path;
     use time::Timespec;
@@ -730,15 +729,17 @@ mod test {
 
     #[test]
     fn display() {
-        // avoid test differences for time zones
-        let _lock = set_time_zone("Europe/Rome");
-
+        // NOTE: this is actually not a proper test
+        //       here we are only printing out the snapshots.
+        //       however not panicking is already something :)
+        //       Display is not properly testable due to time zones differencies;
+        //       we want to avoid using global mutexes in test code
         let backend = LocalBackend::new("tests/backups/single_vol");
         let files = BackupFiles::new(&backend).unwrap();
         println!("Backup snapshots:");
         for snapshot in files.snapshots() {
             println!("Snapshot {}\n{}",
-                     to_pretty_local(snapshot.time()),
+                     snapshot.time().into_local_display(),
                      snapshot.files().into_display());
         }
     }
