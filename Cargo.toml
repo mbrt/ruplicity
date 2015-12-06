@@ -26,6 +26,3 @@ clap = "1.5"
 
 # optional, working only on nightly
 clippy = { version = "*", optional = true }
-
-[dev-dependencies]
-lazy_static = "0.1"

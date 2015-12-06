@@ -226,7 +226,7 @@ impl Display for BackupSet {
             Type::Inc{ .. } => "Incremental",
         };
         write!(f,
-               "{:<20} {:<33} {:>12}",
+               "{:<20} {:<13} {:>12}",
                tp,
                // FIXME: Workaround for rust <= 1.4
                // Alignment is ignored by custom formatters
@@ -319,7 +319,7 @@ impl Display for BackupChain {
                     self.incsets.len() + 1,
                     num_vol));
         try!(write!(f,
-                    "{:<20} {:<33} {:>12}",
+                    "{:<20} {:<13} {:>12}",
                     "Type of backup set:",
                     "Time:",
                     "Num volumes:"));
@@ -605,15 +605,17 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn collection_status_display() {
+        // NOTE: this is actually not a proper test
+        //       here we are only printing out the snapshots.
+        //       however not panicking is already something :)
+        //       Display is not properly testable due to time zones differencies;
+        //       we want to avoid using global mutexes in test code
         let filenames = get_test_filenames();
         let collection_status = Collections::from_filenames(&filenames);
         let display = format!("{}\n", collection_status);
-        let expected = include_str!("../../tests/backups/single_vol/info/collections_display.txt");
         // println!("debug:\n{:?}\n", collection_status);
-        // println!("collection status:\n{}\n", display);
-        assert_eq!(display, expected);
+        println!("collection status:\n{}\n", display);
     }
 
     #[test]

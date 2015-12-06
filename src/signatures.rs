@@ -576,7 +576,6 @@ mod test {
     use super::*;
     use backend::local::LocalBackend;
     use time_utils::{parse_time_str, to_pretty_local};
-    use time_utils::test_utils::set_time_zone;
 
     use std::path::Path;
     use time::Timespec;
@@ -726,9 +725,11 @@ mod test {
 
     #[test]
     fn display() {
-        // avoid test differences for time zones
-        let _lock = set_time_zone("Europe/Rome");
-
+        // NOTE: this is actually not a proper test
+        //       here we are only printing out the snapshots.
+        //       however not panicking is already something :)
+        //       Display is not properly testable due to time zones differencies;
+        //       we want to avoid using global mutexes in test code
         let backend = LocalBackend::new("tests/backups/single_vol");
         let files = BackupFiles::new(&backend).unwrap();
         println!("Backup snapshots:");
