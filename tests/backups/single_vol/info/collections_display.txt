@@ -1,8 +1,0 @@
-Chain start time: Wed, 17 Jun 2015 19:25:45 +0100
-Chain end time: Wed, 17 Jun 2015 19:26:50 +0100
-Number of contained backup sets: 3
-Total number of contained volumes: 3
-Type of backup set:  Time:                             Num volumes:
-Full                 Wed, 17 Jun 2015 19:25:45 +0100              1
-Incremental          Wed, 17 Jun 2015 19:26:29 +0100              1
-Incremental          Wed, 17 Jun 2015 19:26:50 +0100              1
