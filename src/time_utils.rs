@@ -16,9 +16,7 @@ pub trait TimeDisplay {
 
 /// Utility struct that implements Display in a pretty style
 /// for some Tm instance.
-pub struct PrettyDisplay {
-    tm: Tm,
-}
+pub struct PrettyDisplay(Tm);
 
 /// The format to be used to display a time.
 /// It could be a local or an UTC time.
@@ -40,24 +38,24 @@ impl TimeDisplay for Timespec {
     type D = PrettyDisplay;
 
     fn into_local_display(self) -> Self::D {
-        PrettyDisplay { tm: time::at(self) }
+        PrettyDisplay(time::at(self))
     }
 
     fn into_utc_display(self) -> Self::D {
-        PrettyDisplay { tm: time::at_utc(self) }
+        PrettyDisplay(time::at_utc(self))
     }
 }
 
 
 impl Display for PrettyDisplay {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        if time::now_utc().tm_year == self.tm.tm_year {
+        if time::now_utc().tm_year == self.0.tm_year {
             // the year is the current, so print month, day, hour
-            write!(f, "{}", time::strftime("%b %d %R", &self.tm).unwrap())
+            write!(f, "{}", time::strftime("%b %d %R", &self.0).unwrap())
         } else {
             // the year is not the current, so print month, day, year
             // NOTE: the double space before year is meaningful
-            write!(f, "{}", time::strftime("%b %d  %Y", &self.tm).unwrap())
+            write!(f, "{}", time::strftime("%b %d  %Y", &self.0).unwrap())
         }
     }
 }
