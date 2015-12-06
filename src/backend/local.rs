@@ -1,8 +1,8 @@
 use super::Backend;
 use std::fs::{self, File};
+use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::ffi::OsString;
 
 
 /// Backend operating on the local filesystem.

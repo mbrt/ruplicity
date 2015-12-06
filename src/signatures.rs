@@ -160,7 +160,7 @@ impl<'a> Iterator for Snapshots<'a> {
     fn next(&mut self) -> Option<Snapshot<'a>> {
         loop {
             if let Some(chain) = self.chain {
-                if let Some(_) = chain.timestamps.get(self.snapshot_id as usize) {
+                if chain.timestamps.get(self.snapshot_id as usize).is_some() {
                     let result = Some(Snapshot {
                         index: self.snapshot_id,
                         chain: chain,

@@ -44,6 +44,12 @@ pub struct Snapshots<'a, B: 'a> {
     backup: &'a Backup<B>,
 }
 
+// Tmp impl Clone, Copy
+#[derive(Clone, Copy)]
+pub struct Snapshot;
+
+pub type SnapshotFiles<'a> = signatures::SnapshotFiles<'a>;
+
 
 impl<B: Backend> Backup<B> {
     pub fn new(backend: B) -> Self {
@@ -67,7 +73,7 @@ impl<B: Backend> Backup<B> {
 
         // need to close previous scope to borrow again
         // return the cached value
-        Ok(Snapshots{
+        Ok(Snapshots {
             collections: self.collections.borrow(),
             backup: &self,
         })
@@ -78,5 +84,32 @@ impl<B: Backend> Backup<B> {
 impl<'a, B> AsRef<Collections> for Snapshots<'a, B> {
     fn as_ref(&self) -> &Collections {
         self.collections.as_ref().unwrap()
+    }
+}
+
+impl<'a, B> Iterator for Snapshots<'a, B> {
+    type Item = Snapshot;
+
+    fn next(&mut self) -> Option<Snapshot> {
+        None
+    }
+}
+
+
+impl Snapshot {
+    pub fn time(&self) -> Timespec {
+        Timespec { sec: 0, nsec: 0 }
+    }
+
+    pub fn is_full(&self) -> bool {
+        false
+    }
+
+    pub fn is_incremental(&self) -> bool {
+        false
+    }
+
+    pub fn files(&self) -> SnapshotFiles {
+        unimplemented!()
     }
 }
