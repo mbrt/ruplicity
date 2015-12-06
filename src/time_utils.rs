@@ -3,10 +3,16 @@ use time::{Timespec, Tm};
 use std::fmt::{Display, Error, Formatter};
 
 
-/// Default timespec, used to signal a non initialized time.
-#[allow(dead_code)]
-pub const DEFAULT_TIMESPEC: Timespec = Timespec { sec: 0, nsec: 0 };
+/// Trait that allows to display a time into a local or UTC timezone.
+pub trait TimeDisplay {
+    /// The displayable type
+    type D: Display;
 
+    /// Turns self into a displayable type that when displayed uses the local time zone.
+    fn into_local_display(self) -> Self::D;
+    /// Turns self into a displayable type that when displayed uses the UTC time zone.
+    fn into_utc_display(self) -> Self::D;
+}
 
 /// Utility struct that implements Display in a pretty style
 /// for some Tm instance.
@@ -22,6 +28,27 @@ pub enum Format {
     Utc,
 }
 
+
+/// Parse a string representing a duplicity timestamp and returns a Timespec
+/// if all goes well.
+pub fn parse_time_str(s: &str) -> Option<Timespec> {
+    time::strptime(s, "%Y%m%dt%H%M%S%Z").ok().map(|tm| tm.to_timespec())
+}
+
+
+impl TimeDisplay for Timespec {
+    type D = PrettyDisplay;
+
+    fn into_local_display(self) -> Self::D {
+        PrettyDisplay { tm: time::at(self) }
+    }
+
+    fn into_utc_display(self) -> Self::D {
+        PrettyDisplay { tm: time::at_utc(self) }
+    }
+}
+
+
 impl Display for PrettyDisplay {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         if time::now_utc().tm_year == self.tm.tm_year {
@@ -33,36 +60,6 @@ impl Display for PrettyDisplay {
             write!(f, "{}", time::strftime("%b %d  %Y", &self.tm).unwrap())
         }
     }
-}
-
-
-/// Returns an object implementing Display as a pretty printed UTC time.
-#[allow(dead_code)]
-pub fn to_pretty_utc(ts: Timespec) -> PrettyDisplay {
-    PrettyDisplay { tm: time::at_utc(ts) }
-}
-
-/// Returns an object implementing Display as a pretty printed local time.
-pub fn to_pretty_local(ts: Timespec) -> PrettyDisplay {
-    PrettyDisplay { tm: time::at(ts) }
-}
-
-/// Returns an obejct implementing Display as a pretty printed time.
-/// This could be a local or an UTC time, depending on the format parameter.
-#[allow(dead_code)]
-pub fn to_pretty(ts: Timespec, format: Format) -> PrettyDisplay {
-    match format {
-        Format::Local => to_pretty_local(ts),
-        Format::Utc => to_pretty_utc(ts),
-    }
-}
-
-
-
-/// Parse a string representing a duplicity timestamp and returns a Timespec
-/// if all goes well.
-pub fn parse_time_str(s: &str) -> Option<Timespec> {
-    time::strptime(s, "%Y%m%dt%H%M%S%Z").ok().map(|tm| tm.to_timespec())
 }
 
 
@@ -118,7 +115,7 @@ mod test {
     #[test]
     fn display_utc() {
         let time = move_to_this_year(time(1988, 12, 11, 15, 20, 0));
-        assert_eq!(format!("{}", to_pretty_utc(time.to_timespec())), "Dec 11 15:20");
+        assert_eq!(format!("{}", time.to_timespec().into_utc_display()), "Dec 11 15:20");
     }
 
     // NOTE: changing the time zone is global in the process,
@@ -133,20 +130,20 @@ mod test {
     fn display_local() {
         let time = move_to_this_year(time(1988, 12, 11, 15, 20, 0));
         set_time_zone("Europe/London");
-        assert_eq!(format!("{}", to_pretty_local(time.to_timespec())), "Dec 11 15:20");
+        assert_eq!(format!("{}", time.to_timespec().into_local_display()), "Dec 11 15:20");
         set_time_zone("Europe/Rome");
-        assert_eq!(format!("{}", to_pretty_local(time.to_timespec())), "Dec 11 16:20");
+        assert_eq!(format!("{}", time.to_timespec().into_local_display()), "Dec 11 16:20");
     }
 
     #[test]
     fn display_past_year() {
         let time = time(1988, 12, 11, 15, 20, 0);
-        assert_eq!(format!("{}", to_pretty_utc(time.to_timespec())), "Dec 11  1988");
+        assert_eq!(format!("{}", time.to_timespec().into_utc_display()), "Dec 11  1988");
     }
 
     #[test]
     fn parse_display_past_year() {
         let time = parse_time_str("19881211t152000z").unwrap();
-        assert_eq!(format!("{}", to_pretty_utc(time)), "Dec 11  1988");
+        assert_eq!(format!("{}", time.into_utc_display()), "Dec 11  1988");
     }
 }

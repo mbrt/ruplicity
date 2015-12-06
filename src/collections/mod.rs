@@ -6,7 +6,7 @@ use std::path::Path;
 use std::slice;
 use time::Timespec;
 
-use time_utils::to_pretty_local;
+use time_utils::TimeDisplay;
 use self::file_naming as fnm;
 use self::file_naming::{FileNameInfo, FileNameParser};
 
@@ -231,7 +231,7 @@ impl Display for BackupSet {
                // FIXME: Workaround for rust <= 1.4
                // Alignment is ignored by custom formatters
                // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
-               format!("{}", to_pretty_local(self.end_time())),
+               format!("{}", self.end_time().into_local_display()),
                self.volumes_paths.len())
     }
 }
@@ -314,8 +314,8 @@ impl Display for BackupChain {
                     Chain end time: {}\n\
                     Number of contained backup sets: {}\n\
                     Total number of contained volumes: {}\n",
-                    to_pretty_local(self.start_time),
-                    to_pretty_local(self.end_time),
+                    self.start_time.into_local_display(),
+                    self.end_time.into_local_display(),
                     self.incsets.len() + 1,
                     num_vol));
         try!(write!(f,
@@ -402,8 +402,8 @@ impl Display for SignatureChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         try!(write!(f,
                     "start time: {}, end time: {}\n {}",
-                    to_pretty_local(self.start_time()),
-                    to_pretty_local(self.end_time()),
+                    self.start_time().into_local_display(),
+                    self.end_time().into_local_display(),
                     &self.fullsig.file_name));
         for inc in &self.incsigs {
             try!(write!(f, "\n {}", inc.file_name));
