@@ -14,8 +14,7 @@ extern crate regex;
 extern crate tabwriter;
 extern crate tar;
 extern crate time;
-#[macro_use]
-extern crate try_opt;
+#[macro_use] extern crate try_opt;
 
 mod macros;
 mod time_utils;
@@ -23,93 +22,137 @@ pub mod backend;
 pub mod collections;
 pub mod signatures;
 
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::io;
 
 use time::Timespec;
 
 use backend::Backend;
-use collections::Collections;
+use collections::{Collections, BackupChain};
 use signatures::BackupFiles;
 
 
 pub struct Backup<B> {
     backend: B,
-    collections: RefCell<Option<Collections>>,
+    collections: Collections,
     signatures: RefCell<Option<BackupFiles>>,
 }
 
-pub struct Snapshots<'a, B: 'a> {
-    collections: Ref<'a, Option<Collections>>,
-    backup: &'a Backup<B>,
+pub struct Snapshots<'a> {
+    set_iter: Option<BackupSetIter<'a>>,
+    backup: &'a ResourceCache,
 }
 
-// Tmp impl Clone, Copy
-#[derive(Clone, Copy)]
-pub struct Snapshot;
+pub struct Snapshot<'a> {
+    set: &'a collections::BackupSet,
+}
 
 pub type SnapshotFiles<'a> = signatures::SnapshotFiles<'a>;
 
 
+struct BackupSetIter<'a> {
+    coll_iter: collections::ChainIter<'a, BackupChain>,
+    curr_chain: Option<&'a BackupChain>,
+    full_returned: bool,
+    chain_iter: collections::BackupSetIter<'a>,
+}
+
+trait ResourceCache {
+    fn _collections(&self) -> Snapshots;
+}
+
+
 impl<B: Backend> Backup<B> {
-    pub fn new(backend: B) -> Self {
-        Backup {
+    pub fn new(backend: B) -> io::Result<Self> {
+        let files = try!(backend.get_file_names());
+        Ok(Backup {
             backend: backend,
-            collections: RefCell::new(None),
+            collections: Collections::from_filenames(files),
             signatures: RefCell::new(None),
-        }
+        })
     }
 
-    pub fn snapshots(&self) -> io::Result<Snapshots<B>> {
-        {
-            // check if there is a cached collections value
-            let mut coll = self.collections.borrow_mut();
-            if coll.is_none() {
-                // compute collections now
-                let filenames = try!(self.backend.get_file_names());
-                *coll = Some(Collections::from_filenames(filenames));
+    pub fn snapshots(&self) -> io::Result<Snapshots> {
+        let set_iter = {
+            let mut coll_iter = self.collections.backup_chains();
+            let curr_chain = coll_iter.next();
+            if let Some(chain) = curr_chain {
+                Some(BackupSetIter {
+                    coll_iter: coll_iter,
+                    curr_chain: curr_chain,
+                    full_returned: false,
+                    chain_iter: chain.inc_sets(),
+                })
+            } else {
+                None
             }
-        }
+        };
 
-        // need to close previous scope to borrow again
-        // return the cached value
         Ok(Snapshots {
-            collections: self.collections.borrow(),
-            backup: &self,
+            set_iter: set_iter,
+            backup: self,
         })
     }
 }
 
 
-impl<'a, B> AsRef<Collections> for Snapshots<'a, B> {
-    fn as_ref(&self) -> &Collections {
-        self.collections.as_ref().unwrap()
-    }
-}
+impl<'a> Iterator for Snapshots<'a> {
+    type Item = Snapshot<'a>;
 
-impl<'a, B> Iterator for Snapshots<'a, B> {
-    type Item = Snapshot;
-
-    fn next(&mut self) -> Option<Snapshot> {
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ref mut iter) = self.set_iter {
+            loop {
+                if let Some(chain) = iter.curr_chain {
+                    // check if the full set has been already returned
+                    // for the current backup chain
+                    if !iter.full_returned {
+                        iter.full_returned = true;
+                        return Some(Snapshot { set: chain.full_set() });
+                    } else {
+                        if let Some(set) = iter.chain_iter.next() {
+                            return Some(Snapshot { set: set });
+                        }
+                        // the current chain has been exausted
+                        // go to the next one if present
+                        iter.curr_chain = iter.coll_iter.next();
+                        iter.full_returned = false;
+                        if let Some(chain) = iter.curr_chain {
+                            iter.chain_iter = chain.inc_sets();
+                        }
+                    }
+                } else {
+                    // last chain exausted
+                    break;
+                }
+            }
+        }
         None
     }
 }
 
 
-impl Snapshot {
+impl<'a> Snapshot<'a> {
     pub fn time(&self) -> Timespec {
-        Timespec { sec: 0, nsec: 0 }
+        self.set.end_time()
     }
 
     pub fn is_full(&self) -> bool {
-        false
+        self.set.is_full()
     }
 
     pub fn is_incremental(&self) -> bool {
-        false
+        self.set.is_incremental()
     }
 
     pub fn files(&self) -> SnapshotFiles {
         unimplemented!()
     }
 }
+
+
+impl<B: Backend> ResourceCache for Backup<B> {
+    fn _collections(&self) -> Snapshots {
+        self.snapshots().unwrap()
+    }
+}
+
