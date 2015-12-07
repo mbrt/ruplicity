@@ -61,11 +61,11 @@ enum DiffType {
     Deleted,
 }
 
-/// Store separately informations about the signatures and informations about the paths in the
-/// signatures. This allows to reuse informations between snapshots and avoid duplicating them.
+/// Stores informations about paths in a backup chain. The information is reused among different
+/// snapshots if possible.
 #[derive(Debug)]
 struct Chain {
-    timestamps: Vec<Timespec>,
+    num_snapshots: u8,
     files: Vec<PathSnapshots>,
 }
 
@@ -119,7 +119,7 @@ impl BackupFiles {
         for coll_chain in collection.signature_chains() {
             // translate collections::SignatureChain into a Chain
             let mut chain = Chain {
-                timestamps: Vec::new(),
+                num_snapshots: 0,
                 files: Vec::new(),
             };
             // add to the chain the full signature and all the incremental signatures
@@ -159,7 +159,7 @@ impl<'a> Iterator for Snapshots<'a> {
     fn next(&mut self) -> Option<Snapshot<'a>> {
         loop {
             if let Some(chain) = self.chain {
-                if chain.timestamps.get(self.snapshot_id as usize).is_some() {
+                if self.snapshot_id < chain.num_snapshots {
                     let result = Some(Snapshot {
                         index: self.snapshot_id,
                         chain: chain,
@@ -183,10 +183,6 @@ impl<'a> Iterator for Snapshots<'a> {
 
 
 impl<'a> Snapshot<'a> {
-    pub fn time(&self) -> Timespec {
-        self.chain.timestamps[self.index as usize]
-    }
-
     pub fn files(&self) -> SnapshotFiles<'a> {
         SnapshotFiles {
             index: self.index,
@@ -199,10 +195,7 @@ impl<'a> Snapshot<'a> {
 
 impl<'a> Display for Snapshot<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f,
-               "Backup time: {}\n{}",
-               self.time().into_local_display(),
-               self.files().into_display())
+        write!(f, "{}", self.files().into_display())
     }
 }
 
@@ -370,7 +363,7 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
                                  sigfile: &SignatureFile)
                                  -> io::Result<()> {
     let result = {
-        let snapshot_id = chain.timestamps.len() as u8;
+        let snapshot_id = chain.num_snapshots;
         if sigfile.compressed {
             let gz_decoder = try!(GzDecoder::new(file));
             add_sigtar_to_snapshots(&mut chain.files,
@@ -385,10 +378,10 @@ fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
         }
     };
     if result.is_ok() {
-        // add to the list of signatures only if everything is ok
+        // add to the list of snapshots only if everything is ok
         // we do not need to cleanup the chain if someting went wrong, because if the
-        // list of signatures is not updated, the change is not observable
-        chain.timestamps.push(sigfile.time);
+        // number of signatures is not updated, the change is not observable
+        chain.num_snapshots += 1;
     }
     result
 }
@@ -737,9 +730,7 @@ mod test {
         let files = BackupFiles::new(&backend).unwrap();
         println!("Backup snapshots:");
         for snapshot in files.snapshots() {
-            println!("Snapshot {}\n{}",
-                     snapshot.time().into_local_display(),
-                     snapshot.files().into_display());
+            println!("Snapshot {}\n", snapshot.files().into_display());
         }
     }
 
