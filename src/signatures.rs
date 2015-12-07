@@ -10,21 +10,40 @@ use tar;
 use time::Timespec;
 
 use backend::Backend;
-use collections::{Collections, SignatureFile};
+use collections::{SignatureChain, SignatureFile};
 use time_utils::TimeDisplay;
 
 
+/// Stores informations about paths in a backup chain. The information is reused among different
+/// snapshots if possible.
 #[derive(Debug)]
-pub struct BackupFiles {
-    chains: Vec<Chain>,
+pub struct Chain {
+    num_snapshots: u8,
+    files: Vec<PathSnapshots>,
     ug_map: UserGroupMap,
 }
 
-pub struct Snapshot<'a> {
-    index: u8,
+/// A series of backup snapshots, in creation order.
+pub struct Snapshots<'a> {
     chain: &'a Chain,
-    backup: &'a BackupFiles,
+    snapshot_id: u8,
 }
+
+pub struct Snapshot<'a> {
+    chain: &'a Chain,
+    index: u8,
+}
+
+/// Files inside a backup snapshot.
+#[derive(Clone)]
+pub struct SnapshotFiles<'a> {
+    index: u8,
+    iter: slice::Iter<'a, PathSnapshots>,
+    chain: &'a Chain,
+}
+
+/// Allows to display files of a snapshot, in a `ls -s` unix command style.
+pub struct SnapshotFilesDisplay<'a>(SnapshotFiles<'a>);
 
 /// Informations about a file inside a backup snapshot.
 #[derive(Debug)]
@@ -34,39 +53,12 @@ pub struct File<'a> {
     ug_map: &'a UserGroupMap,
 }
 
-/// A series of backup snapshots, in creation order.
-pub struct Snapshots<'a> {
-    chain_iter: slice::Iter<'a, Chain>,
-    chain: Option<&'a Chain>,
-    snapshot_id: u8,
-    backup: &'a BackupFiles,
-}
-
-/// Files inside a backup snapshot.
-#[derive(Clone)]
-pub struct SnapshotFiles<'a> {
-    index: u8,
-    iter: slice::Iter<'a, PathSnapshots>,
-    backup: &'a BackupFiles,
-}
-
-/// Allows to display files of a snapshot, in a `ls -s` unix command style.
-pub struct SnapshotFilesDisplay<'a>(SnapshotFiles<'a>);
-
 
 #[derive(Copy, Clone, Debug)]
 enum DiffType {
     Signature,
     Snapshot,
     Deleted,
-}
-
-/// Stores informations about paths in a backup chain. The information is reused among different
-/// snapshots if possible.
-#[derive(Debug)]
-struct Chain {
-    num_snapshots: u8,
-    files: Vec<PathSnapshots>,
 }
 
 #[derive(Debug)]
@@ -104,51 +96,145 @@ struct UserGroupMap {
 struct ModeDisplay(Option<u32>);
 
 
-impl BackupFiles {
-    pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
-        let collection = {
-            let filenames = try!(backend.get_file_names());
-            Collections::from_filenames(filenames)
-        };
-        Self::from_collection(&collection, backend)
+impl Chain {
+    pub fn new() -> Self {
+        Chain {
+            num_snapshots: 0,
+            files: Vec::new(),
+            ug_map: UserGroupMap::new(),
+        }
     }
 
-    pub fn from_collection<B: Backend>(collection: &Collections, backend: &B) -> io::Result<Self> {
-        let mut chains: Vec<Chain> = Vec::new();
-        let mut ug_map = UserGroupMap::new();
-        for coll_chain in collection.signature_chains() {
-            // translate collections::SignatureChain into a Chain
-            let mut chain = Chain {
-                num_snapshots: 0,
-                files: Vec::new(),
-            };
-            // add to the chain the full signature and all the incremental signatures
-            // if an error occurs in the full signature exit
-            let file = try!(backend.open_file(coll_chain.full_signature().file_name.as_ref()));
-            try!(add_sigfile_to_chain(&mut chain, &mut ug_map, file, coll_chain.full_signature()));
-            for inc in coll_chain.inc_signatures() {
-                // TODO(#4): if an error occurs here, do not exit with an error, instead
-                // break the iteration and store the error inside the chain
-                let file = try!(backend.open_file(inc.file_name.as_ref()));
-                try!(add_sigfile_to_chain(&mut chain, &mut ug_map, file, &inc));
-            }
-            chains.push(chain);
+    pub fn from_sigchain<B: Backend>(coll: &SignatureChain, backend: &B) -> io::Result<Self> {
+        let mut chain = Chain::new();
+        // add to the chain the full signature and all the incremental signatures
+        // if an error occurs in the full signature exit
+        let file = try!(backend.open_file(coll.full_signature().file_name.as_ref()));
+        try!(chain.add_sigfile(file, coll.full_signature()));
+        for inc in coll.inc_signatures() {
+            // TODO(#4): if an error occurs here, do not exit with an error, instead
+            // break the iteration and store the error inside the chain
+            let file = try!(backend.open_file(inc.file_name.as_ref()));
+            try!(chain.add_sigfile(file, &inc));
         }
-        Ok(BackupFiles {
-            chains: chains,
-            ug_map: ug_map,
-        })
+        Ok(chain)
     }
 
     pub fn snapshots(&self) -> Snapshots {
-        let mut iter = self.chains.iter();
-        let first_chain = iter.next();
         Snapshots {
-            chain_iter: iter,
-            chain: first_chain,
+            chain: self,
             snapshot_id: 0,
-            backup: &self,
         }
+    }
+
+    fn add_sigfile<R: Read>(&mut self, file: R, sigfile: &SignatureFile) -> io::Result<()> {
+        let result = {
+            let snapshot_id = self.num_snapshots;
+            if sigfile.compressed {
+                let gz_decoder = try!(GzDecoder::new(file));
+                self.add_sigtar_to_snapshots(tar::Archive::new(gz_decoder), snapshot_id)
+            } else {
+                self.add_sigtar_to_snapshots(tar::Archive::new(file), snapshot_id)
+            }
+        };
+        if result.is_ok() {
+            // add to the list of snapshots only if everything is ok
+            // we do not need to cleanup the chain if someting went wrong, because if the
+            // number of signatures is not updated, the change is not observable
+            self.num_snapshots += 1;
+        }
+        result
+    }
+
+    fn add_sigtar_to_snapshots<R: Read>(&mut self,
+                                        mut tar: tar::Archive<R>,
+                                        snapshot_id: u8)
+                                        -> io::Result<()> {
+        let mut new_files: Vec<PathSnapshots> = Vec::new();
+        {
+            let mut old_snapshots = self.files.iter_mut().peekable();
+            for tarfile in try!(tar.files_mut()) {
+                // we can ignore paths with errors
+                // the only problem here is that we miss some change in the chain, but it is
+                // better than abort the whole signature
+                let mut tarfile = unwrap_or_continue!(tarfile);
+                let size_hint = compute_size_hint(&mut tarfile);
+                let path = unwrap_or_continue!(tarfile.header().path());
+                let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
+                let info = match difftype {
+                    DiffType::Signature | DiffType::Snapshot => {
+                        let header = tarfile.header();
+                        let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
+                        if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
+                            self.ug_map.add_user(uid, name.to_owned());
+                        }
+                        if let (Ok(gid), Some(name)) = (header.gid(), header.groupname()) {
+                            self.ug_map.add_group(gid, name.to_owned());
+                        }
+                        Some(PathInfo {
+                            mtime: time,
+                            uid: header.uid().ok(),
+                            gid: header.gid().ok(),
+                            mode: header.mode().ok(),
+                            size_hint: size_hint,
+                        })
+                    }
+                    _ => None,
+                };
+                let new_snapshot = PathSnapshot {
+                    info: info,
+                    index: snapshot_id,
+                };
+                // find the current path in the old snapshots
+                // note: they are ordered
+                let position = {
+                    let mut position: Option<&mut PathSnapshots> = None;
+                    loop {
+                        let mut found = false;
+                        if let Some(path_snapshots) = old_snapshots.peek() {
+                            let old_path = path_snapshots.path.as_path();
+                            if old_path == path {
+                                // this path is already present in old snapshots: update them
+                                found = true;
+                            } else if old_path > path {
+                                // we've already reached the first item next to the current path
+                                // so, the path is not present in old snapshots
+                                break;
+                            }
+                        }
+                        if found {
+                            let path_snapshots = old_snapshots.next().unwrap();
+                            position = Some(path_snapshots);
+                        } else {
+                            // we have not found the element, so 'old_path < path' or there are no
+                            // more paths to check:
+                            // continue the loop if there are more elements
+                            if !old_snapshots.next().is_some() {
+                                break;
+                            }
+                        }
+                    }
+                    position
+                };
+                if let Some(path_snapshots) = position {
+                    path_snapshots.snapshots.push(new_snapshot);
+                } else {
+                    // the path is not present in the old snapshots: add to new list
+                    new_files.push(PathSnapshots {
+                        path: path.to_path_buf(),
+                        snapshots: vec![new_snapshot],
+                    });
+                }
+            }
+        }
+        // merge the new files with old snapshots
+        if !new_files.is_empty() {
+            // TODO: Performance hurt here: we have two sorted arrays to merge,
+            // better to use this algorithm: http://stackoverflow.com/a/4553321/1667955
+            self.files.extend(new_files.into_iter());
+            self.files.sort_by(|a, b| a.path.cmp(&b.path));
+        }
+        Ok(())
     }
 }
 
@@ -157,26 +243,12 @@ impl<'a> Iterator for Snapshots<'a> {
     type Item = Snapshot<'a>;
 
     fn next(&mut self) -> Option<Snapshot<'a>> {
-        loop {
-            if let Some(chain) = self.chain {
-                if self.snapshot_id < chain.num_snapshots {
-                    let result = Some(Snapshot {
-                        index: self.snapshot_id,
-                        chain: chain,
-                        backup: self.backup,
-                    });
-                    self.snapshot_id += 1;
-                    return result;
-                } else {
-                    // this chain is completed
-                    // go to next chain
-                    self.chain = self.chain_iter.next();
-                    self.snapshot_id = 0;
-                }
-            } else {
-                // no other chains are present
-                return None;
-            }
+        if self.snapshot_id < self.chain.num_snapshots {
+            let result = Some(Snapshot{ chain: self.chain, index: self.snapshot_id });
+            self.snapshot_id += 1;
+            result
+        } else {
+            None
         }
     }
 }
@@ -187,7 +259,7 @@ impl<'a> Snapshot<'a> {
         SnapshotFiles {
             index: self.index,
             iter: self.chain.files.iter(),
-            backup: self.backup,
+            chain: self.chain,
         }
     }
 }
@@ -223,7 +295,7 @@ impl<'a> Iterator for SnapshotFiles<'a> {
                     return Some(File {
                         path: path_snapshots.path.as_ref(),
                         info: info,
-                        ug_map: &self.backup.ug_map,
+                        ug_map: &self.chain.ug_map,
                     });
                 }
             }
@@ -357,127 +429,6 @@ impl Display for ModeDisplay {
 }
 
 
-fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
-                                 ug_map: &mut UserGroupMap,
-                                 file: R,
-                                 sigfile: &SignatureFile)
-                                 -> io::Result<()> {
-    let result = {
-        let snapshot_id = chain.num_snapshots;
-        if sigfile.compressed {
-            let gz_decoder = try!(GzDecoder::new(file));
-            add_sigtar_to_snapshots(&mut chain.files,
-                                    ug_map,
-                                    tar::Archive::new(gz_decoder),
-                                    snapshot_id)
-        } else {
-            add_sigtar_to_snapshots(&mut chain.files,
-                                    ug_map,
-                                    tar::Archive::new(file),
-                                    snapshot_id)
-        }
-    };
-    if result.is_ok() {
-        // add to the list of snapshots only if everything is ok
-        // we do not need to cleanup the chain if someting went wrong, because if the
-        // number of signatures is not updated, the change is not observable
-        chain.num_snapshots += 1;
-    }
-    result
-}
-
-fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
-                                    ug_map: &mut UserGroupMap,
-                                    mut tar: tar::Archive<R>,
-                                    snapshot_id: u8)
-                                    -> io::Result<()> {
-    let mut new_files: Vec<PathSnapshots> = Vec::new();
-    {
-        let mut old_snapshots = snapshots.iter_mut().peekable();
-        for tarfile in try!(tar.files_mut()) {
-            // we can ignore paths with errors
-            // the only problem here is that we miss some change in the chain, but it is
-            // better than abort the whole signature
-            let mut tarfile = unwrap_or_continue!(tarfile);
-            let size_hint = compute_size_hint(&mut tarfile);
-            let path = unwrap_or_continue!(tarfile.header().path());
-            let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
-            let info = match difftype {
-                DiffType::Signature | DiffType::Snapshot => {
-                    let header = tarfile.header();
-                    let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
-                    if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
-                        ug_map.add_user(uid, name.to_owned());
-                    }
-                    if let (Ok(gid), Some(name)) = (header.gid(), header.groupname()) {
-                        ug_map.add_group(gid, name.to_owned());
-                    }
-                    Some(PathInfo {
-                        mtime: time,
-                        uid: header.uid().ok(),
-                        gid: header.gid().ok(),
-                        mode: header.mode().ok(),
-                        size_hint: size_hint,
-                    })
-                }
-                _ => None,
-            };
-            let new_snapshot = PathSnapshot {
-                info: info,
-                index: snapshot_id,
-            };
-            // find the current path in the old snapshots
-            // note: they are ordered
-            let position = {
-                let mut position: Option<&mut PathSnapshots> = None;
-                loop {
-                    let mut found = false;
-                    if let Some(path_snapshots) = old_snapshots.peek() {
-                        let old_path = path_snapshots.path.as_path();
-                        if old_path == path {
-                            // this path is already present in old snapshots: update them
-                            found = true;
-                        } else if old_path > path {
-                            // we've already reached the first item next to the current path
-                            // so, the path is not present in old snapshots
-                            break;
-                        }
-                    }
-                    if found {
-                        let path_snapshots = old_snapshots.next().unwrap();
-                        position = Some(path_snapshots);
-                    } else {
-                        // we have not found the element, so 'old_path < path' or there are no
-                        // more paths to check:
-                        // continue the loop if there are more elements
-                        if !old_snapshots.next().is_some() {
-                            break;
-                        }
-                    }
-                }
-                position
-            };
-            if let Some(path_snapshots) = position {
-                path_snapshots.snapshots.push(new_snapshot);
-            } else {
-                // the path is not present in the old snapshots: add to new list
-                new_files.push(PathSnapshots {
-                    path: path.to_path_buf(),
-                    snapshots: vec![new_snapshot],
-                });
-            }
-        }
-    }
-    // merge the new files with old snapshots
-    if !new_files.is_empty() {
-        // TODO: Performance hurt here: we have two sorted arrays to merge,
-        // better to use this algorithm: http://stackoverflow.com/a/4553321/1667955
-        snapshots.extend(new_files.into_iter());
-        snapshots.sort_by(|a, b| a.path.cmp(&b.path));
-    }
-    Ok(())
-}
-
 fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     // split the path in (first directory, the remaining path)
     // the first is the type, the remaining is the real path
@@ -570,7 +521,9 @@ pub fn _mode_display(mode: Option<u32>) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
+    use backend::Backend;
     use backend::local::LocalBackend;
+    use collections::Collections;
     use time_utils::{parse_time_str, TimeDisplay};
 
     use std::path::Path;
@@ -609,7 +562,7 @@ mod test {
         FileTest::from_info(Path::new(path), time, "michele", "michele")
     }
 
-    fn get_single_vol_files() -> Vec<Vec<FileTest<'static>>> {
+    fn single_vol_expected_files() -> Vec<Vec<FileTest<'static>>> {
         // the utf-8 invalid path name is apparently not testable
         // so, we are going to ignore it
         //
@@ -674,11 +627,17 @@ mod test {
              vec![0, 0, 30, 30, 0, 3500000, 75650, 456, 0, 0, 11, 11, 0]]
     }
 
+    fn single_vol_files() -> Chain {
+        let backend = LocalBackend::new("tests/backups/single_vol");
+        let filenames = backend.get_file_names().unwrap();
+        let coll = Collections::from_filenames(filenames);
+        Chain::from_sigchain(coll.signature_chains().next().unwrap(), &backend).unwrap()
+    }
+
     #[test]
     fn file_list() {
-        let expected_files = get_single_vol_files();
-        let backend = LocalBackend::new("tests/backups/single_vol");
-        let files = BackupFiles::new(&backend).unwrap();
+        let expected_files = single_vol_expected_files();
+        let files = single_vol_files();
         // println!("debug files\n---------\n{:#?}\n----------", files);
         let actual_files = files.snapshots().map(|s| {
             s.files()
@@ -695,8 +654,7 @@ mod test {
 
     #[test]
     fn size_hint() {
-        let backend = LocalBackend::new("tests/backups/single_vol");
-        let files = BackupFiles::new(&backend).unwrap();
+        let files = single_vol_files();
         let actual_sizes = files.snapshots().map(|s| {
             s.files()
              .map(|f| f.size_hint().unwrap())
@@ -726,8 +684,7 @@ mod test {
         //       however not panicking is already something :)
         //       Display is not properly testable due to time zones differencies;
         //       we want to avoid using global mutexes in test code
-        let backend = LocalBackend::new("tests/backups/single_vol");
-        let files = BackupFiles::new(&backend).unwrap();
+        let files = single_vol_files();
         println!("Backup snapshots:");
         for snapshot in files.snapshots() {
             println!("Snapshot {}\n", snapshot.files().into_display());

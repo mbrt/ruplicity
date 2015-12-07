@@ -29,13 +29,11 @@ use time::Timespec;
 
 use backend::Backend;
 use collections::{Collections, BackupChain};
-use signatures::BackupFiles;
 
 
 pub struct Backup<B> {
     backend: B,
     collections: Collections,
-    signatures: RefCell<Option<BackupFiles>>,
 }
 
 pub struct Snapshots<'a> {
@@ -68,7 +66,6 @@ impl<B: Backend> Backup<B> {
         Ok(Backup {
             backend: backend,
             collections: Collections::from_filenames(files),
-            signatures: RefCell::new(None),
         })
     }
 
