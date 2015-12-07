@@ -322,10 +322,10 @@ impl Display for BackupChain {
                     "{:<20} {:<13} {:>12}",
                     "Type of backup set:",
                     "Time:",
-                    "Num volumes:"));
-        try!(write!(f, "\n{}", self.fullset));
+                    "Num volumes:\n"));
+        try!(write!(f, "{}\n", self.fullset));
         for inc in &self.incsets {
-            try!(write!(f, "\n{}", inc));
+            try!(write!(f, "{}\n", inc));
         }
         Ok(())
     }
@@ -401,12 +401,12 @@ impl SignatureChain {
 impl Display for SignatureChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         try!(write!(f,
-                    "start time: {}, end time: {}\n {}",
+                    "start time: {}, end time: {}\n {}\n",
                     self.start_time().into_local_display(),
                     self.end_time().into_local_display(),
                     &self.fullsig.file_name));
         for inc in &self.incsigs {
-            try!(write!(f, "\n {}", inc.file_name));
+            try!(write!(f, " {}\n", inc.file_name));
         }
         Ok(())
     }
@@ -507,12 +507,10 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
 
 fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
     // create a new signature chain for each fill signature
-    let mut sig_chains: Vec<_> = fname_infos.iter()
-                                            .filter(|f| {
-                                                matches!(f.info.tp, fnm::Type::FullSig{..})
-                                            })
-                                            .map(|f| SignatureChain::from_filename_info(f))
-                                            .collect();
+    let mut sig_chains = fname_infos.iter()
+                                    .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
+                                    .map(|f| SignatureChain::from_filename_info(f))
+                                    .collect::<Vec<_>>();
     // and collect all the new signatures, sorted by start time
     let mut new_sig: Vec<_> = fname_infos.iter()
                                          .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
