@@ -212,6 +212,10 @@ impl BackupSet {
         matches!(self.tp, Type::Inc{..})
     }
 
+    pub fn num_volumes(&self) -> usize {
+        self.volumes_paths.len()
+    }
+
     fn fix_encrypted(&mut self, pr_encrypted: bool) {
         if self.encrypted != pr_encrypted && self.partial && pr_encrypted {
             self.encrypted = pr_encrypted;
@@ -232,7 +236,7 @@ impl Display for BackupSet {
                // Alignment is ignored by custom formatters
                // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
                format!("{}", self.end_time().into_local_display()),
-               self.volumes_paths.len())
+               self.num_volumes())
     }
 }
 
