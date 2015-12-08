@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 
 /// Backend operating on the local filesystem.
+#[derive(Debug)]
 pub struct LocalBackend {
     base_path: PathBuf,
 }

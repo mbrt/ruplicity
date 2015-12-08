@@ -32,6 +32,7 @@ use collections::{BackupChain, BackupSet, Collections};
 use signatures::Chain;
 
 
+#[derive(Debug)]
 pub struct Backup<B> {
     backend: B,
     collections: Collections,
