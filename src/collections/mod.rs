@@ -492,7 +492,7 @@ fn compute_backup_chains(fname_infos: &[FileNameInfo]) -> Vec<BackupChain> {
 
 fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
     let mut sets = Vec::<BackupSet>::new();
-    for fileinfo in fname_infos.iter() {
+    for fileinfo in fname_infos {
         let mut inserted = false;
         for set in &mut sets {
             if set.add_filename(&fileinfo) {
@@ -516,9 +516,9 @@ fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain>
                                     .map(|f| SignatureChain::from_filename_info(f))
                                     .collect::<Vec<_>>();
     // and collect all the new signatures, sorted by start time
-    let mut new_sig: Vec<_> = fname_infos.iter()
-                                         .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
-                                         .collect();
+    let mut new_sig = fname_infos.iter()
+                                 .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
+                                 .collect::<Vec<_>>();
     new_sig.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
 
     // add the new signatures to signature chains

@@ -23,3 +23,12 @@ fn peek() {
     assert_eq!(iter.peek(), Some(&&2));
     assert_eq!(iter.peek(), Some(&&2));
 }
+
+#[test]
+fn exact_size() {
+    let v = vec![0, 1, 2, 3];
+    let mut iter = v.iter();
+    assert_eq!(iter.len(), 4);
+    iter.next();
+    assert_eq!(iter.len(), 3);
+}

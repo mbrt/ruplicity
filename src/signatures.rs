@@ -244,12 +244,33 @@ impl<'a> Iterator for Snapshots<'a> {
 
     fn next(&mut self) -> Option<Snapshot<'a>> {
         if self.snapshot_id < self.chain.num_snapshots {
-            let result = Some(Snapshot{ chain: self.chain, index: self.snapshot_id });
             self.snapshot_id += 1;
-            result
+            Some(Snapshot{ chain: self.chain, index: self.snapshot_id - 1 })
         } else {
             None
         }
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Snapshot<'a>> {
+        use std::u8;
+
+        // check for u8 overflow to be fool-proof
+        if n + self.snapshot_id as usize >= u8::MAX as usize {
+            return None;
+        }
+        let id = self.snapshot_id + n as u8;
+        if id < self.chain.num_snapshots {
+            self.snapshot_id = id + 1;
+            Some(Snapshot{ chain: self.chain, index: self.snapshot_id - 1 })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> ExactSizeIterator for Snapshots<'a> {
+    fn len(&self) -> usize {
+        (self.chain.num_snapshots - self.snapshot_id) as usize
     }
 }
 
@@ -524,7 +545,7 @@ mod test {
     use backend::Backend;
     use backend::local::LocalBackend;
     use collections::Collections;
-    use time_utils::{parse_time_str, TimeDisplay};
+    use time_utils::parse_time_str;
 
     use std::path::Path;
     use time::Timespec;
