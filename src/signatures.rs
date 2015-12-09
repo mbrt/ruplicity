@@ -245,7 +245,10 @@ impl<'a> Iterator for Snapshots<'a> {
     fn next(&mut self) -> Option<Snapshot<'a>> {
         if self.snapshot_id < self.chain.num_snapshots {
             self.snapshot_id += 1;
-            Some(Snapshot{ chain: self.chain, index: self.snapshot_id - 1 })
+            Some(Snapshot {
+                chain: self.chain,
+                index: self.snapshot_id - 1,
+            })
         } else {
             None
         }
@@ -261,7 +264,10 @@ impl<'a> Iterator for Snapshots<'a> {
         let id = self.snapshot_id + n as u8;
         if id < self.chain.num_snapshots {
             self.snapshot_id = id + 1;
-            Some(Snapshot{ chain: self.chain, index: self.snapshot_id - 1 })
+            Some(Snapshot {
+                chain: self.chain,
+                index: self.snapshot_id - 1,
+            })
         } else {
             None
         }

@@ -114,7 +114,8 @@ mod test {
     #[test]
     fn display_utc() {
         let time = move_to_this_year(time(1988, 12, 11, 15, 20, 0));
-        assert_eq!(format!("{}", time.to_timespec().into_utc_display()), "Dec 11 15:20");
+        assert_eq!(format!("{}", time.to_timespec().into_utc_display()),
+                   "Dec 11 15:20");
     }
 
     // NOTE: changing the time zone is global in the process,
@@ -130,15 +131,18 @@ mod test {
     fn display_local() {
         let time = move_to_this_year(time(1988, 12, 11, 15, 20, 0));
         set_time_zone("Europe/London");
-        assert_eq!(format!("{}", time.to_timespec().into_local_display()), "Dec 11 15:20");
+        assert_eq!(format!("{}", time.to_timespec().into_local_display()),
+                   "Dec 11 15:20");
         set_time_zone("Europe/Rome");
-        assert_eq!(format!("{}", time.to_timespec().into_local_display()), "Dec 11 16:20");
+        assert_eq!(format!("{}", time.to_timespec().into_local_display()),
+                   "Dec 11 16:20");
     }
 
     #[test]
     fn display_past_year() {
         let time = time(1988, 12, 11, 15, 20, 0);
-        assert_eq!(format!("{}", time.to_timespec().into_utc_display()), "Dec 11  1988");
+        assert_eq!(format!("{}", time.to_timespec().into_utc_display()),
+                   "Dec 11  1988");
     }
 
     #[test]

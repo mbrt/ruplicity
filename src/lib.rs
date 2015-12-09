@@ -14,7 +14,8 @@ extern crate regex;
 extern crate tabwriter;
 extern crate tar;
 extern crate time;
-#[macro_use] extern crate try_opt;
+#[macro_use]
+extern crate try_opt;
 
 mod macros;
 mod time_utils;
@@ -281,14 +282,16 @@ mod test {
     }
 
     fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<SnapshotTest> {
-        backup.snapshots().map(|s| {
-            assert!(s.is_full() != s.is_incremental());
-            SnapshotTest {
-                time: s.time(),
-                is_full: s.is_full(),
-                num_volumes: s.num_volumes(),
-            }
-        }).collect()
+        backup.snapshots()
+              .map(|s| {
+                  assert!(s.is_full() != s.is_incremental());
+                  SnapshotTest {
+                      time: s.time(),
+                      is_full: s.is_full(),
+                      num_volumes: s.num_volumes(),
+                  }
+              })
+              .collect()
     }
 
     fn single_vol_signature_chain() -> Chain {
@@ -299,12 +302,14 @@ mod test {
     }
 
     fn from_sigchain(chain: &Chain) -> Vec<Vec<FileTest>> {
-        chain.snapshots().map(|s| {
-            s.files()
-             .map(|f| FileTest::from_file(&f))
-             .filter(|f| f.path.to_str().is_some())
+        chain.snapshots()
+             .map(|s| {
+                 s.files()
+                  .map(|f| FileTest::from_file(&f))
+                  .filter(|f| f.path.to_str().is_some())
+                  .collect::<Vec<_>>()
+             })
              .collect::<Vec<_>>()
-        }).collect::<Vec<_>>()
     }
 
 
@@ -327,12 +332,16 @@ mod test {
 
         let backend = LocalBackend::new("tests/backups/single_vol");
         let backup = Backup::new(backend).unwrap();
-        let actual = backup.snapshots().map(|s| {
-            s.files().unwrap().as_signature_info()
-             .map(|f| FileTest::from_file(&f))
-             .filter(|f| f.path.to_str().is_some())
-             .collect::<Vec<_>>()
-        }).collect::<Vec<_>>();
+        let actual = backup.snapshots()
+                           .map(|s| {
+                               s.files()
+                                .unwrap()
+                                .as_signature_info()
+                                .map(|f| FileTest::from_file(&f))
+                                .filter(|f| f.path.to_str().is_some())
+                                .collect::<Vec<_>>()
+                           })
+                           .collect::<Vec<_>>();
         assert_eq!(actual, expected);
     }
 }
