@@ -657,7 +657,7 @@ mod test {
 
     #[cfg(windows)]
     fn single_vol_sizes() -> Vec<Vec<usize>> {
-        let mut result = get_single_vol_sizes_unix();
+        let mut result = single_vol_sizes_unix();
         // remove the last element
         for s in &mut result {
             s.pop();
