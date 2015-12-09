@@ -220,3 +220,65 @@ impl<B: Backend> ResourceCache for Backup<B> {
         Ok(self.signatures[chain_id].borrow())
     }
 }
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use backend::Backend;
+    use backend::local::LocalBackend;
+    use collections::{BackupSet, Collections};
+
+    use time::Timespec;
+
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct TestSnapshot {
+        time: Timespec,
+        is_full: bool,
+        num_volumes: usize,
+    }
+
+    fn from_backup_set(set: &BackupSet, full: bool) -> TestSnapshot {
+        TestSnapshot {
+            time: set.end_time(),
+            is_full: full,
+            num_volumes: set.num_volumes(),
+        }
+    }
+
+    fn from_collection(coll: &Collections) -> Vec<TestSnapshot> {
+        let mut result = Vec::new();
+        for chain in coll.backup_chains() {
+            result.push(from_backup_set(chain.full_set(), true));
+            for set in chain.inc_sets() {
+                result.push(from_backup_set(set, false));
+            }
+        }
+        result
+    }
+
+    fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<TestSnapshot> {
+        backup.snapshots().map(|s| {
+            assert!(s.is_full() != s.is_incremental());
+            TestSnapshot {
+                time: s.time(),
+                is_full: s.is_full(),
+                num_volumes: s.num_volumes(),
+            }
+        }).collect()
+    }
+
+
+    #[test]
+    fn same_collections() {
+        let backend = LocalBackend::new("tests/backups/single_vol");
+        let filenames = backend.get_file_names().unwrap();
+        let coll = Collections::from_filenames(filenames);
+        let backup = Backup::new(backend).unwrap();
+
+        let expected = from_collection(&coll);
+        let actual = to_test_snapshot(&backup);
+        assert_eq!(actual, expected);
+    }
+}
