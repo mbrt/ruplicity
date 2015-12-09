@@ -117,7 +117,7 @@ impl<'a> Iterator for Snapshots<'a> {
                 self.sig_id += 1;
                 return Some(Snapshot {
                     set: inc_set,
-                    chain_id: self.chain_id,
+                    chain_id: self.chain_id - 1,
                     sig_id: self.sig_id,
                     backup: self.backup,
                 });
