@@ -64,7 +64,6 @@ impl Display for PrettyDisplay {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::env;
     use time::{self, Tm};
 
 
@@ -93,7 +92,9 @@ mod test {
         tm
     }
 
+    #[cfg(unix)]
     fn set_time_zone(tz: &str) {
+        use std::env;
         env::set_var("TZ", tz);
         time::tzset();
     }
@@ -124,6 +125,7 @@ mod test {
     //       - use a global mutex
     //       we are now using the first option, since the following is the only test requiring a
     //       certain time zone to be set.
+    #[cfg(unix)]
     #[test]
     fn display_local() {
         let time = move_to_this_year(time(1988, 12, 11, 15, 20, 0));

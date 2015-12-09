@@ -15,7 +15,8 @@ install:
   - rustc -V
   - cargo -V
 
-build: false
+build_script:
+  - cargo build --verbose
 
 test_script:
-  - cargo test --verbose
+  - cargo test -- --nocapture
