@@ -228,26 +228,48 @@ mod test {
     use backend::Backend;
     use backend::local::LocalBackend;
     use collections::{BackupSet, Collections};
+    use signatures::{Chain, File};
+
+    use std::path::PathBuf;
 
     use time::Timespec;
 
 
     #[derive(Debug, Eq, PartialEq)]
-    struct TestSnapshot {
+    struct SnapshotTest {
         time: Timespec,
         is_full: bool,
         num_volumes: usize,
     }
 
-    fn from_backup_set(set: &BackupSet, full: bool) -> TestSnapshot {
-        TestSnapshot {
+    #[derive(Debug, Clone, Eq, PartialEq)]
+    struct FileTest {
+        path: PathBuf,
+        mtime: Timespec,
+        uname: String,
+        gname: String,
+    }
+
+    impl FileTest {
+        pub fn from_file(file: &File) -> Self {
+            FileTest {
+                path: file.path().to_owned(),
+                mtime: file.mtime(),
+                uname: file.username().unwrap().to_owned(),
+                gname: file.groupname().unwrap().to_owned(),
+            }
+        }
+    }
+
+    fn from_backup_set(set: &BackupSet, full: bool) -> SnapshotTest {
+        SnapshotTest {
             time: set.end_time(),
             is_full: full,
             num_volumes: set.num_volumes(),
         }
     }
 
-    fn from_collection(coll: &Collections) -> Vec<TestSnapshot> {
+    fn from_collection(coll: &Collections) -> Vec<SnapshotTest> {
         let mut result = Vec::new();
         for chain in coll.backup_chains() {
             result.push(from_backup_set(chain.full_set(), true));
@@ -258,15 +280,31 @@ mod test {
         result
     }
 
-    fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<TestSnapshot> {
+    fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<SnapshotTest> {
         backup.snapshots().map(|s| {
             assert!(s.is_full() != s.is_incremental());
-            TestSnapshot {
+            SnapshotTest {
                 time: s.time(),
                 is_full: s.is_full(),
                 num_volumes: s.num_volumes(),
             }
         }).collect()
+    }
+
+    fn single_vol_signature_chain() -> Chain {
+        let backend = LocalBackend::new("tests/backups/single_vol");
+        let filenames = backend.get_file_names().unwrap();
+        let coll = Collections::from_filenames(filenames);
+        Chain::from_sigchain(coll.signature_chains().next().unwrap(), &backend).unwrap()
+    }
+
+    fn from_sigchain(chain: &Chain) -> Vec<Vec<FileTest>> {
+        chain.snapshots().map(|s| {
+            s.files()
+             .map(|f| FileTest::from_file(&f))
+             .filter(|f| f.path.to_str().is_some())
+             .collect::<Vec<_>>()
+        }).collect::<Vec<_>>()
     }
 
 
@@ -279,6 +317,22 @@ mod test {
 
         let expected = from_collection(&coll);
         let actual = to_test_snapshot(&backup);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn same_files() {
+        let sigchain = single_vol_signature_chain();
+        let expected = from_sigchain(&sigchain);
+
+        let backend = LocalBackend::new("tests/backups/single_vol");
+        let backup = Backup::new(backend).unwrap();
+        let actual = backup.snapshots().map(|s| {
+            s.files().unwrap().as_signature_info()
+             .map(|f| FileTest::from_file(&f))
+             .filter(|f| f.path.to_str().is_some())
+             .collect::<Vec<_>>()
+        }).collect::<Vec<_>>();
         assert_eq!(actual, expected);
     }
 }
