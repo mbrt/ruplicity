@@ -16,9 +16,7 @@ pub trait TimeDisplay {
 
 /// Utility struct that implements Display in a pretty style
 /// for some Tm instance.
-pub struct PrettyDisplay {
-    tm: Tm,
-}
+pub struct PrettyDisplay(Tm);
 
 /// The format to be used to display a time.
 /// It could be a local or an UTC time.
@@ -40,24 +38,24 @@ impl TimeDisplay for Timespec {
     type D = PrettyDisplay;
 
     fn into_local_display(self) -> Self::D {
-        PrettyDisplay { tm: time::at(self) }
+        PrettyDisplay(time::at(self))
     }
 
     fn into_utc_display(self) -> Self::D {
-        PrettyDisplay { tm: time::at_utc(self) }
+        PrettyDisplay(time::at_utc(self))
     }
 }
 
 
 impl Display for PrettyDisplay {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        if time::now_utc().tm_year == self.tm.tm_year {
+        if time::now_utc().tm_year == self.0.tm_year {
             // the year is the current, so print month, day, hour
-            write!(f, "{}", time::strftime("%b %d %R", &self.tm).unwrap())
+            write!(f, "{}", time::strftime("%b %d %R", &self.0).unwrap())
         } else {
             // the year is not the current, so print month, day, year
             // NOTE: the double space before year is meaningful
-            write!(f, "{}", time::strftime("%b %d  %Y", &self.tm).unwrap())
+            write!(f, "{}", time::strftime("%b %d  %Y", &self.0).unwrap())
         }
     }
 }
@@ -66,7 +64,6 @@ impl Display for PrettyDisplay {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::env;
     use time::{self, Tm};
 
 
@@ -95,7 +92,9 @@ mod test {
         tm
     }
 
+    #[cfg(unix)]
     fn set_time_zone(tz: &str) {
+        use std::env;
         env::set_var("TZ", tz);
         time::tzset();
     }
@@ -126,6 +125,7 @@ mod test {
     //       - use a global mutex
     //       we are now using the first option, since the following is the only test requiring a
     //       certain time zone to be set.
+    #[cfg(unix)]
     #[test]
     fn display_local() {
         let time = move_to_this_year(time(1988, 12, 11, 15, 20, 0));

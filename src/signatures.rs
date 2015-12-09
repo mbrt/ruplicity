@@ -638,7 +638,14 @@ mod test {
         vec![s1, s2, s3]
     }
 
-    fn get_single_vol_sizes() -> Vec<Vec<usize>> {
+    fn single_vol_files() -> Chain {
+        let backend = LocalBackend::new("tests/backups/single_vol");
+        let filenames = backend.get_file_names().unwrap();
+        let coll = Collections::from_filenames(filenames);
+        Chain::from_sigchain(coll.signature_chains().next().unwrap(), &backend).unwrap()
+    }
+
+    fn single_vol_sizes_unix() -> Vec<Vec<usize>> {
         // note that `ls -l` returns 4096 for directory size, but we consider directories to be
         // null sized.
         // note also that symbolic links are considered to be null sized. This is an open question
@@ -648,12 +655,21 @@ mod test {
              vec![0, 0, 30, 30, 0, 3500000, 75650, 456, 0, 0, 11, 11, 0]]
     }
 
-    fn single_vol_files() -> Chain {
-        let backend = LocalBackend::new("tests/backups/single_vol");
-        let filenames = backend.get_file_names().unwrap();
-        let coll = Collections::from_filenames(filenames);
-        Chain::from_sigchain(coll.signature_chains().next().unwrap(), &backend).unwrap()
+    #[cfg(windows)]
+    fn single_vol_sizes() -> Vec<Vec<usize>> {
+        let mut result = get_single_vol_sizes_unix();
+        // remove the last element
+        for s in &mut result {
+            s.pop();
+        }
+        result
     }
+
+    #[cfg(unix)]
+    fn single_vol_sizes() -> Vec<Vec<usize>> {
+        single_vol_sizes_unix()
+    }
+
 
     #[test]
     fn file_list() {
@@ -681,12 +697,12 @@ mod test {
              .map(|f| f.size_hint().unwrap())
              .collect::<Vec<_>>()
         });
-        let expected_sizes = get_single_vol_sizes();
+        let expected_sizes = single_vol_sizes();
 
         // iterate all over the snapshots
         for (actual, expected) in actual_sizes.zip(expected_sizes) {
-            assert_eq!(actual.len(), expected.len());
             // println!("debug {:?}", actual);
+            assert_eq!(actual.len(), expected.len());
             // iterate all the files
             for (actual, expected) in actual.iter().zip(expected) {
                 assert!(actual.0 <= expected && actual.1 >= expected,
