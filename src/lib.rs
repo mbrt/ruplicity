@@ -4,9 +4,9 @@
         unstable_features,
         unused_import_braces, unused_qualifications)]
 
-#![cfg_attr(feature = "unstable", allow(unstable_features))]
-#![cfg_attr(feature = "unstable", feature(plugin))]
-#![cfg_attr(feature = "unstable", plugin(clippy))]
+#![cfg_attr(feature = "nightly", allow(unstable_features))]
+#![cfg_attr(feature = "lints", feature(plugin))]
+#![cfg_attr(feature = "lints", plugin(clippy))]
 
 extern crate byteorder;
 extern crate flate2;

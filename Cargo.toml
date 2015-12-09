@@ -10,7 +10,9 @@ keywords = ["duplicity", "backup"]
 
 [features]
 default = []
-unstable = ["clippy"]
+lints = ["clippy", "nightly"]
+nightly = [] # for building with nightly and unstable features
+unstable = ["lints", "nightly"] # for building with travis-cargo
 
 [dependencies]
 flate2 = "0.2"
