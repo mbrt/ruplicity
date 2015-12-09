@@ -147,17 +147,11 @@ impl BackupSet {
     }
 
     pub fn start_time(&self) -> Timespec {
-        match self.tp {
-            Type::Full{ time } => time,
-            Type::Inc{ start_time, .. } => start_time,
-        }
+        self.tp.start_time()
     }
 
     pub fn end_time(&self) -> Timespec {
-        match self.tp {
-            Type::Full{ time } => time,
-            Type::Inc{ end_time, .. } => end_time,
-        }
+        self.tp.end_time()
     }
 
     pub fn is_compressed(&self) -> bool {
