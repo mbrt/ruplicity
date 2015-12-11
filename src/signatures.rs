@@ -24,11 +24,13 @@ pub struct Chain {
 }
 
 /// A series of backup snapshots, in creation order.
+#[derive(Debug)]
 pub struct Snapshots<'a> {
     chain: &'a Chain,
     snapshot_id: u8,
 }
 
+#[derive(Debug)]
 pub struct Snapshot<'a> {
     chain: &'a Chain,
     index: u8,
