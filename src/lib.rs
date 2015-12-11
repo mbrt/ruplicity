@@ -92,17 +92,19 @@ impl<B: Backend> Backup<B> {
         })
     }
 
-    pub fn snapshots(&self) -> Snapshots {
+    pub fn snapshots(&self) -> io::Result<Snapshots> {
         let set_iter = CollectionsIter {
             chain_iter: self.collections.backup_chains(),
             incset_iter: None,
         };
-        Snapshots {
+        // in future, when we will add lazy collections,
+        // this could fail, so we add a Result in advance
+        Ok(Snapshots {
             set_iter: set_iter,
             chain_id: 0,
             sig_id: 0,
             backup: self,
-        }
+        })
     }
 }
 
@@ -283,6 +285,7 @@ mod test {
 
     fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<SnapshotTest> {
         backup.snapshots()
+              .unwrap()
               .map(|s| {
                   assert!(s.is_full() != s.is_incremental());
                   SnapshotTest {
@@ -333,6 +336,7 @@ mod test {
         let backend = LocalBackend::new("tests/backups/single_vol");
         let backup = Backup::new(backend).unwrap();
         let actual = backup.snapshots()
+                           .unwrap()
                            .map(|s| {
                                s.files()
                                 .unwrap()
