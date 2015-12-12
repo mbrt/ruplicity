@@ -27,7 +27,7 @@ impl Backend for LocalBackend {
     type FileNameIter = FileNameIterator;
     type FileStream = File;
 
-    fn get_file_names(&self) -> io::Result<Self::FileNameIter> {
+    fn file_names(&self) -> io::Result<Self::FileNameIter> {
         let dir = try!(fs::read_dir(self.base_path.as_path()));
         Ok(FileNameIterator(dir))
     }

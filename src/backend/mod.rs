@@ -18,7 +18,7 @@ pub trait Backend {
 
     /// Returns a list of available file names.
     /// The file names returned should have an extension, and do not contain the base path.
-    fn get_file_names(&self) -> io::Result<Self::FileNameIter>;
+    fn file_names(&self) -> io::Result<Self::FileNameIter>;
 
     /// Open a file for reading.
     fn open_file(&self, name: &Path) -> io::Result<Self::FileStream>;

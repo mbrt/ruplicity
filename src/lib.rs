@@ -7,7 +7,7 @@
 //! line utility, a fusion filesystem, etc.) and to improve overall performances. Full
 //! compatibility with the original duplicity is guaranteed.
 //!
-//! [1] http://duplicity.nongnu.org/
+//! [1]: http://duplicity.nongnu.org/
 
 #![deny(missing_copy_implementations,
         trivial_casts, trivial_numeric_casts,
@@ -109,7 +109,7 @@ impl<B: Backend> Backup<B> {
     /// let backup = Backup::new(backend);
     /// ```
     pub fn new(backend: B) -> io::Result<Self> {
-        let files = try!(backend.get_file_names());
+        let files = try!(backend.file_names());
         let collections = Collections::from_filenames(files);
         let signatures = {
             // initialize signatures with empty signatures
@@ -352,7 +352,7 @@ mod test {
 
     fn single_vol_signature_chain() -> Chain {
         let backend = LocalBackend::new("tests/backups/single_vol");
-        let filenames = backend.get_file_names().unwrap();
+        let filenames = backend.file_names().unwrap();
         let coll = Collections::from_filenames(filenames);
         Chain::from_sigchain(coll.signature_chains().next().unwrap(), &backend).unwrap()
     }
@@ -372,7 +372,7 @@ mod test {
     #[test]
     fn same_collections() {
         let backend = LocalBackend::new("tests/backups/single_vol");
-        let filenames = backend.get_file_names().unwrap();
+        let filenames = backend.file_names().unwrap();
         let coll = Collections::from_filenames(filenames);
         let backup = Backup::new(backend).unwrap();
 

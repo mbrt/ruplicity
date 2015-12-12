@@ -648,7 +648,7 @@ mod test {
 
     fn single_vol_files() -> Chain {
         let backend = LocalBackend::new("tests/backups/single_vol");
-        let filenames = backend.get_file_names().unwrap();
+        let filenames = backend.file_names().unwrap();
         let coll = Collections::from_filenames(filenames);
         Chain::from_sigchain(coll.signature_chains().next().unwrap(), &backend).unwrap()
     }
