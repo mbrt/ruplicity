@@ -496,20 +496,7 @@ fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)>
 ///
 /// This function returns the lower and upper bound of the file size in bytes. On error returns
 /// `None`.
-///
-/// # Examples
-///
-/// ```rust
-/// use std::io::Cursor;
-/// use ruplicity::signatures::compute_size_hint_signature;
-///
-/// let bytes = vec![0x72, 0x73, 0x01, 0x36, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x08,
-///                  0xaf, 0xb8, 0x99, 0x27, 0x6f, 0x3a, 0x17, 0xc2, 0xc1, 0x4e, 0x76, 0x83];
-/// let mut cursor = Cursor::new(bytes);
-/// let computed = compute_size_hint_signature(&mut cursor);
-/// assert_eq!(computed, Some((0, 512)));
-/// ```
-pub fn compute_size_hint_signature<R: Read>(file: &mut R) -> Option<(usize, usize)> {
+pub fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
@@ -522,7 +509,8 @@ pub fn compute_size_hint_signature<R: Read>(file: &mut R) -> Option<(usize, usiz
         let ss_len = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
         let sign_block_len_bytes = 4 + ss_len;
         // the remaining part of the file are blocks
-        let num_blocks = file.bytes().count() / sign_block_len_bytes;
+        let file_size = try_opt!(file.header().size().ok()) as usize;
+        let num_blocks = (file_size - 8) / sign_block_len_bytes;
 
         let max_file_len = file_block_len_bytes * num_blocks;
         if max_file_len > file_block_len_bytes {
