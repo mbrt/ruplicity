@@ -14,8 +14,9 @@ use collections::{SignatureChain, SignatureFile};
 use time_utils::TimeDisplay;
 
 
-/// Stores informations about paths in a backup chain. The information is reused among different
-/// snapshots if possible.
+/// Stores informations about paths in a backup chain.
+///
+/// The information is reused among different snapshots if possible.
 #[derive(Debug)]
 pub struct Chain {
     num_snapshots: u8,
@@ -23,13 +24,14 @@ pub struct Chain {
     ug_map: UserGroupMap,
 }
 
-/// A series of backup snapshots, in creation order.
+/// Signatures for backup snapshots, in creation order.
 #[derive(Debug)]
 pub struct Snapshots<'a> {
     chain: &'a Chain,
     snapshot_id: u8,
 }
 
+/// Signatures for a backup snapshot.
 #[derive(Debug)]
 pub struct Snapshot<'a> {
     chain: &'a Chain,
@@ -44,7 +46,7 @@ pub struct SnapshotFiles<'a> {
     chain: &'a Chain,
 }
 
-/// Allows to display files of a snapshot, in a `ls -s` unix command style.
+/// Allows to display files of a snapshot, in a `ls -l` unix command style.
 pub struct SnapshotFilesDisplay<'a>(SnapshotFiles<'a>);
 
 /// Informations about a file inside a backup snapshot.
@@ -99,6 +101,7 @@ struct ModeDisplay(Option<u32>);
 
 
 impl Chain {
+    /// Builds a new empty signature chain.
     pub fn new() -> Self {
         Chain {
             num_snapshots: 0,
@@ -107,6 +110,10 @@ impl Chain {
         }
     }
 
+    /// Opens a signature chain from signature chain files, by using a backend.
+    ///
+    /// The given signature chain file names are read by using the given backend, to build the
+    /// corresponding signature chain.
     pub fn from_sigchain<B: Backend>(coll: &SignatureChain, backend: &B) -> io::Result<Self> {
         let mut chain = Chain::new();
         // add to the chain the full signature and all the incremental signatures
@@ -122,6 +129,7 @@ impl Chain {
         Ok(chain)
     }
 
+    /// Returns the snapshots present in the signature chain.
     pub fn snapshots(&self) -> Snapshots {
         Snapshots {
             chain: self,
@@ -241,6 +249,7 @@ impl Chain {
 }
 
 
+// some optimizations are implemented for snapshots iteration, like `nth` and `ExactSizeIterator`.
 impl<'a> Iterator for Snapshots<'a> {
     type Item = Snapshot<'a>;
 
@@ -284,6 +293,7 @@ impl<'a> ExactSizeIterator for Snapshots<'a> {
 
 
 impl<'a> Snapshot<'a> {
+    /// Returns the files inside this backup snapshot.
     pub fn files(&self) -> SnapshotFiles<'a> {
         SnapshotFiles {
             index: self.index,
@@ -355,14 +365,17 @@ impl<'a> File<'a> {
         self.path
     }
 
+    /// Returns the value of the owner's user ID field.
     pub fn userid(&self) -> Option<u32> {
         self.info.uid
     }
 
+    /// Returns the value of the group's user ID field.
     pub fn groupid(&self) -> Option<u32> {
         self.info.gid
     }
 
+    /// Returns the mode bits for this file.
     pub fn mode(&self) -> Option<u32> {
         self.info.mode
     }
@@ -522,8 +535,8 @@ pub fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(
     }
 }
 
-fn compute_size_hint_snapshot<R: Read>(file: &mut R) -> Option<(usize, usize)> {
-    let bytes = file.bytes().count();
+fn compute_size_hint_snapshot<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+    let bytes = try_opt!(file.header().size().ok()) as usize;
     Some((bytes, bytes))
 }
 

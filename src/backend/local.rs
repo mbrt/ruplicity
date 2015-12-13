@@ -1,3 +1,25 @@
+//! Local file system backend.
+//!
+//! This sub-module provides types for accessing the local file system as a backend.
+//!
+//! # Example
+//!
+//! ```
+//! use ruplicity::backend::Backend;
+//! use ruplicity::backend::local::LocalBackend;
+//! use std::io::Read;
+//! use std::path::Path;
+//!
+//! let backend = LocalBackend::new("tests/backend");
+//! for file in backend.file_names().unwrap() {
+//!     let path: &Path = file.as_ref();
+//!     println!("file: {}", path.to_str().unwrap());
+//!     let mut file = backend.open_file(path).unwrap();
+//!     let mut contents = Vec::new();
+//!     file.read_to_end(&mut contents).unwrap();
+//!     println!("contents: {}", String::from_utf8(contents).unwrap());
+//! }
+//! ```
 use super::Backend;
 use std::fs::{self, File};
 use std::ffi::OsString;

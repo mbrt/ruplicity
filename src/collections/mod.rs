@@ -26,7 +26,7 @@ pub struct BackupChain {
     end_time: Timespec,
 }
 
-/// A chain of signature belonging to the same backup set.
+/// A chain of signatures belonging to the same backup set.
 #[derive(Debug)]
 pub struct SignatureChain {
     fullsig: SignatureFile,
