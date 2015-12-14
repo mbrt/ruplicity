@@ -100,12 +100,12 @@ impl<B: Backend> Backup<B> {
     /// unavailable or non-existing, an empty backup could be returned.
     ///
     /// # Examples
-    /// ```no_run
-    /// use ruplicity::{Backend, Backup};
+    /// ```
+    /// use ruplicity::Backup;
     /// use ruplicity::backend::local::LocalBackend;
     ///
     /// // use the local backend to open a path in the file system containing a backup
-    /// let backend = LocalBackend::new("/path/to/backup");
+    /// let backend = LocalBackend::new("tests/backup/single_vol");
     /// let backup = Backup::new(backend);
     /// ```
     pub fn new(backend: B) -> io::Result<Self> {
