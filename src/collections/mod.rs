@@ -1,3 +1,7 @@
+//! Operations on backup files.
+//!
+//! This sub-module provides informations about a backup, by looking at the files present in a
+//! backup directory.
 mod file_naming;
 
 use std::collections::HashMap;

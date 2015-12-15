@@ -1,3 +1,7 @@
+//! Operations on backup signatures.
+//!
+//! This sub-module exposes types to deal with duplicity signatures, that can be used to get
+//! informations about files present in a backup chain.
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, Read};
