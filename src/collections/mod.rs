@@ -1,7 +1,8 @@
 //! Operations on backup files.
 //!
-//! This sub-module provides informations about a backup, by looking at the files present in a
+//! This sub-module provides information about a backup, by looking at the files present in a
 //! backup directory.
+
 mod file_naming;
 
 use std::collections::HashMap;
@@ -15,13 +16,21 @@ use self::file_naming as fnm;
 use self::file_naming::{FileNameInfo, FileNameParser};
 
 
-
+/// General information about a backup.
+///
+/// Determines the status of a backup by looking at the files present in the backup folder. No
+/// backup archive is opened in this process. Thanks to that, performances are great; however no
+/// validation is performed on backup files.
 #[derive(Debug)]
 pub struct Collections {
     backup_chains: Vec<BackupChain>,
     sig_chains: Vec<SignatureChain>,
 }
 
+/// Contains information about a backup chain.
+///
+/// A backup chain is composed by one full and all the incremental backup snapshots before the
+/// next full one.
 #[derive(Debug)]
 pub struct BackupChain {
     fullset: BackupSet,
@@ -30,13 +39,16 @@ pub struct BackupChain {
     end_time: Timespec,
 }
 
-/// A chain of signatures belonging to the same backup set.
+/// Contains information about signatures in a backup chain.
+///
+/// See the docs for [`BackupChain`](struct.BackupChain.html).
 #[derive(Debug)]
 pub struct SignatureChain {
     fullsig: SignatureFile,
     incsigs: Vec<SignatureFile>,
 }
 
+/// Information about a backup snapshot.
 #[derive(Debug)]
 pub struct BackupSet {
     tp: Type,
@@ -47,6 +59,7 @@ pub struct BackupSet {
     volumes_paths: HashMap<i32, String>,
 }
 
+/// Information about a signature file.
 #[derive(Debug)]
 pub struct SignatureFile {
     pub file_name: String,
@@ -78,7 +91,7 @@ enum Type {
 
 
 impl BackupSet {
-    /// Creates a new `BackupSet`, starting from file name informations.
+    /// Creates a new `BackupSet`, starting from file name information.
     pub fn new(fname: &FileNameInfo) -> Self {
         // set type
         let tp = match fname.info.tp {
@@ -416,6 +429,7 @@ impl Display for SignatureChain {
 
 
 impl Collections {
+    /// Creates a new empty collection.
     pub fn new() -> Self {
         Collections {
             backup_chains: Vec::new(),
@@ -423,6 +437,25 @@ impl Collections {
         }
     }
 
+    /// Creates a collection, starting from a list of file names.
+    ///
+    /// The given file names are not opened for validation. Information is collected based solely
+    /// by the names themselves.
+    ///
+    /// # Examples
+    /// ```
+    /// use ruplicity::collections::Collections;
+    ///
+    /// let names = vec!["duplicity-full.20150617T182545Z.manifest",
+    ///                  "duplicity-full.20150617T182545Z.vol1.difftar.gz",
+    ///                  "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
+    ///                  "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest",
+    ///                  "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz",
+    ///                  "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest"];
+    /// let collections = Collections::from_filenames(&names);
+    /// assert_eq!(collections.backup_chains().count(), 1);
+    /// assert_eq!(collections.signature_chains().count(), 1);
+    /// ```
     pub fn from_filenames<I>(filenames: I) -> Self
         where I: IntoIterator,
               I::Item: AsRef<Path>
@@ -435,10 +468,18 @@ impl Collections {
         }
     }
 
+    /// Returns the backup chains.
+    ///
+    /// Each backup chain should be coupled with a signature chain. They can be matched because
+    /// they are both in chronological order.
     pub fn backup_chains(&self) -> ChainIter<BackupChain> {
         self.backup_chains.iter()
     }
 
+    /// Returns the signature chains.
+    ///
+    /// Each signature chain should be coupled with a backup chain. They can be matched because
+    /// they are both in chronological order.
     pub fn signature_chains(&self) -> ChainIter<SignatureChain> {
         self.sig_chains.iter()
     }

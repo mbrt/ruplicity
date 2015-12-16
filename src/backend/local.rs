@@ -12,14 +12,17 @@
 //!
 //! let backend = LocalBackend::new("tests/backend");
 //! for file in backend.file_names().unwrap() {
+//!     // print the current path
 //!     let path: &Path = file.as_ref();
 //!     println!("file: {}", path.to_str().unwrap());
+//!     // print file contents
 //!     let mut file = backend.open_file(path).unwrap();
 //!     let mut contents = Vec::new();
 //!     file.read_to_end(&mut contents).unwrap();
 //!     println!("contents: {}", String::from_utf8(contents).unwrap());
 //! }
 //! ```
+
 use super::Backend;
 use std::fs::{self, File};
 use std::ffi::OsString;
@@ -27,7 +30,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 
-/// Backend operating on the local filesystem.
+/// Backend for some directory in the local file system.
 #[derive(Debug)]
 pub struct LocalBackend {
     base_path: PathBuf,
@@ -38,7 +41,7 @@ pub struct FileNameIterator(fs::ReadDir);
 
 
 impl LocalBackend {
-    /// Create a new LocalBackend that operates on the given directory.
+    /// Creates a new local backend for the given directory.
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         LocalBackend { base_path: path.as_ref().to_path_buf() }
     }

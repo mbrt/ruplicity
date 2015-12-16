@@ -105,9 +105,9 @@ impl<B: Backend> Backup<B> {
     /// use ruplicity::backend::local::LocalBackend;
     ///
     /// // use the local backend to open a path in the file system containing a backup
-    /// let backend = LocalBackend::new("tests/backup/single_vol");
-    /// let backup = Backup::new(backend);
-    /// println!("Got backup {:?}!", backup);
+    /// let backend = LocalBackend::new("tests/backups/single_vol");
+    /// let backup = Backup::new(backend).unwrap();
+    /// println!("Got backup with {} snapshots!", backup.snapshots().unwrap().count());
     /// ```
     pub fn new(backend: B) -> io::Result<Self> {
         let files = try!(backend.file_names());
@@ -243,7 +243,7 @@ impl<'a> AsRef<BackupSet> for Snapshot<'a> {
 impl<'a> SnapshotFiles<'a> {
     /// Converts the snapshot files into the signature representation.
     ///
-    /// This function can be used to retrieve lower level informations about the files in the
+    /// This function can be used to retrieve lower level information about the files in the
     /// snapshot.
     pub fn as_signature_info(&self) -> signatures::SnapshotFiles {
         self.chain.as_ref().unwrap().snapshots().nth(self.sig_id).unwrap().files()

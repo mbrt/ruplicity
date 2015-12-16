@@ -3,6 +3,7 @@
 //! This sub-module exposes a trait to access a file system containing duplicity backup files,
 //! abstracting over the actual transport. This could be a local mounted file system directory,
 //! a network drive, a cloud service, or whatever.
+
 pub mod local;
 
 use std::io::{self, Read};

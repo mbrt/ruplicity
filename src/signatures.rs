@@ -1,7 +1,8 @@
 //! Operations on backup signatures.
 //!
 //! This sub-module exposes types to deal with duplicity signatures. It can be used to get
-//! informations about files backupped in a backup chain.
+//! information about files backupped in a backup chain.
+
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, Read};
@@ -18,7 +19,7 @@ use collections::{SignatureChain, SignatureFile};
 use time_utils::TimeDisplay;
 
 
-/// Stores informations about paths in a backup chain.
+/// Stores information about paths in a backup chain.
 ///
 /// The information is reused among different snapshots if possible.
 #[derive(Debug)]
@@ -50,10 +51,12 @@ pub struct SnapshotFiles<'a> {
     chain: &'a Chain,
 }
 
-/// Allows to display files of a snapshot, in a `ls -l` unix command style.
+/// Allows to display files of a snapshot.
+///
+/// The style used is similar to the one used by `ls -l` unix command.
 pub struct SnapshotFilesDisplay<'a>(SnapshotFiles<'a>);
 
-/// Informations about a file inside a backup snapshot.
+/// Information about a file inside a backup snapshot.
 #[derive(Debug)]
 pub struct File<'a> {
     path: &'a Path,
@@ -735,9 +738,9 @@ mod test {
         //       Display is not properly testable due to time zones differencies;
         //       we want to avoid using global mutexes in test code
         let files = single_vol_files();
-        println!("Backup snapshots:");
+        println!("Backup snapshots:\n");
         for snapshot in files.snapshots() {
-            println!("Snapshot {}\n", snapshot.files().into_display());
+            println!("Snapshot\n{}", snapshot.files().into_display());
         }
     }
 
