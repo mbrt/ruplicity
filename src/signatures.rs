@@ -1,7 +1,7 @@
 //! Operations on backup signatures.
 //!
-//! This sub-module exposes types to deal with duplicity signatures, that can be used to get
-//! informations about files present in a backup chain.
+//! This sub-module exposes types to deal with duplicity signatures. It can be used to get
+//! informations about files backupped in a backup chain.
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, Read};
@@ -35,14 +35,14 @@ pub struct Snapshots<'a> {
     snapshot_id: u8,
 }
 
-/// Signatures for a backup snapshot.
+/// A signature for a backup snapshot.
 #[derive(Debug)]
 pub struct Snapshot<'a> {
     chain: &'a Chain,
     index: u8,
 }
 
-/// Files inside a backup snapshot.
+/// Files backupped in some backup snapshot.
 #[derive(Clone)]
 pub struct SnapshotFiles<'a> {
     index: u8,
@@ -117,7 +117,7 @@ impl Chain {
     /// Opens a signature chain from signature chain files, by using a backend.
     ///
     /// The given signature chain file names are read by using the given backend, to build the
-    /// corresponding signature chain.
+    /// corresponding `Chain` instance.
     pub fn from_sigchain<B: Backend>(coll: &SignatureChain, backend: &B) -> io::Result<Self> {
         let mut chain = Chain::new();
         // add to the chain the full signature and all the incremental signatures
@@ -281,7 +281,7 @@ impl<'a> Iterator for Snapshots<'a> {
             self.snapshot_id = id + 1;
             Some(Snapshot {
                 chain: self.chain,
-                index: self.snapshot_id - 1,
+                index: id,
             })
         } else {
             None

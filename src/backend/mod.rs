@@ -1,15 +1,15 @@
-//! Operations on backup files, abstracted over transport.
+//! Transport layer for backup files.
 //!
-//! This sub-module exposes a trait used to provide access to backup files, abstracting over the
-//! actual transport. This could be a local mounted file system directory, a network drive, or a
-//! cloud service.
+//! This sub-module exposes a trait to access a file system containing duplicity backup files,
+//! abstracting over the actual transport. This could be a local mounted file system directory,
+//! a network drive, a cloud service, or whatever.
 pub mod local;
 
 use std::io::{self, Read};
 use std::path::Path;
 
 
-/// A trait used to provide access to backup files.
+/// A trait used to provide a transport layer for backup files.
 pub trait Backend {
     /// A file name. It must be convertible to a `Path`.
     type FileName: AsRef<Path>;
