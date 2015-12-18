@@ -8,6 +8,24 @@
 //! with the original duplicity backup format is guaranteed.
 //!
 //! [1]: http://duplicity.nongnu.org/
+//!
+//! # Example
+//! In this example we open a directory containing a backup, and print informations about the files
+//! in all the snapshots.
+//!
+//! ```
+//! use ruplicity::Backup;
+//! use ruplicity::backend::local::LocalBackend;
+//! use ruplicity::time_utils::TimeDisplay;
+//!
+//! // use the local backend to open a path in the file system containing a backup
+//! let backend = LocalBackend::new("tests/backups/single_vol");
+//! let backup = Backup::new(backend).unwrap();
+//! for snapshot in backup.snapshots().unwrap() {
+//!     println!("Snapshot {}", snapshot.time().into_local_display());
+//!     println!("{}", snapshot.entries().unwrap());
+//! }
+//! ```
 
 #![deny(missing_copy_implementations,
         missing_docs,
@@ -30,12 +48,13 @@ extern crate time;
 extern crate try_opt;
 
 mod macros;
-mod time_utils;
+pub mod time_utils;
 pub mod backend;
 pub mod collections;
 pub mod signatures;
 
 use std::cell::{Ref, RefCell};
+use std::fmt::{self, Display, Formatter};
 use std::io;
 
 use time::Timespec;
@@ -197,14 +216,14 @@ impl<'a> Snapshot<'a> {
         self.set.end_time()
     }
 
-    /// Returns true if the snapshot is a full backup.
+    /// Returns whether the snapshot is a full backup.
     ///
     /// A full snapshot does not depend on previous snapshots.
     pub fn is_full(&self) -> bool {
         self.set.is_full()
     }
 
-    /// Returns true if the snapshot is an incremental backup.
+    /// Returns whether the snapshot is an incremental backup.
     ///
     /// An incremental snapshot depends on all the previous incremental snapshots and the first
     /// previous full snapshot. This set of dependent snapshots is called "chain".
@@ -242,12 +261,17 @@ impl<'a> Snapshot<'a> {
 
 
 impl<'a> SnapshotEntries<'a> {
-    /// Converts the snapshot files into the signature representation.
+    /// Returns the signatures representation for the entries.
     ///
-    /// This function can be used to retrieve lower level information about the files in the
-    /// snapshot.
+    /// This function can be used to retrieve information about the files in the snapshot.
     pub fn as_signature(&self) -> signatures::SnapshotEntries {
         self.chain.as_ref().unwrap().snapshots().nth(self.sig_id).unwrap().files()
+    }
+}
+
+impl<'a> Display for SnapshotEntries<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.as_signature().into_display().fmt(f)
     }
 }
 

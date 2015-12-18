@@ -48,7 +48,9 @@ pub struct SignatureChain {
     incsigs: Vec<SignatureFile>,
 }
 
-/// Information about a backup snapshot.
+/// Information about the files which make a backup snapshot.
+///
+/// This struct contains paths for the manifest and volumes, and the backup format.
 #[derive(Debug)]
 pub struct BackupSet {
     tp: Type,
@@ -95,74 +97,6 @@ enum Type {
 
 
 impl BackupSet {
-    /// Creates a new backup set, starting from file name information.
-    pub fn new(fname: &FileNameInfo) -> Self {
-        // set type
-        let tp = match fname.info.tp {
-            fnm::Type::Full{ time, .. } |
-            fnm::Type::FullManifest{ time, .. } |
-            fnm::Type::FullSig{ time, .. } => Type::Full { time: time },
-            fnm::Type::Inc{ start_time, end_time, .. } |
-            fnm::Type::IncManifest{ start_time, end_time, .. } |
-            fnm::Type::NewSig{ start_time, end_time, .. } => {
-                Type::Inc {
-                    start_time: start_time,
-                    end_time: end_time,
-                }
-            }
-        };
-        // set partial
-        let partial = {
-            match fname.info.tp {
-                fnm::Type::FullManifest{ partial, .. } |
-                fnm::Type::IncManifest{ partial, .. } |
-                fnm::Type::FullSig{ partial, .. } |
-                fnm::Type::NewSig{ partial, .. } => partial,
-                _ => false,
-            }
-        };
-
-        let mut result = BackupSet {
-            tp: tp,
-            partial: partial,
-            compressed: fname.info.compressed,
-            encrypted: fname.info.encrypted,
-            manifest_path: String::new(),
-            volumes_paths: HashMap::new(),
-        };
-        result.add_filename(fname);
-        result
-    }
-
-    /// Adds a filename to given set. Return true if it fits.
-    ///
-    /// The filename will match the given set if it has the right
-    /// times and is of the right type. The information will be set
-    /// from the first filename given.
-    pub fn add_filename(&mut self, file_info: &FileNameInfo) -> bool {
-        let pr = &file_info.info;
-        let fname = file_info.file_name;
-
-        if !self.is_same_set(&pr) {
-            false
-        } else {
-            // update info
-            match pr.tp {
-                fnm::Type::Full{ volume_number, .. } |
-                fnm::Type::Inc{ volume_number, .. } => {
-                    self.volumes_paths.insert(volume_number, fname.to_owned());
-                }
-                fnm::Type::FullManifest{ .. } |
-                fnm::Type::IncManifest{ .. } => {
-                    self.manifest_path = fname.to_owned();
-                }
-                _ => (),
-            }
-            self.fix_encrypted(pr.encrypted);
-            true
-        }
-    }
-
     /// Returns whether the set is complete.
     ///
     /// The corresponding backup has not been stopped before completion.
@@ -251,6 +185,74 @@ impl BackupSet {
                     _ => false,
                 }
             }
+        }
+    }
+
+    /// Creates a new backup set, starting from file name information.
+    fn new(fname: &FileNameInfo) -> Self {
+        // set type
+        let tp = match fname.info.tp {
+            fnm::Type::Full{ time, .. } |
+            fnm::Type::FullManifest{ time, .. } |
+            fnm::Type::FullSig{ time, .. } => Type::Full { time: time },
+            fnm::Type::Inc{ start_time, end_time, .. } |
+            fnm::Type::IncManifest{ start_time, end_time, .. } |
+            fnm::Type::NewSig{ start_time, end_time, .. } => {
+                Type::Inc {
+                    start_time: start_time,
+                    end_time: end_time,
+                }
+            }
+        };
+        // set partial
+        let partial = {
+            match fname.info.tp {
+                fnm::Type::FullManifest{ partial, .. } |
+                fnm::Type::IncManifest{ partial, .. } |
+                fnm::Type::FullSig{ partial, .. } |
+                fnm::Type::NewSig{ partial, .. } => partial,
+                _ => false,
+            }
+        };
+
+        let mut result = BackupSet {
+            tp: tp,
+            partial: partial,
+            compressed: fname.info.compressed,
+            encrypted: fname.info.encrypted,
+            manifest_path: String::new(),
+            volumes_paths: HashMap::new(),
+        };
+        result.add_filename(fname);
+        result
+    }
+
+    /// Adds a filename to given set. Return true if it fits.
+    ///
+    /// The filename will match the given set if it has the right
+    /// times and is of the right type. The information will be set
+    /// from the first filename given.
+    fn add_filename(&mut self, file_info: &FileNameInfo) -> bool {
+        let pr = &file_info.info;
+        let fname = file_info.file_name;
+
+        if !self.is_same_set(&pr) {
+            false
+        } else {
+            // update info
+            match pr.tp {
+                fnm::Type::Full{ volume_number, .. } |
+                fnm::Type::Inc{ volume_number, .. } => {
+                    self.volumes_paths.insert(volume_number, fname.to_owned());
+                }
+                fnm::Type::FullManifest{ .. } |
+                fnm::Type::IncManifest{ .. } => {
+                    self.manifest_path = fname.to_owned();
+                }
+                _ => (),
+            }
+            self.fix_encrypted(pr.encrypted);
+            true
         }
     }
 

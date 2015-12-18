@@ -1,6 +1,21 @@
+//! Utilities to parse and display timestamps.
+//!
+//! This sub-module contains a trait that can be used to display a timestamp in local or UTC time
+//! zones, and a function to parse a timestamp.
+//!
+//! # Example
+//! Parse a duplicity timestamp and display it:
+//!
+//! ```
+//! use ruplicity::time_utils::{parse_time_str, TimeDisplay};
+//!
+//! let time = parse_time_str("19881211t152000z").unwrap();
+//! println!("My birth is {}", time.into_local_display());
+//! ```
+
 use time;
 use time::{Timespec, Tm};
-use std::fmt::{Display, Error, Formatter};
+use std::fmt::{Display, Result, Formatter};
 
 
 /// Trait that allows to display a time into a local or UTC timezone.
@@ -14,21 +29,22 @@ pub trait TimeDisplay {
     fn into_utc_display(self) -> Self::D;
 }
 
-/// Utility struct that implements Display in a pretty style
-/// for some Tm instance.
+/// Implements `Display` in a pretty style for some Tm instance.
+///
+/// The format is `month day year` in case the timestamp is for a year different than the current;
+/// it is `month day time` otherwise.
+///
+/// # Example
+/// Suppose to have the timestamp `2012-02-22T14:53:18Z`. If we are in 2012, the display will be
+/// `Feb 22 14:53`; if we are in 2015, the display will be `Feb 22  2012`.
+#[derive(Copy, Clone, Debug)]
 pub struct PrettyDisplay(Tm);
 
-/// The format to be used to display a time.
-/// It could be a local or an UTC time.
-#[allow(dead_code)]
-pub enum Format {
-    Local,
-    Utc,
-}
 
-
-/// Parse a string representing a duplicity timestamp and returns a Timespec
-/// if all goes well.
+/// Parse a string representing a duplicity timestamp and returns a `Timespec` if all goes well.
+///
+/// An example of such a timestamp is "19881211t152000z" which represents the date
+/// `1988-12-11T15:20:00Z` in the UTC time zone.
 pub fn parse_time_str(s: &str) -> Option<Timespec> {
     time::strptime(s, "%Y%m%dt%H%M%S%Z").ok().map(|tm| tm.to_timespec())
 }
@@ -48,7 +64,7 @@ impl TimeDisplay for Timespec {
 
 
 impl Display for PrettyDisplay {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         if time::now_utc().tm_year == self.0.tm_year {
             // the year is the current, so print month, day, hour
             write!(f, "{}", time::strftime("%b %d %R", &self.0).unwrap())

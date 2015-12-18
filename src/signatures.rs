@@ -43,7 +43,7 @@ pub struct Snapshot<'a> {
     index: u8,
 }
 
-/// Files backupped in some backup snapshot.
+/// Files and directories inside a backup snapshot.
 #[derive(Clone)]
 pub struct SnapshotEntries<'a> {
     index: u8,
@@ -345,8 +345,8 @@ impl<'a> Display for Snapshot<'a> {
 impl<'a> SnapshotEntries<'a> {
     /// Returns a displayable struct for the files.
     ///
-    /// Needs to consume `self`, because it has to iterate over all the files before displaying
-    /// them, because alignment information is needed.
+    /// Needs to consume `self`, because it has to iterate over all the files to align the output
+    /// columns properly.
     pub fn into_display(self) -> SnapshotEntriesDisplay<'a> {
         SnapshotEntriesDisplay(self)
     }
