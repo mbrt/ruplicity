@@ -23,7 +23,7 @@ and add `extern crate ruplicity` to your crate root.
 Why I chose to implement a duplicity backup reader in Rust? What are the differencies with duplicity?
 
 1. Performances.
-2. Provide an easy to use library to implement many features such as a [command line utility](https://github.com/mbrt/ruplicity-console), and a [fuse filesystem](https://github.com/mbrt/ruplicity-fuse) to be used to mount a backup directly in your file system, which are not easily implementable by duplicity.
+2. Provide an easy to use library to implement features such as a [command line utility](https://github.com/mbrt/ruplicity-console), and a [fuse filesystem](https://github.com/mbrt/ruplicity-fuse) to mount a backup directly in your file system (that is not easily implementable within duplicity).
 
 This library will not aim to replace duplicity, since it does not provide actual backup / restore functionalities, and it does not have the [many backends](http://duplicity.nongnu.org/duplicity.1.html) duplicity has.
 
