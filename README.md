@@ -12,7 +12,7 @@ Rust library to explore [duplicity backups](http://duplicity.nongnu.org/).
 
 Add the corresponding entry to your `Cargo.toml` dependencies:
 
-```
+```toml
 [dependencies]
 ruplicity = "0.2"
 ```
