@@ -1,9 +1,10 @@
 [package]
 name = "ruplicity"
-version = "0.1.0"
-authors = ["mbrt"]
-description = "Browse duplicity backups"
+version = "0.2.0"
+authors = ["Michele Bertasi <@brt_device>"]
+description = "Library to read duplicity backups"
 repository = "https://github.com/mbrt/ruplicity"
+documentation = "http://mbrt.github.io/ruplicity"
 readme = "README.md"
 license = "MIT"
 keywords = ["duplicity", "backup"]
