@@ -4,9 +4,9 @@
 [![Coverage Status](https://coveralls.io/repos/mbrt/ruplicity/badge.svg?branch=master&service=github)](https://coveralls.io/github/mbrt/ruplicity?branch=master)
 [![](http://meritbadge.herokuapp.com/ruplicity)](https://crates.io/crates/ruplicity)
 
-[API documentation](http://mbrt.github.io/ruplicity)
-
 Rust library to explore [duplicity backups](http://duplicity.nongnu.org/).
+
+[API documentation](http://mbrt.github.io/ruplicity)
 
 ## Installation
 
