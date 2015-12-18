@@ -5,7 +5,7 @@
 
 [API documentation](http://mbrt.github.io/ruplicity)
 
-Rust library managing duplicity backups.
+Rust library to explore [duplicity backups](http://duplicity.nongnu.org/).
 
 ## Installation
 
@@ -21,6 +21,11 @@ and add `extern crate ruplicity` to your crate root.
 ## Motivations
 
 Why I chose to implement a duplicity backup reader in Rust? What are the differencies with duplicity?
+
+1. Performances.
+2. Provide an easy to use library to implement many features such as a [command line utility](https://github.com/mbrt/ruplicity-console), and a [fuse filesystem](https://github.com/mbrt/ruplicity-fuse) to be used to mount a backup directly in your file system, which are not easily implementable by duplicity.
+
+This library will not aim to replace duplicity, since it does not provide actual backup / restore functionalities, and it does not have the [many backends](http://duplicity.nongnu.org/duplicity.1.html) duplicity has.
 
 ## Example
 
@@ -45,6 +50,14 @@ fn main() {
 ```
 
 Check out the documentation for advanced usages and examples.
+
+## Contributing
+
+Contributions are welcome! There are lots of features still to be implemented. The most important are:
+
+* improve the code; I need some feedback from experienced Rustaceans here :)
+* improve performances (since there is always room for a boost)
+* implement new features such as [read backup file contents](https://github.com/mbrt/ruplicity/issues/30), and new backends (e.g. Dropbox, Azure, FTP, etc.), like dropbox does.
 
 ## License
 
