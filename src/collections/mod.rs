@@ -483,7 +483,6 @@ impl Collections {
     pub fn signature_chains(&self) -> ChainIter<SignatureChain> {
         self.sig_chains.iter()
     }
-
 }
 
 fn compute_filename_infos<'a, I, E>(filenames: I) -> Vec<FileNameInfo<'a>>

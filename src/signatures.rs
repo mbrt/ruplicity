@@ -434,7 +434,8 @@ impl<'a> Entry<'a> {
 impl<'a> Display for Entry<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f,
-               "{}\t{}\t{}\t{}\t{}",
+               "{}{}\t{}\t{}\t{}\t{}",
+               self.entry_type(),
                ModeDisplay(self.mode()),
                self.username().unwrap_or("?"),
                self.groupname().unwrap_or("?"),
@@ -461,6 +462,19 @@ impl EntryType {
             b'6' => EntryType::Fifo,
             _ => EntryType::Unknown(byte),
         }
+    }
+}
+
+impl Display for EntryType {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", match *self {
+            EntryType::File => '-',
+            EntryType::Dir => 'd',
+            EntryType::HardLink => '-',
+            EntryType::SymLink => 'l',
+            EntryType::Fifo => 'p',
+            EntryType::Unknown(_) => '?',
+        })
     }
 }
 
@@ -556,7 +570,7 @@ fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)>
 ///
 /// This function returns the lower and upper bound of the file size in bytes. On error returns
 /// `None`.
-pub fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
@@ -656,7 +670,9 @@ mod test {
                       make_ftest("changeable_permission", "20010828t182330z", EntryType::File),
                       make_ftest("deleted_file", "20020727t230005z", EntryType::File),
                       make_ftest("directory_to_file", "20020727t230036z", EntryType::Dir),
-                      make_ftest("directory_to_file/file", "20020727t230036z", EntryType::File),
+                      make_ftest("directory_to_file/file",
+                                 "20020727t230036z",
+                                 EntryType::File),
                       make_ftest("executable", "20010828t073429z", EntryType::File),
                       make_ftest("executable2", "20010828t181927z", EntryType::File),
                       make_ftest("fifo", "20010828t073246z", EntryType::Fifo),
@@ -674,7 +690,9 @@ mod test {
                       make_ftest("directory_to_file", "20020727t230048z", EntryType::File),
                       make_ftest("executable", "20010828t073429z", EntryType::File),
                       make_ftest("executable2", "20020727t230133z", EntryType::Dir),
-                      make_ftest("executable2/another_file", "20020727t230133z", EntryType::File),
+                      make_ftest("executable2/another_file",
+                                 "20020727t230133z",
+                                 EntryType::File),
                       make_ftest("fifo", "20010828t073246z", EntryType::Fifo),
                       make_ftest("file_to_directory", "20020727t232406z", EntryType::Dir),
                       make_ftest("largefile", "20020731t015524z", EntryType::File),
@@ -748,7 +766,7 @@ mod test {
         });
         assert_eq!(files.snapshots().count(), 3);
         for (actual, expected) in actual_files.zip(expected_files) {
-            println!("\nExpected:\n{:#?}\nActual:\n{:#?}", expected, actual);
+            // println!("\nExpected:\n{:#?}\nActual:\n{:#?}", expected, actual);
             assert_eq!(actual, expected);
         }
     }
