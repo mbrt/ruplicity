@@ -70,7 +70,7 @@ pub struct Snapshot<'a> {
 }
 
 /// Contains the files present in a certain backup snapshot.
-pub struct SnapshotFiles<'a> {
+pub struct SnapshotEntries<'a> {
     chain: Ref<'a, Option<Chain>>,
     sig_id: usize,
 }
@@ -220,10 +220,10 @@ impl<'a> Snapshot<'a> {
     /// Be aware that using this functionality means that all the signature files in the current
     /// backup chain must be loaded, and this could take some time, depending on the file access
     /// provided by the backend.
-    pub fn files(&self) -> io::Result<SnapshotFiles> {
+    pub fn files(&self) -> io::Result<SnapshotEntries> {
         let sig = try!(self.backup._signature_chain(self.chain_id));
         if self.sig_id < sig.as_ref().unwrap().snapshots().len() {
-            Ok(SnapshotFiles {
+            Ok(SnapshotEntries {
                 chain: sig,
                 sig_id: self.sig_id,
             })
@@ -240,12 +240,12 @@ impl<'a> AsRef<BackupSet> for Snapshot<'a> {
 }
 
 
-impl<'a> SnapshotFiles<'a> {
+impl<'a> SnapshotEntries<'a> {
     /// Converts the snapshot files into the signature representation.
     ///
     /// This function can be used to retrieve lower level information about the files in the
     /// snapshot.
-    pub fn as_signature_info(&self) -> signatures::SnapshotFiles {
+    pub fn as_signature_info(&self) -> signatures::SnapshotEntries {
         self.chain.as_ref().unwrap().snapshots().nth(self.sig_id).unwrap().files()
     }
 }
@@ -285,7 +285,7 @@ mod test {
     use super::*;
     use backend::local::LocalBackend;
     use collections::{BackupSet, Collections};
-    use signatures::{Chain, File};
+    use signatures::{Chain, Entry};
 
     use std::path::PathBuf;
 
@@ -300,16 +300,16 @@ mod test {
     }
 
     #[derive(Debug, Clone, Eq, PartialEq)]
-    struct FileTest {
+    struct EntryTest {
         path: PathBuf,
         mtime: Timespec,
         uname: String,
         gname: String,
     }
 
-    impl FileTest {
-        pub fn from_file(file: &File) -> Self {
-            FileTest {
+    impl EntryTest {
+        pub fn from_entry(file: &Entry) -> Self {
+            EntryTest {
                 path: file.path().to_owned(),
                 mtime: file.mtime(),
                 uname: file.username().unwrap().to_owned(),
@@ -358,11 +358,11 @@ mod test {
         Chain::from_sigchain(coll.signature_chains().next().unwrap(), &backend).unwrap()
     }
 
-    fn from_sigchain(chain: &Chain) -> Vec<Vec<FileTest>> {
+    fn from_sigchain(chain: &Chain) -> Vec<Vec<EntryTest>> {
         chain.snapshots()
              .map(|s| {
                  s.files()
-                  .map(|f| FileTest::from_file(&f))
+                  .map(|f| EntryTest::from_entry(&f))
                   .filter(|f| f.path.to_str().is_some())
                   .collect::<Vec<_>>()
              })
@@ -395,7 +395,7 @@ mod test {
                                s.files()
                                 .unwrap()
                                 .as_signature_info()
-                                .map(|f| FileTest::from_file(&f))
+                                .map(|f| EntryTest::from_entry(&f))
                                 .filter(|f| f.path.to_str().is_some())
                                 .collect::<Vec<_>>()
                            })

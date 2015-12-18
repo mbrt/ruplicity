@@ -45,7 +45,7 @@ pub struct Snapshot<'a> {
 
 /// Files backupped in some backup snapshot.
 #[derive(Clone)]
-pub struct SnapshotFiles<'a> {
+pub struct SnapshotEntries<'a> {
     index: u8,
     iter: slice::Iter<'a, PathSnapshots>,
     chain: &'a Chain,
@@ -54,14 +54,27 @@ pub struct SnapshotFiles<'a> {
 /// Allows to display files of a snapshot.
 ///
 /// The style used is similar to the one used by `ls -l` unix command.
-pub struct SnapshotFilesDisplay<'a>(SnapshotFiles<'a>);
+pub struct SnapshotEntriesDisplay<'a>(SnapshotEntries<'a>);
 
-/// Information about a file inside a backup snapshot.
+/// Information about an entry inside a backup snapshot.
+///
+/// This could be a file, a directory, a link, etc.
 #[derive(Debug)]
-pub struct File<'a> {
+pub struct Entry<'a> {
     path: &'a Path,
     info: &'a PathInfo,
     ug_map: &'a UserGroupMap,
+}
+
+/// Type of entry in a backup snapshot.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum EntryType {
+    File,
+    Dir,
+    HardLink,
+    SymLink,
+    Fifo,
+    Unknown(u8),
 }
 
 
@@ -94,6 +107,7 @@ struct PathInfo {
     uid: Option<u32>,
     gid: Option<u32>,
     mode: Option<u32>,
+    entry_type: u8,
     size_hint: Option<(usize, usize)>,
 }
 
@@ -194,6 +208,8 @@ impl Chain {
                             gid: header.gid().ok(),
                             mode: header.mode().ok(),
                             size_hint: size_hint,
+                            // TODO #25: refactor when tar is updated
+                            entry_type: header.link[0],
                         })
                     }
                     _ => None,
@@ -301,8 +317,8 @@ impl<'a> ExactSizeIterator for Snapshots<'a> {
 
 impl<'a> Snapshot<'a> {
     /// Returns the files inside this backup snapshot.
-    pub fn files(&self) -> SnapshotFiles<'a> {
-        SnapshotFiles {
+    pub fn files(&self) -> SnapshotEntries<'a> {
+        SnapshotEntries {
             index: self.index,
             iter: self.chain.files.iter(),
             chain: self.chain,
@@ -318,27 +334,27 @@ impl<'a> Display for Snapshot<'a> {
 }
 
 
-impl<'a> SnapshotFiles<'a> {
+impl<'a> SnapshotEntries<'a> {
     /// Returns a displayable struct for the files.
     ///
     /// Needs to consume `self`, because it has to iterate over all the files before displaying
     /// them, because alignment information is needed.
-    pub fn into_display(self) -> SnapshotFilesDisplay<'a> {
-        SnapshotFilesDisplay(self)
+    pub fn into_display(self) -> SnapshotEntriesDisplay<'a> {
+        SnapshotEntriesDisplay(self)
     }
 }
 
-impl<'a> Iterator for SnapshotFiles<'a> {
-    type Item = File<'a>;
+impl<'a> Iterator for SnapshotEntries<'a> {
+    type Item = Entry<'a>;
 
-    fn next(&mut self) -> Option<File<'a>> {
+    fn next(&mut self) -> Option<Entry<'a>> {
         let index = self.index;     // prevents borrow checker complains
         for path_snapshots in &mut self.iter {
             if let Some(s) = path_snapshots.snapshots.iter().rev().find(|s| s.index <= index) {
                 // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
-                    return Some(File {
+                    return Some(Entry {
                         path: path_snapshots.path.as_ref(),
                         info: info,
                         ug_map: &self.chain.ug_map,
@@ -350,7 +366,7 @@ impl<'a> Iterator for SnapshotFiles<'a> {
     }
 }
 
-impl<'a> Display for SnapshotFilesDisplay<'a> {
+impl<'a> Display for SnapshotEntriesDisplay<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         use std::io::Write;
         use tabwriter::TabWriter;
@@ -366,8 +382,8 @@ impl<'a> Display for SnapshotFilesDisplay<'a> {
 }
 
 
-impl<'a> File<'a> {
-    /// Returns the full path of the file.
+impl<'a> Entry<'a> {
+    /// Returns the full path of the entry.
     pub fn path(&self) -> &'a Path {
         self.path
     }
@@ -397,18 +413,25 @@ impl<'a> File<'a> {
         self.info.gid.and_then(|gid| self.ug_map.get_group_name(gid))
     }
 
-    /// Returns the time of the last modification.
+    /// Returns the last modification time.
     pub fn mtime(&self) -> Timespec {
         self.info.mtime
     }
 
-    /// Returns a lower and upper bound in bytes on the file size.
+    /// Returns a lower and upper bound in bytes on the entry size.
+    ///
+    /// Note that for directories, this returns a size of zero, even if on Linux directories are
+    /// often considered to have a 4096 bytes size.
     pub fn size_hint(&self) -> Option<(usize, usize)> {
         self.info.size_hint
     }
+
+    pub fn entry_type(&self) -> EntryType {
+        EntryType::new(self.info.entry_type)
+    }
 }
 
-impl<'a> Display for File<'a> {
+impl<'a> Display for Entry<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f,
                "{}\t{}\t{}\t{}\t{}",
@@ -421,6 +444,23 @@ impl<'a> Display for File<'a> {
                self.path()
                    .to_str()
                    .map_or("?", |p| if p.is_empty() { "." } else { p }))
+    }
+}
+
+
+impl EntryType {
+    /// Creates a new entry type from a raw byte.
+    ///
+    /// The enumeration is taken from TAR file specification.
+    pub fn new(byte: u8) -> EntryType {
+        match byte {
+            0 | b'0' => EntryType::File,
+            b'5' => EntryType::Dir,
+            b'1' => EntryType::HardLink,
+            b'2' => EntryType::SymLink,
+            b'6' => EntryType::Fifo,
+            _ => EntryType::Unknown(byte),
+        }
     }
 }
 
@@ -568,88 +608,96 @@ mod test {
 
 
     #[derive(Debug, Clone, Eq, PartialEq)]
-    struct FileTest<'a> {
+    struct EntryTest<'a> {
         path: &'a Path,
         mtime: Timespec,
         uname: &'a str,
         gname: &'a str,
+        entry_type: EntryType,
     }
 
-    impl<'a> FileTest<'a> {
-        pub fn from_file(file: &File<'a>) -> Self {
-            FileTest {
+    impl<'a> EntryTest<'a> {
+        pub fn from_entry(file: &Entry<'a>) -> Self {
+            EntryTest {
                 path: file.path(),
                 mtime: file.mtime(),
                 uname: file.username().unwrap(),
                 gname: file.groupname().unwrap(),
+                entry_type: file.entry_type(),
             }
         }
 
-        pub fn from_info(path: &'a Path, mtime: &'a str, uname: &'a str, gname: &'a str) -> Self {
-            FileTest {
+        pub fn from_info(path: &'a Path,
+                         mtime: &'a str,
+                         uname: &'a str,
+                         gname: &'a str,
+                         etype: EntryType)
+                         -> Self {
+            EntryTest {
                 path: path,
                 mtime: parse_time_str(mtime).unwrap(),
                 uname: uname,
                 gname: gname,
+                entry_type: etype,
             }
         }
     }
 
-    fn make_ftest<'a>(path: &'a str, time: &'a str) -> FileTest<'a> {
-        FileTest::from_info(Path::new(path), time, "michele", "michele")
+    fn make_ftest<'a>(path: &'a str, time: &'a str, etype: EntryType) -> EntryTest<'a> {
+        EntryTest::from_info(Path::new(path), time, "michele", "michele", etype)
     }
 
-    fn single_vol_expected_files() -> Vec<Vec<FileTest<'static>>> {
+    fn single_vol_expected_files() -> Vec<Vec<EntryTest<'static>>> {
         // the utf-8 invalid path name is apparently not testable
         // so, we are going to ignore it
         //
         // snapshot 1
-        let s1 = vec![make_ftest("", "20020928t183059z"),
-                      make_ftest("changeable_permission", "20010828t182330z"),
-                      make_ftest("deleted_file", "20020727t230005z"),
-                      make_ftest("directory_to_file", "20020727t230036z"),
-                      make_ftest("directory_to_file/file", "20020727t230036z"),
-                      make_ftest("executable", "20010828t073429z"),
-                      make_ftest("executable2", "20010828t181927z"),
-                      make_ftest("fifo", "20010828t073246z"),
-                      make_ftest("file_to_directory", "20020727t232354z"),
-                      make_ftest("largefile", "20020731t015430z"),
-                      make_ftest("regular_file", "20010828t073052z"),
-                      make_ftest("regular_file.sig", "20010830t004037z"),
-                      make_ftest("symbolic_link", "20021101t044447z"),
-                      make_ftest("test", "20010828t215638z"),
-                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
-                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
+        let s1 = vec![make_ftest("", "20020928t183059z", EntryType::Dir),
+                      make_ftest("changeable_permission", "20010828t182330z", EntryType::File),
+                      make_ftest("deleted_file", "20020727t230005z", EntryType::File),
+                      make_ftest("directory_to_file", "20020727t230036z", EntryType::Dir),
+                      make_ftest("directory_to_file/file", "20020727t230036z", EntryType::File),
+                      make_ftest("executable", "20010828t073429z", EntryType::File),
+                      make_ftest("executable2", "20010828t181927z", EntryType::File),
+                      make_ftest("fifo", "20010828t073246z", EntryType::Fifo),
+                      make_ftest("file_to_directory", "20020727t232354z", EntryType::File),
+                      make_ftest("largefile", "20020731t015430z", EntryType::File),
+                      make_ftest("regular_file", "20010828t073052z", EntryType::File),
+                      make_ftest("regular_file.sig", "20010830t004037z", EntryType::File),
+                      make_ftest("symbolic_link", "20021101t044447z", EntryType::SymLink),
+                      make_ftest("test", "20010828t215638z", EntryType::File),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z", EntryType::File),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z", EntryType::File)];
         // snapshot 2
-        let s2 = vec![make_ftest("", "20020731t015532z"),
-                      make_ftest("changeable_permission", "20010828t182330z"),
-                      make_ftest("directory_to_file", "20020727t230048z"),
-                      make_ftest("executable", "20010828t073429z"),
-                      make_ftest("executable2", "20020727t230133z"),
-                      make_ftest("executable2/another_file", "20020727t230133z"),
-                      make_ftest("fifo", "20010828t073246z"),
-                      make_ftest("file_to_directory", "20020727t232406z"),
-                      make_ftest("largefile", "20020731t015524z"),
-                      make_ftest("new_file", "20020727t230018z"),
-                      make_ftest("regular_file", "20020727t225932z"),
-                      make_ftest("regular_file.sig", "20010830t004037z"),
-                      make_ftest("symbolic_link", "20020727t225946z"),
-                      make_ftest("test", "20010828t215638z"),
-                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
-                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
+        let s2 = vec![make_ftest("", "20020731t015532z", EntryType::Dir),
+                      make_ftest("changeable_permission", "20010828t182330z", EntryType::File),
+                      make_ftest("directory_to_file", "20020727t230048z", EntryType::File),
+                      make_ftest("executable", "20010828t073429z", EntryType::File),
+                      make_ftest("executable2", "20020727t230133z", EntryType::Dir),
+                      make_ftest("executable2/another_file", "20020727t230133z", EntryType::File),
+                      make_ftest("fifo", "20010828t073246z", EntryType::Fifo),
+                      make_ftest("file_to_directory", "20020727t232406z", EntryType::Dir),
+                      make_ftest("largefile", "20020731t015524z", EntryType::File),
+                      make_ftest("new_file", "20020727t230018z", EntryType::File),
+                      make_ftest("regular_file", "20020727t225932z", EntryType::File),
+                      make_ftest("regular_file.sig", "20010830t004037z", EntryType::File),
+                      make_ftest("symbolic_link", "20020727t225946z", EntryType::Dir),
+                      make_ftest("test", "20010828t215638z", EntryType::File),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z", EntryType::File),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z", EntryType::File)];
         // snapshot 3
-        let s3 = vec![make_ftest("", "20020928t183059z"),
-                      make_ftest("changeable_permission", "20010828t182330z"),
-                      make_ftest("executable", "20010828t073429z"),
-                      make_ftest("executable2", "20010828t181927z"),
-                      make_ftest("fifo", "20010828t073246z"),
-                      make_ftest("largefile", "20020731t034334z"),
-                      make_ftest("regular_file", "20010828t073052z"),
-                      make_ftest("regular_file.sig", "20010830t004037z"),
-                      make_ftest("symbolic_link", "20021101t044448z"),
-                      make_ftest("test", "20010828t215638z"),
-                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
-                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
+        let s3 = vec![make_ftest("", "20020928t183059z", EntryType::Dir),
+                      make_ftest("changeable_permission", "20010828t182330z", EntryType::File),
+                      make_ftest("executable", "20010828t073429z", EntryType::File),
+                      make_ftest("executable2", "20010828t181927z", EntryType::File),
+                      make_ftest("fifo", "20010828t073246z", EntryType::Fifo),
+                      make_ftest("largefile", "20020731t034334z", EntryType::File),
+                      make_ftest("regular_file", "20010828t073052z", EntryType::File),
+                      make_ftest("regular_file.sig", "20010830t004037z", EntryType::File),
+                      make_ftest("symbolic_link", "20021101t044448z", EntryType::SymLink),
+                      make_ftest("test", "20010828t215638z", EntryType::File),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z", EntryType::File),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z", EntryType::File)];
 
         vec![s1, s2, s3]
     }
@@ -694,13 +742,13 @@ mod test {
         // println!("debug files\n---------\n{:#?}\n----------", files);
         let actual_files = files.snapshots().map(|s| {
             s.files()
-             .map(|f| FileTest::from_file(&f))
+             .map(|f| EntryTest::from_entry(&f))
              .filter(|f| f.path.to_str().is_some())
              .collect::<Vec<_>>()
         });
         assert_eq!(files.snapshots().count(), 3);
         for (actual, expected) in actual_files.zip(expected_files) {
-            // println!("\nExpected:\n{:#?}\nActual:\n{:#?}", expected, actual);
+            println!("\nExpected:\n{:#?}\nActual:\n{:#?}", expected, actual);
             assert_eq!(actual, expected);
         }
     }
