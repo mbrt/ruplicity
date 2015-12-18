@@ -3,13 +3,14 @@
 //! This library provides utilities to manage duplicity backups [1]. Backup files could be prensent
 //! in the local file system, or can be accessed remotely, provided that the right backend is
 //! implemented. This is a rust version of the original duplicity project, that is written in
-//! Python. The goal is to o provide a library to be used for different purposes (e.g. a command
-//! line utility, a fusion filesystem, etc.) and to improve overall performances. Full
-//! compatibility with the original duplicity is guaranteed.
+//! Python. The goal is to provide a library to be used for different purposes (e.g. a command
+//! line utility, a fusion filesystem, etc.) and to improve overall performances. Compatibility
+//! with the original duplicity backup format is guaranteed.
 //!
 //! [1]: http://duplicity.nongnu.org/
 
 #![deny(missing_copy_implementations,
+        missing_docs,
         trivial_casts, trivial_numeric_casts,
         unsafe_code,
         unstable_features,
@@ -182,8 +183,9 @@ impl<'a> Iterator for Snapshots<'a> {
     }
 }
 
-impl<'a> AsRef<Collections> for Snapshots<'a> {
-    fn as_ref(&self) -> &Collections {
+impl<'a> Snapshots<'a> {
+    /// Returns the low level representation of the snapshots.
+    pub fn as_collections(&self) -> &Collections {
         self.backup._collections()
     }
 }
@@ -215,12 +217,17 @@ impl<'a> Snapshot<'a> {
         self.set.num_volumes()
     }
 
-    /// Returns the files present in the snapshot.
+    /// Returns the low level representation of the snapshot.
+    pub fn as_backup_set(&self) -> &BackupSet {
+        self.set
+    }
+
+    /// Returns the files and directories present in the snapshot.
     ///
     /// Be aware that using this functionality means that all the signature files in the current
     /// backup chain must be loaded, and this could take some time, depending on the file access
-    /// provided by the backend.
-    pub fn files(&self) -> io::Result<SnapshotEntries> {
+    /// provided by the backend and the signatures size.
+    pub fn entries(&self) -> io::Result<SnapshotEntries> {
         let sig = try!(self.backup._signature_chain(self.chain_id));
         if self.sig_id < sig.as_ref().unwrap().snapshots().len() {
             Ok(SnapshotEntries {
@@ -233,19 +240,13 @@ impl<'a> Snapshot<'a> {
     }
 }
 
-impl<'a> AsRef<BackupSet> for Snapshot<'a> {
-    fn as_ref(&self) -> &BackupSet {
-        self.set
-    }
-}
-
 
 impl<'a> SnapshotEntries<'a> {
     /// Converts the snapshot files into the signature representation.
     ///
     /// This function can be used to retrieve lower level information about the files in the
     /// snapshot.
-    pub fn as_signature_info(&self) -> signatures::SnapshotEntries {
+    pub fn as_signature(&self) -> signatures::SnapshotEntries {
         self.chain.as_ref().unwrap().snapshots().nth(self.sig_id).unwrap().files()
     }
 }
@@ -392,9 +393,9 @@ mod test {
         let actual = backup.snapshots()
                            .unwrap()
                            .map(|s| {
-                               s.files()
+                               s.entries()
                                 .unwrap()
-                                .as_signature_info()
+                                .as_signature()
                                 .map(|f| EntryTest::from_entry(&f))
                                 .filter(|f| f.path.to_str().is_some())
                                 .collect::<Vec<_>>()

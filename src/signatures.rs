@@ -69,11 +69,19 @@ pub struct Entry<'a> {
 /// Type of entry in a backup snapshot.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum EntryType {
+    /// A regular file.
     File,
+    /// A directory.
     Dir,
+    /// An hard link.
+    ///
+    /// This entry type is currently not supported by duplicity.
     HardLink,
+    /// A symbolic link.
     SymLink,
+    /// An unix pipe.
     Fifo,
+    /// All the other entry types, that are currently not managed.
     Unknown(u8),
 }
 
@@ -426,6 +434,7 @@ impl<'a> Entry<'a> {
         self.info.size_hint
     }
 
+    /// Returns the type of the entry.
     pub fn entry_type(&self) -> EntryType {
         EntryType::new(self.info.entry_type)
     }

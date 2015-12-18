@@ -62,9 +62,13 @@ pub struct BackupSet {
 /// Information about a signature file.
 #[derive(Debug)]
 pub struct SignatureFile {
+    /// The file name of the signature file.
     pub file_name: String,
+    /// The snapshot time.
     pub time: Timespec,
+    /// Determine if the signature is gzipped or not.
     pub compressed: bool,
+    /// Determine if the signature is encrypted or not.
     pub encrypted: bool,
 }
 
@@ -91,7 +95,7 @@ enum Type {
 
 
 impl BackupSet {
-    /// Creates a new `BackupSet`, starting from file name information.
+    /// Creates a new backup set, starting from file name information.
     pub fn new(fname: &FileNameInfo) -> Self {
         // set type
         let tp = match fname.info.tp {
@@ -130,7 +134,7 @@ impl BackupSet {
         result
     }
 
-    /// Add a filename to given set. Return true if it fits.
+    /// Adds a filename to given set. Return true if it fits.
     ///
     /// The filename will match the given set if it has the right
     /// times and is of the right type. The information will be set
@@ -159,39 +163,74 @@ impl BackupSet {
         }
     }
 
+    /// Returns whether the set is complete.
+    ///
+    /// The corresponding backup has not been stopped before completion.
     pub fn is_complete(&self) -> bool {
         !self.manifest_path.is_empty()
     }
 
-    pub fn start_time(&self) -> Timespec {
-        self.tp.start_time()
-    }
-
-    pub fn end_time(&self) -> Timespec {
-        self.tp.end_time()
-    }
-
-    pub fn is_compressed(&self) -> bool {
-        self.compressed
-    }
-
-    pub fn is_encrypted(&self) -> bool {
-        self.encrypted
-    }
-
+    /// Returns whether the set is partial.
+    ///
+    /// This could happen when a backup is stopped before the completion.
     pub fn is_partial(&self) -> bool {
         self.partial
     }
 
+    /// Returns the creation time of the parent set.
+    ///
+    /// The parent set depends on the type of this set. If it is incremental, the parent set is the
+    /// previous one. If it is full, there is no parent set, so the time returned is the creation
+    /// time for this set. Otherwise the creation time of this set is returned. This time, combined
+    /// with `end_time` represent the time span handled by this set.
+    pub fn start_time(&self) -> Timespec {
+        self.tp.start_time()
+    }
+
+    /// Returns the creation time of this set.
+    ///
+    /// If this set is a full backup, this time is the same as the start time. This time, combined
+    /// with `start_time` represent the time span handled by this set.
+    pub fn end_time(&self) -> Timespec {
+        self.tp.end_time()
+    }
+
+    /// Returns whether the set is compressed.
+    pub fn is_compressed(&self) -> bool {
+        self.compressed
+    }
+
+    /// Returns whether the set is encrypted.
+    pub fn is_encrypted(&self) -> bool {
+        self.encrypted
+    }
+
+    /// Returns the path of the manifest file for the set.
     pub fn manifest_path(&self) -> &str {
         self.manifest_path.as_ref()
     }
 
+    /// Returns the path of the given volume.
     pub fn volume_path(&self, volume_num: i32) -> Option<&str> {
         self.volumes_paths.get(&volume_num).map(AsRef::as_ref)
     }
 
-    /// Checks if the given file belongs to the same backup set, by looking at timestamps.
+    /// Returns the number of volumes in the set.
+    pub fn num_volumes(&self) -> usize {
+        self.volumes_paths.len()
+    }
+
+    /// Returns whether the set is a full backup.
+    pub fn is_full(&self) -> bool {
+        matches!(self.tp, Type::Full{..})
+    }
+
+    /// Returns whether the set is a full backup.
+    pub fn is_incremental(&self) -> bool {
+        matches!(self.tp, Type::Inc{..})
+    }
+
+    /// Returns whether the given file belongs to the same backup set, by looking at timestamps.
     pub fn is_same_set(&self, pr: &fnm::Info) -> bool {
         match self.tp {
             Type::Full{ time: my_time } => {
@@ -213,18 +252,6 @@ impl BackupSet {
                 }
             }
         }
-    }
-
-    pub fn is_full(&self) -> bool {
-        matches!(self.tp, Type::Full{..})
-    }
-
-    pub fn is_incremental(&self) -> bool {
-        matches!(self.tp, Type::Inc{..})
-    }
-
-    pub fn num_volumes(&self) -> usize {
-        self.volumes_paths.len()
     }
 
     fn fix_encrypted(&mut self, pr_encrypted: bool) {
@@ -300,18 +327,24 @@ impl BackupChain {
         }
     }
 
+    /// Returns the first backup set.
+    ///
+    /// It must be a full backup.
     pub fn full_set(&self) -> &BackupSet {
         &self.fullset
     }
 
+    /// Returns an iterator over the incremental sets in the chain.
     pub fn inc_sets(&self) -> BackupSetIter {
         self.incsets.iter()
     }
 
+    /// Returns the time of the first backup set in the chain.
     pub fn start_time(&self) -> Timespec {
         self.start_time
     }
 
+    /// Returns the time of the last backup set in the chain.
     pub fn end_time(&self) -> Timespec {
         self.end_time
     }
@@ -348,6 +381,7 @@ impl Display for BackupChain {
 
 
 impl SignatureFile {
+    /// Construct a signature file from a file name and infos.
     pub fn from_file_and_info(fname: &str, pr: &fnm::Info) -> Self {
         let time = {
             match pr.tp {
@@ -364,6 +398,7 @@ impl SignatureFile {
         }
     }
 
+    /// Construct a signature file from file name info.
     pub fn from_filename_info(info: &FileNameInfo) -> Self {
         Self::from_file_and_info(info.file_name, &info.info)
     }
@@ -379,6 +414,7 @@ impl SignatureChain {
         }
     }
 
+    /// Create a new signature chain from a `FileNameInfo` instance.
     pub fn from_filename_info(fname_info: &FileNameInfo) -> Self {
         Self::new(fname_info.file_name, &fname_info.info)
     }
@@ -404,10 +440,12 @@ impl SignatureChain {
         self.incsigs.iter()
     }
 
+    /// Returns the time of the first signature in the chain.
     pub fn start_time(&self) -> Timespec {
         self.fullsig.time
     }
 
+    /// Returns the time of the last signature in the chain.
     pub fn end_time(&self) -> Timespec {
         self.incsigs.last().map_or(self.start_time(), |inc| inc.time)
     }
