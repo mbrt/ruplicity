@@ -14,7 +14,7 @@ unstable = ["clippy"]
 
 [dependencies]
 flate2 = "0.2"
-tar = "0.3"
+tar = { git = "https://github.com/alexcrichton/tar-rs.git" }
 regex = "0.1"
 try_opt = "0.1"
 time = "0.1"

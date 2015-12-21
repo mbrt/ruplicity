@@ -59,3 +59,14 @@ fn link() {
     let expected = vec!["file", "file_contents\n"];
     assert_eq!(contents, expected);
 }
+
+#[test]
+fn long_path() {
+    let file = File::open("tests/long_path.tar") .unwrap();
+    let mut tar = Archive::new(file);
+    for file in tar.files_mut().unwrap() {
+        if let Ok(f) = file {
+            println!("{:?}",  f.header().path().unwrap())
+        }
+    }
+}
