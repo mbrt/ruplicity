@@ -443,11 +443,12 @@ impl<'a> Entry<'a> {
 impl<'a> Display for Entry<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f,
-               "{}{}\t{}\t{}\t{}\t{}",
+               "{}{}\t{}\t{}\t{}\t{}\t{}",
                self.entry_type(),
                ModeDisplay(self.mode()),
                self.username().unwrap_or("?"),
                self.groupname().unwrap_or("?"),
+               self.size_hint().map_or("?".to_string(), |hint| format!("{}", hint.1)),
                self.mtime().into_local_display(),
                // handle special case for the root:
                // the path is empty, return "." instead
@@ -476,14 +477,16 @@ impl EntryType {
 
 impl Display for EntryType {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", match *self {
-            EntryType::File => '-',
-            EntryType::Dir => 'd',
-            EntryType::HardLink => '-',
-            EntryType::SymLink => 'l',
-            EntryType::Fifo => 'p',
-            EntryType::Unknown(_) => '?',
-        })
+        write!(f,
+               "{}",
+               match *self {
+                   EntryType::File => '-',
+                   EntryType::Dir => 'd',
+                   EntryType::HardLink => '-',
+                   EntryType::SymLink => 'l',
+                   EntryType::Fifo => 'p',
+                   EntryType::Unknown(_) => '?',
+               })
     }
 }
 
