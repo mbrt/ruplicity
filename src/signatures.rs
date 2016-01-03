@@ -448,7 +448,7 @@ impl<'a> Display for Entry<'a> {
                ModeDisplay(self.mode()),
                self.username().unwrap_or("?"),
                self.groupname().unwrap_or("?"),
-               self.size_hint().map_or("?".to_string(), |hint| format!("{}", hint.1)),
+               self.size_hint().map_or("?".to_owned(), |hint| format!("{}", hint.1)),
                self.mtime().into_local_display(),
                // handle special case for the root:
                // the path is empty, return "." instead
