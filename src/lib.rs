@@ -132,15 +132,7 @@ impl<B: Backend> Backup<B> {
     pub fn new(backend: B) -> io::Result<Self> {
         let files = try!(backend.file_names());
         let collections = Collections::from_filenames(files);
-        let signatures = {
-            // initialize signatures with empty signatures
-            // to be loaded lazily
-            let mut signatures = Vec::new();
-            for _ in collections.signature_chains() {
-                signatures.push(RefCell::new(None));
-            }
-            signatures
-        };
+        let signatures = collections.signature_chains().map(|_| RefCell::new(None)).collect();
         Ok(Backup {
             backend: backend,
             collections: collections,
