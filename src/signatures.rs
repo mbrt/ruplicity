@@ -17,6 +17,7 @@ use time::Timespec;
 use backend::Backend;
 use collections::{SignatureChain, SignatureFile};
 use time_utils::TimeDisplay;
+use tarext;
 
 
 /// Stores information about paths in a backup chain.
@@ -117,6 +118,7 @@ struct PathInfo {
     mode: Option<u32>,
     entry_type: u8,
     size_hint: Option<(usize, usize)>,
+    link: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -210,6 +212,10 @@ impl Chain {
                         if let (Ok(gid), Some(name)) = (header.gid(), header.groupname()) {
                             self.ug_map.add_group(gid, name.to_owned());
                         }
+                        let link = match tarext::link_name(header) {
+                            Ok(Some(path)) => Some(path.to_path_buf()),
+                            _ => None,
+                        };
                         Some(PathInfo {
                             mtime: time,
                             uid: header.uid().ok(),
@@ -218,6 +224,7 @@ impl Chain {
                             size_hint: size_hint,
                             // TODO #25: refactor when tar is updated
                             entry_type: header.link[0],
+                            link: link,
                         })
                     }
                     _ => None,
@@ -437,6 +444,13 @@ impl<'a> Entry<'a> {
     /// Returns the type of the entry.
     pub fn entry_type(&self) -> EntryType {
         EntryType::new(self.info.entry_type)
+    }
+
+    /// Returns the path that this entry points to.
+    ///
+    /// This will return some path only if this entry is a symbolic link.
+    pub fn linked_path(&self) -> Option<&Path> {
+        self.info.link.as_ref().map(|p| p.as_path())
     }
 }
 
