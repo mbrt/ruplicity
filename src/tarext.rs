@@ -1,10 +1,6 @@
 use std::borrow::Cow;
 use std::io;
 use std::path::{Path, PathBuf};
-#[cfg(unix)]
-use std::os::unix::prelude::*;
-#[cfg(windows)]
-use std::os::windows::prelude::*;
 
 use tar::Header;
 
@@ -40,6 +36,9 @@ fn truncate<'a>(slice: &'a [u8]) -> &'a [u8] {
 
 #[cfg(windows)]
 fn bytes2path(bytes: Cow<[u8]>) -> io::Result<Cow<Path>> {
+    use std::os::windows::prelude::*;
+    use std::str;
+
     return match bytes {
         Cow::Borrowed(bytes) => {
             let s = try!(str::from_utf8(bytes).map_err(|_| not_unicode()));
@@ -54,11 +53,16 @@ fn bytes2path(bytes: Cow<[u8]>) -> io::Result<Cow<Path>> {
     fn not_unicode() -> io::Error {
         other("only unicode paths are supported on windows")
     }
+
+    fn other(msg: &str) -> io::Error {
+        io::Error::new(io::ErrorKind::Other, msg)
+    }
 }
 
 #[cfg(unix)]
 fn bytes2path(bytes: Cow<[u8]>) -> io::Result<Cow<Path>> {
     use std::ffi::{OsStr, OsString};
+    use std::os::unix::prelude::*;
 
     Ok(match bytes {
         Cow::Borrowed(bytes) => {
