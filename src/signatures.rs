@@ -449,7 +449,7 @@ impl<'a> Entry<'a> {
     /// Returns the path that this entry points to.
     ///
     /// This will return some path only if this entry is a symbolic link.
-    pub fn linked_path(&self) -> Option<&Path> {
+    pub fn linked_path(&self) -> Option<&'a Path> {
         self.info.link.as_ref().map(|p| p.as_path())
     }
 }
@@ -654,6 +654,7 @@ mod test {
         uname: &'a str,
         gname: &'a str,
         entry_type: EntryType,
+        link: Option<&'a Path>,
     }
 
     impl<'a> EntryTest<'a> {
@@ -664,6 +665,7 @@ mod test {
                 uname: file.username().unwrap(),
                 gname: file.groupname().unwrap(),
                 entry_type: file.entry_type(),
+                link: file.linked_path(),
             }
         }
 
@@ -671,7 +673,8 @@ mod test {
                          mtime: &'a str,
                          uname: &'a str,
                          gname: &'a str,
-                         etype: EntryType)
+                         etype: EntryType,
+                         link: Option<&'a Path>)
                          -> Self {
             EntryTest {
                 path: path,
@@ -679,12 +682,22 @@ mod test {
                 uname: uname,
                 gname: gname,
                 entry_type: etype,
+                link: link,
             }
         }
     }
 
     fn make_ftest<'a>(path: &'a str, time: &'a str, etype: EntryType) -> EntryTest<'a> {
-        EntryTest::from_info(Path::new(path), time, "michele", "michele", etype)
+        EntryTest::from_info(Path::new(path), time, "michele", "michele", etype, None)
+    }
+
+    fn make_ftest_link<'a>(path: &'a str, time: &'a str, link: &'a str) -> EntryTest<'a> {
+        EntryTest::from_info(Path::new(path),
+                             time,
+                             "michele",
+                             "michele",
+                             EntryType::SymLink,
+                             Some(Path::new(link)))
     }
 
     fn single_vol_expected_files() -> Vec<Vec<EntryTest<'static>>> {
@@ -706,7 +719,7 @@ mod test {
                       make_ftest("largefile", "20020731t015430z", EntryType::File),
                       make_ftest("regular_file", "20010828t073052z", EntryType::File),
                       make_ftest("regular_file.sig", "20010830t004037z", EntryType::File),
-                      make_ftest("symbolic_link", "20021101t044447z", EntryType::SymLink),
+                      make_ftest_link("symbolic_link", "20021101t044447z", "regular_file"),
                       make_ftest("test", "20010828t215638z", EntryType::File),
                       make_ftest("two_hardlinked_files1", "20010828t073142z", EntryType::File),
                       make_ftest("two_hardlinked_files2", "20010828t073142z", EntryType::File)];
@@ -738,7 +751,7 @@ mod test {
                       make_ftest("largefile", "20020731t034334z", EntryType::File),
                       make_ftest("regular_file", "20010828t073052z", EntryType::File),
                       make_ftest("regular_file.sig", "20010830t004037z", EntryType::File),
-                      make_ftest("symbolic_link", "20021101t044448z", EntryType::SymLink),
+                      make_ftest_link("symbolic_link", "20021101t044448z", "regular_file"),
                       make_ftest("test", "20010828t215638z", EntryType::File),
                       make_ftest("two_hardlinked_files1", "20010828t073142z", EntryType::File),
                       make_ftest("two_hardlinked_files2", "20010828t073142z", EntryType::File)];
