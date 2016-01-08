@@ -58,7 +58,7 @@ Contributions are welcome! There are lots of features still to be implemented. T
 
 * improve the code; I need some feedback from experienced Rustaceans here :);
 * improve performances (since there is always room for a boost);
-* implement new features such as [read backup file contents](https://github.com/mbrt/ruplicity/issues/30), and new backends (e.g. Dropbox, Azure, FTP, etc.), like dropbox does;
+* implement new features such as [read backup file contents](https://github.com/mbrt/ruplicity/issues/30), and new backends (e.g. Dropbox, Azure, FTP, etc.), like duplicity does;
 * support encrypted backups; this is actually more feasible when a rust GPG library is implemented.
 
 ## License
