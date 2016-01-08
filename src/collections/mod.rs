@@ -731,4 +731,33 @@ mod test {
             assert_eq!(inc.end_time(), parse_time_str("20150617t182650z").unwrap());
         }
     }
+
+    #[test]
+    fn multi_chain() {
+        let fnames = vec!["duplicity-full.20160108T223144Z.manifest",
+                          "duplicity-full.20160108T223144Z.vol1.difftar.gz",
+                          "duplicity-full.20160108T223209Z.manifest",
+                          "duplicity-full.20160108T223209Z.vol1.difftar.gz",
+                          "duplicity-full-signatures.20160108T223144Z.sigtar.gz",
+                          "duplicity-full-signatures.20160108T223209Z.sigtar.gz",
+                          "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+                          "duplicity-inc.20160108T223144Z.to.20160108T223159Z.vol1.difftar.gz",
+                          "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
+                          "duplicity-inc.20160108T223209Z.to.20160108T223217Z.vol1.difftar.gz",
+                          "duplicity-new-signatures.20160108T223144Z.to.20160108T223159Z.sigtar.gz",
+                          "duplicity-new-signatures.20160108T223209Z.to.20160108T223217Z.sigtar.gz"];
+        let collection = Collections::from_filenames(&fnames);
+        assert_eq!(collection.backup_chains().count(), 2);
+        assert_eq!(collection.signature_chains().count(), 2);
+        // first chain
+        let chain = collection.backup_chains().nth(0).unwrap();
+        assert_eq!(chain.inc_sets().count(), 1);
+        let chain = collection.signature_chains().nth(0).unwrap();
+        assert_eq!(chain.inc_signatures().count(), 1);
+        // second chain
+        let chain = collection.backup_chains().nth(1).unwrap();
+        assert_eq!(chain.inc_sets().count(), 1);
+        let chain = collection.signature_chains().nth(1).unwrap();
+        assert_eq!(chain.inc_signatures().count(), 1);
+    }
 }
