@@ -194,13 +194,13 @@ impl Chain {
         let mut new_files: Vec<PathSnapshots> = Vec::new();
         {
             let mut old_snapshots = self.files.iter_mut().peekable();
-            for tarfile in try!(tar.files_mut()) {
+            for tarfile in tarext::GnuEntries::new(try!(tar.files_mut())) {
                 // we can ignore paths with errors
                 // the only problem here is that we miss some change in the chain, but it is
                 // better than abort the whole signature
                 let mut tarfile = unwrap_or_continue!(tarfile);
                 let size_hint = compute_size_hint(&mut tarfile);
-                let path = unwrap_or_continue!(tarfile.header().path());
+                let path = unwrap_or_continue!(tarfile.path());
                 let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
                 let info = match difftype {
                     DiffType::Signature | DiffType::Snapshot => {
@@ -579,7 +579,7 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     }
 }
 
-fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+fn compute_size_hint<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
     let difftype = {
         let path = try_opt!(file.header().path().ok());
         let (difftype, _) = try_opt!(parse_snapshot_path(&path));
@@ -596,7 +596,7 @@ fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)>
 ///
 /// This function returns the lower and upper bound of the file size in bytes. On error returns
 /// `None`.
-fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+fn compute_size_hint_signature<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
@@ -622,7 +622,7 @@ fn compute_size_hint_signature<R: Read>(file: &mut tar::File<R>) -> Option<(usiz
     }
 }
 
-fn compute_size_hint_snapshot<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+fn compute_size_hint_snapshot<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
     let bytes = try_opt!(file.header().size().ok()) as usize;
     Some((bytes, bytes))
 }
