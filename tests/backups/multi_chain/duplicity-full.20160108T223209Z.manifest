@@ -1,0 +1,6 @@
+Hostname dellxps
+Localdir .
+Volume 1:
+    StartingPath   .  
+    EndingPath     file  
+    Hash SHA1 ae84b5357f21818de93104e513adba9dbd492c17

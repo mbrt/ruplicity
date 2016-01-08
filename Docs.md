@@ -39,6 +39,12 @@ To list all the backup snapshots contained in a directory:
 duplicity collection-status --no-encryption file://<absolute-path-of-backup>
 ```
 
+If you don't have enough space on `/tmp` directory mount it to a more capable drive:
+
+```
+sudo mount -o bind /path/to/hd /tmp
+```
+
 ### Time formats
 
 duplicity uses time strings in two places. Firstly, many of the files duplicity creates will have the time in their filenames in the w3 datetime format as described in a [w3 note](http://www.w3.org/TR/NOTE-datetime). Basically they look like "2001-07-15T04:09:38-07:00", which means what it looks like. The "-07:00" section means the time zone is 7 hours behind UTC.
