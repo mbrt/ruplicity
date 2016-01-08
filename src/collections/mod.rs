@@ -588,28 +588,27 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
 }
 
 fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
-    // create a new signature chain for each fill signature
-    let mut sig_chains = fname_infos.iter()
-                                    .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
-                                    .map(|f| SignatureChain::from_filename_info(f))
-                                    .collect::<Vec<_>>();
-    // and collect all the new signatures, sorted by start time
-    let mut new_sig = fname_infos.iter()
-                                 .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
-                                 .collect::<Vec<_>>();
-    new_sig.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
-
-    // add the new signatures to signature chains
-    for sig in new_sig.into_iter() {
-        let mut added = false;
-        for chain in &mut sig_chains {
-            if chain.add_new_sig(&sig) {
-                added = true;
-                break;
+    // sort infos by start time
+    let sorted_infos = {
+        let mut i = fname_infos.iter().collect::<Vec<_>>();
+        i.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
+        i
+    };
+    let mut sig_chains = Vec::new();
+    for f in sorted_infos {
+        match f.info.tp {
+            fnm::Type::FullSig{..} => {
+                sig_chains.push(SignatureChain::from_filename_info(f));
             }
-        }
-        if !added {
-            // TODO: add to orphaned filenames
+            fnm::Type::NewSig{start_time, ..} => {
+                if let Some(ref mut chain) = sig_chains.last_mut() {
+                    if chain.end_time() == start_time && chain.add_new_sig(f) {
+                        continue;
+                    }
+                }
+                // TODO: otherwise add to orphaned incremental signatures
+            }
+            _ => (),
         }
     }
     sig_chains
