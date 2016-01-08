@@ -97,3 +97,19 @@ Duplicity uses md4 type signatures, because the header starts with: 0x72730136. 
   - [strong sum length]B BE? strong sum;
 
 BE stands for Big Endian. There is only one header and then one block for each file block.
+
+## Manifest
+
+Every backup snapshot contains a manifest file. The manifest is a text file containing informations about which paths are contained in which volumes.
+
+## Volumes
+
+A volume stores file contents for some paths. Contents are stored in form of patches from previous contents. Therefore, file contents can be retreived by applying an ordered sequence of patches.
+
+Given a certain patch, to retreive the patch sequence (see `patchdir.normalyze_ps`), given the complete ordered sequence:
+* iterate backwards in time;
+* remove blank diffs;
+* add every delta diff until a full diff is found;
+* return also the full diff and break the iteration.
+
+To have a patched file, we need to apply librsync patches (see `librsync.PatchedFile`).
