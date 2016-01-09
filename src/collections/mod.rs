@@ -589,41 +589,31 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
 }
 
 fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
-    let sorted_infos = {
-        // sort infos by start time and full before inc
-        let mut i = fname_infos.iter().collect::<Vec<_>>();
-        i.sort_by(|a, b| {
-            match a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0) {
-                Ordering::Less => Ordering::Less,
-                Ordering::Greater => Ordering::Greater,
-                Ordering::Equal => {
-                    // compare by type
-                    match (&a.info.tp, &b.info.tp) {
-                        (&fnm::Type::FullSig{..}, &fnm::Type::FullSig{..}) => Ordering::Equal,
-                        (&fnm::Type::FullSig{..}, _) => Ordering::Less,
-                        (_, &fnm::Type::FullSig{..}) => Ordering::Greater,
-                        _ => Ordering::Equal,
-                    }
-                }
-            }
-        });
-        i
+    // collect full signatures, sort them by start time and make the chains from them
+    let mut sig_chains = fname_infos.iter()
+                                    .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
+                                    .map(SignatureChain::from_filename_info)
+                                    .collect::<Vec<_>>();
+    sig_chains.sort_by(|a, b| a.start_time().cmp(&b.start_time()));
+    // collect inc signatures and sort them by start time
+    let inc_sigs = {
+        let mut is = fname_infos.iter()
+                                .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
+                                .collect::<Vec<_>>();
+        is.sort_by(|a, b| a.start_time().cmp(&b.start_time()));
+        is
     };
-    let mut sig_chains = Vec::new();
-    for f in sorted_infos {
-        match f.info.tp {
-            fnm::Type::FullSig{..} => {
-                sig_chains.push(SignatureChain::from_filename_info(f));
+    // add inc signatures to chains
+    for inc in inc_sigs {
+        let mut added = false;
+        for chain in &mut sig_chains {
+            if chain.end_time() == inc.start_time() && chain.add_new_sig(inc) {
+                added = true;
+                break;
             }
-            fnm::Type::NewSig{start_time, ..} => {
-                if let Some(ref mut chain) = sig_chains.last_mut() {
-                    if chain.end_time() == start_time && chain.add_new_sig(f) {
-                        continue;
-                    }
-                }
-                // TODO: otherwise add to orphaned incremental signatures
-            }
-            _ => (),
+        }
+        if !added {
+            // TODO: add to orphaned incremental signatures
         }
     }
     sig_chains
