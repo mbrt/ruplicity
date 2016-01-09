@@ -6,6 +6,7 @@
 mod file_naming;
 
 use std::collections::HashMap;
+use std::cmp::Ordering;
 use std::fmt::{Display, Error, Formatter};
 use std::path::Path;
 use std::slice;
@@ -424,7 +425,7 @@ impl SignatureChain {
     /// Adds the given incremental signature to the signature chain if possible,
     /// returns false otherwise.
     pub fn add_new_sig(&mut self, fname: &FileNameInfo) -> bool {
-        if let fnm::Type::NewSig{ .. } = fname.info.tp {
+        if matches!(fname.info.tp, fnm::Type::NewSig{ .. }) {
             self.incsigs.push(SignatureFile::from_filename_info(fname));
             true
         } else {
@@ -588,10 +589,24 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
 }
 
 fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
-    // sort infos by start time
     let sorted_infos = {
+        // sort infos by start time and full before inc
         let mut i = fname_infos.iter().collect::<Vec<_>>();
-        i.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
+        i.sort_by(|a, b| {
+            match a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0) {
+                Ordering::Less => Ordering::Less,
+                Ordering::Greater => Ordering::Greater,
+                Ordering::Equal => {
+                    // compare by type
+                    match (&a.info.tp, &b.info.tp) {
+                        (&fnm::Type::FullSig{..}, &fnm::Type::FullSig{..}) => Ordering::Equal,
+                        (&fnm::Type::FullSig{..}, _) => Ordering::Less,
+                        (_, &fnm::Type::FullSig{..}) => Ordering::Greater,
+                        _ => Ordering::Equal,
+                    }
+                }
+            }
+        });
         i
     };
     let mut sig_chains = Vec::new();

@@ -247,7 +247,7 @@ impl<'a> Snapshot<'a> {
                 sig_id: self.sig_id,
             })
         } else {
-            Err(io::Error::new(io::ErrorKind::NotFound, "The signature chain is incomplete"))
+            Err(not_found("The signature chain is incomplete"))
         }
     }
 }
@@ -284,9 +284,8 @@ impl<B: Backend> ResourceCache for Backup<B> {
                     let new_sig = try!(Chain::from_sigchain(sigchain, &self.backend));
                     *sig = Some(new_sig);
                 } else {
-                    return Err(io::Error::new(io::ErrorKind::NotFound,
-                                              "The given backup snapshot does not have a \
-                                              corresponding signature"));
+                    return Err(not_found("The given backup snapshot does not have a \
+                                         corresponding signature"));
                 }
             }
         }
@@ -298,15 +297,20 @@ impl<B: Backend> ResourceCache for Backup<B> {
 }
 
 
+fn not_found(msg: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::NotFound, msg)
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
     use backend::local::LocalBackend;
     use collections::{BackupSet, Collections};
     use signatures::{Chain, Entry};
+    use time_utils::parse_time_str;
 
-    use std::path::PathBuf;
-
+    use std::path::{Path, PathBuf};
     use time::Timespec;
 
 
@@ -332,6 +336,19 @@ mod test {
                 mtime: file.mtime(),
                 uname: file.username().unwrap().to_owned(),
                 gname: file.groupname().unwrap().to_owned(),
+            }
+        }
+
+        pub fn from_info(path: &str,
+                         mtime: &str,
+                         uname: &str,
+                         gname: &str)
+                         -> Self {
+            EntryTest {
+                path: Path::new(path).to_path_buf(),
+                mtime: parse_time_str(mtime).unwrap(),
+                uname: uname.to_owned(),
+                gname: gname.to_owned(),
             }
         }
     }
@@ -387,10 +404,36 @@ mod test {
              .collect::<Vec<_>>()
     }
 
+    fn from_backup<B: Backend>(backup: &Backup<B>) -> Vec<Vec<EntryTest>> {
+        backup.snapshots()
+              .unwrap()
+              .map(|s| {
+                  s.entries()
+                   .unwrap()
+                   .as_signature()
+                   .map(|f| EntryTest::from_entry(&f))
+                   .filter(|f| f.path.to_str().is_some())
+                   .collect::<Vec<_>>()
+              })
+              .collect::<Vec<_>>()
+    }
+
 
     #[test]
-    fn same_collections() {
+    fn same_collections_single_vol() {
         let backend = LocalBackend::new("tests/backups/single_vol");
+        let filenames = backend.file_names().unwrap();
+        let coll = Collections::from_filenames(filenames);
+        let backup = Backup::new(backend).unwrap();
+
+        let expected = from_collection(&coll);
+        let actual = to_test_snapshot(&backup);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn same_collections_multi_chain() {
+        let backend = LocalBackend::new("tests/backups/multi_chain");
         let filenames = backend.file_names().unwrap();
         let coll = Collections::from_filenames(filenames);
         let backup = Backup::new(backend).unwrap();
@@ -407,17 +450,27 @@ mod test {
 
         let backend = LocalBackend::new("tests/backups/single_vol");
         let backup = Backup::new(backend).unwrap();
-        let actual = backup.snapshots()
-                           .unwrap()
-                           .map(|s| {
-                               s.entries()
-                                .unwrap()
-                                .as_signature()
-                                .map(|f| EntryTest::from_entry(&f))
-                                .filter(|f| f.path.to_str().is_some())
-                                .collect::<Vec<_>>()
-                           })
-                           .collect::<Vec<_>>();
+        let actual = from_backup(&backup);
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn multi_chain_files() {
+        let backend = LocalBackend::new("tests/backups/multi_chain");
+        let backup = Backup::new(backend).unwrap();
+        let actual = from_backup(&backup);
+        let expected = vec![vec![make_entry_test("", "20160108t223141z"),
+                                 make_entry_test("file", "20160108t222924z")],
+                            vec![make_entry_test("", "20160108t223153z"),
+                                 make_entry_test("file", "20160108t223153z")],
+                            vec![make_entry_test("", "20160108t223206z"),
+                                 make_entry_test("file", "20160108t223206z")],
+                            vec![make_entry_test("", "20160108t223215z"),
+                                 make_entry_test("file", "20160108t223215z")]];
+        assert_eq!(actual, expected);
+
+        fn make_entry_test(path: &str, mtime: &str) -> EntryTest {
+            EntryTest::from_info(path, mtime, "michele", "michele")
+        }
     }
 }
