@@ -76,3 +76,37 @@ impl Iterator for FileNameIterator {
         None
     }
 }
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use backend::Backend;
+
+    #[test]
+    fn multi_chain_files() {
+        let backend = LocalBackend::new("tests/backups/multi_chain");
+        let files = backend.file_names().unwrap().collect::<Vec<_>>();
+        let actual = {
+            let mut r = files.iter()
+                             .map(|p| p.to_str().unwrap())
+                             .filter(|p| p.starts_with("duplicity-"))
+                             .collect::<Vec<_>>();
+            r.sort();
+            r
+        };
+        let expected = vec!["duplicity-full-signatures.20160108T223144Z.sigtar.gz",
+                            "duplicity-full-signatures.20160108T223209Z.sigtar.gz",
+                            "duplicity-full.20160108T223144Z.manifest",
+                            "duplicity-full.20160108T223144Z.vol1.difftar.gz",
+                            "duplicity-full.20160108T223209Z.manifest",
+                            "duplicity-full.20160108T223209Z.vol1.difftar.gz",
+                            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+                            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.vol1.difftar.gz",
+                            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
+                            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.vol1.difftar.gz",
+                            "duplicity-new-signatures.20160108T223144Z.to.20160108T223159Z.sigtar.gz",
+                            "duplicity-new-signatures.20160108T223209Z.to.20160108T223217Z.sigtar.gz"];
+        assert_eq!(actual, expected);
+    }
+}

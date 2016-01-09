@@ -424,7 +424,7 @@ impl SignatureChain {
     /// Adds the given incremental signature to the signature chain if possible,
     /// returns false otherwise.
     pub fn add_new_sig(&mut self, fname: &FileNameInfo) -> bool {
-        if let fnm::Type::NewSig{ .. } = fname.info.tp {
+        if matches!(fname.info.tp, fnm::Type::NewSig{ .. }) {
             self.incsigs.push(SignatureFile::from_filename_info(fname));
             true
         } else {
@@ -588,28 +588,31 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
 }
 
 fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
-    // create a new signature chain for each fill signature
+    // collect full signatures, sort them by start time and make the chains from them
     let mut sig_chains = fname_infos.iter()
                                     .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
-                                    .map(|f| SignatureChain::from_filename_info(f))
+                                    .map(SignatureChain::from_filename_info)
                                     .collect::<Vec<_>>();
-    // and collect all the new signatures, sorted by start time
-    let mut new_sig = fname_infos.iter()
-                                 .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
-                                 .collect::<Vec<_>>();
-    new_sig.sort_by(|a, b| a.info.tp.time_range().0.cmp(&b.info.tp.time_range().0));
-
-    // add the new signatures to signature chains
-    for sig in new_sig.into_iter() {
+    sig_chains.sort_by(|a, b| a.start_time().cmp(&b.start_time()));
+    // collect inc signatures and sort them by start time
+    let inc_sigs = {
+        let mut is = fname_infos.iter()
+                                .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
+                                .collect::<Vec<_>>();
+        is.sort_by(|a, b| a.start_time().cmp(&b.start_time()));
+        is
+    };
+    // add inc signatures to chains
+    for inc in inc_sigs {
         let mut added = false;
         for chain in &mut sig_chains {
-            if chain.add_new_sig(&sig) {
+            if chain.end_time() == inc.start_time() && chain.add_new_sig(inc) {
                 added = true;
                 break;
             }
         }
         if !added {
-            // TODO: add to orphaned filenames
+            // TODO: add to orphaned incremental signatures
         }
     }
     sig_chains
@@ -730,5 +733,34 @@ mod test {
                        parse_time_str("20150617t182629z").unwrap());
             assert_eq!(inc.end_time(), parse_time_str("20150617t182650z").unwrap());
         }
+    }
+
+    #[test]
+    fn multi_chain() {
+        let fnames = vec!["duplicity-full.20160108T223144Z.manifest",
+                          "duplicity-full.20160108T223144Z.vol1.difftar.gz",
+                          "duplicity-full.20160108T223209Z.manifest",
+                          "duplicity-full.20160108T223209Z.vol1.difftar.gz",
+                          "duplicity-full-signatures.20160108T223144Z.sigtar.gz",
+                          "duplicity-full-signatures.20160108T223209Z.sigtar.gz",
+                          "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+                          "duplicity-inc.20160108T223144Z.to.20160108T223159Z.vol1.difftar.gz",
+                          "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
+                          "duplicity-inc.20160108T223209Z.to.20160108T223217Z.vol1.difftar.gz",
+                          "duplicity-new-signatures.20160108T223144Z.to.20160108T223159Z.sigtar.gz",
+                          "duplicity-new-signatures.20160108T223209Z.to.20160108T223217Z.sigtar.gz"];
+        let collection = Collections::from_filenames(&fnames);
+        assert_eq!(collection.backup_chains().count(), 2);
+        assert_eq!(collection.signature_chains().count(), 2);
+        // first chain
+        let chain = collection.backup_chains().nth(0).unwrap();
+        assert_eq!(chain.inc_sets().count(), 1);
+        let chain = collection.signature_chains().nth(0).unwrap();
+        assert_eq!(chain.inc_signatures().count(), 1);
+        // second chain
+        let chain = collection.backup_chains().nth(1).unwrap();
+        assert_eq!(chain.inc_sets().count(), 1);
+        let chain = collection.signature_chains().nth(1).unwrap();
+        assert_eq!(chain.inc_signatures().count(), 1);
     }
 }
