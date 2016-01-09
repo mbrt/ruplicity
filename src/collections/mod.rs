@@ -6,7 +6,6 @@
 mod file_naming;
 
 use std::collections::HashMap;
-use std::cmp::Ordering;
 use std::fmt::{Display, Error, Formatter};
 use std::path::Path;
 use std::slice;
