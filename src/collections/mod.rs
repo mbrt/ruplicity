@@ -529,16 +529,16 @@ fn compute_filename_infos<'a, I, E>(filenames: I) -> Vec<FileNameInfo<'a>>
     where I: IntoIterator<Item = &'a E>,
           E: AsRef<Path> + 'a
 {
-    let mut result = Vec::new();
     let parser = FileNameParser::new();
-    for name in filenames {
-        if let Some(name) = name.as_ref().to_str() {
-            if let Some(info) = parser.parse(name) {
-                result.push(FileNameInfo::new(name, info));
-            }
-        }
-    }
-    result
+    filenames.into_iter()
+             .filter_map(|path| path.as_ref().to_str())
+             .filter_map(|name| {
+                 match parser.parse(name) {
+                     Some(info) => Some(FileNameInfo::new(name, info)),
+                     None => None,
+                 }
+             })
+             .collect()
 }
 
 fn compute_backup_chains(fname_infos: &[FileNameInfo]) -> Vec<BackupChain> {
