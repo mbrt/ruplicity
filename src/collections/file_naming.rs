@@ -64,6 +64,10 @@ impl<'a> FileNameInfo<'a> {
             info: info,
         }
     }
+
+    pub fn start_time(&self) -> Timespec {
+        self.info.tp.time_range().0
+    }
 }
 
 impl Type {

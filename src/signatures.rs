@@ -1,5 +1,10 @@
+//! Operations on backup signatures.
+//!
+//! This sub-module exposes types to deal with duplicity signatures. It can be used to get
+//! information about files backupped in a backup chain.
+
 use std::collections::HashMap;
-use std::fmt::{Display, Error, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::io::{self, Read};
 use std::iter::Iterator;
 use std::path::{Component, Path, PathBuf};
@@ -10,42 +15,75 @@ use tar;
 use time::Timespec;
 
 use backend::Backend;
-use collections::{CollectionsStatus, SignatureFile};
-use time_utils::to_pretty_local;
+use collections::{SignatureChain, SignatureFile};
+use time_utils::TimeDisplay;
+use tarext;
 
 
+/// Stores information about paths in a backup chain.
+///
+/// The information is reused among different snapshots if possible.
 #[derive(Debug)]
-pub struct BackupFiles {
-    chains: Vec<Chain>,
-    ug_cache: UserGroupNameCache,
+pub struct Chain {
+    num_snapshots: u8,
+    files: Vec<PathSnapshots>,
+    ug_map: UserGroupMap,
 }
 
-pub struct Snapshot<'a> {
-    index: u8,
-    chain: &'a Chain,
-    ug_cache: &'a UserGroupNameCache,
-}
-
-/// Informations about a file inside a backup snapshot.
+/// Signatures for backup snapshots, in creation order.
 #[derive(Debug)]
-pub struct File<'a> {
-    path: &'a Path,
-    info: &'a PathInfo,
-    ug_cache: &'a UserGroupNameCache,
-}
-
-/// Iterator over a list of backup snapshots.
 pub struct Snapshots<'a> {
-    chain_iter: slice::Iter<'a, Chain>,
-    chain: Option<&'a Chain>,
+    chain: &'a Chain,
     snapshot_id: u8,
-    ug_cache: &'a UserGroupNameCache,
 }
 
-pub struct SnapshotFiles<'a> {
+/// A signature for a backup snapshot.
+#[derive(Debug)]
+pub struct Snapshot<'a> {
+    chain: &'a Chain,
+    index: u8,
+}
+
+/// Files and directories inside a backup snapshot.
+#[derive(Clone)]
+pub struct SnapshotEntries<'a> {
     index: u8,
     iter: slice::Iter<'a, PathSnapshots>,
-    ug_cache: &'a UserGroupNameCache,
+    chain: &'a Chain,
+}
+
+/// Allows to display files of a snapshot.
+///
+/// The style used is similar to the one used by `ls -l` unix command.
+pub struct SnapshotEntriesDisplay<'a>(SnapshotEntries<'a>);
+
+/// Information about an entry inside a backup snapshot.
+///
+/// This could be a file, a directory, a link, etc.
+#[derive(Debug)]
+pub struct Entry<'a> {
+    path: &'a Path,
+    info: &'a PathInfo,
+    ug_map: &'a UserGroupMap,
+}
+
+/// Type of entry in a backup snapshot.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum EntryType {
+    /// A regular file.
+    File,
+    /// A directory.
+    Dir,
+    /// An hard link.
+    ///
+    /// This entry type is currently not supported by duplicity.
+    HardLink,
+    /// A symbolic link.
+    SymLink,
+    /// An unix pipe.
+    Fifo,
+    /// All the other entry types, that are currently not managed.
+    Unknown(u8),
 }
 
 
@@ -54,14 +92,6 @@ enum DiffType {
     Signature,
     Snapshot,
     Deleted,
-}
-
-/// Store separately informations about the signatures and informations about the paths in the
-/// signatures. This allows to reuse informations between snapshots and avoid duplicating them.
-#[derive(Debug)]
-struct Chain {
-    timestamps: Vec<Timespec>,
-    files: Vec<PathSnapshots>,
 }
 
 #[derive(Debug)]
@@ -86,120 +116,263 @@ struct PathInfo {
     uid: Option<u32>,
     gid: Option<u32>,
     mode: Option<u32>,
+    entry_type: u8,
     size_hint: Option<(usize, usize)>,
+    link: Option<PathBuf>,
 }
 
 #[derive(Debug)]
-struct UserGroupNameCache {
+struct UserGroupMap {
     uid_map: HashMap<u32, String>,
     gid_map: HashMap<u32, String>,
 }
 
+#[derive(Debug)]
+struct ModeDisplay(Option<u32>);
 
-impl BackupFiles {
-    pub fn new<B: Backend>(backend: &B) -> io::Result<BackupFiles> {
-        let collection = {
-            let filenames = try!(backend.get_file_names());
-            CollectionsStatus::from_filenames(filenames)
-        };
-        let mut chains: Vec<Chain> = Vec::new();
-        let mut ug_cache = UserGroupNameCache::new();
-        let coll_chains = collection.signature_chains();
-        for coll_chain in coll_chains {
-            // translate collections::SignatureChain into a Chain
-            let mut chain = Chain {
-                timestamps: Vec::new(),
-                files: Vec::new(),
-            };
-            // add to the chain the full signature and all the incremental signatures
-            // if an error occurs in the full signature exit
-            let file = try!(backend.open_file(coll_chain.fullsig.file_name.as_ref()));
-            try!(add_sigfile_to_chain(&mut chain, &mut ug_cache, file, &coll_chain.fullsig));
-            for inc in &coll_chain.inclist {
-                // TODO: if an error occurs here, do not exit with an error, instead
-                // break the iteration and store the error inside the chain
-                let file = try!(backend.open_file(inc.file_name.as_ref()));
-                try!(add_sigfile_to_chain(&mut chain, &mut ug_cache, file, &inc));
-            }
-            chains.push(chain);
+
+impl Chain {
+    /// Builds a new empty signature chain.
+    pub fn new() -> Self {
+        Chain {
+            num_snapshots: 0,
+            files: Vec::new(),
+            ug_map: UserGroupMap::new(),
         }
-        Ok(BackupFiles {
-            chains: chains,
-            ug_cache: ug_cache,
-        })
     }
 
-    pub fn snapshots(&self) -> Snapshots {
-        let mut iter = self.chains.iter();
-        let first_chain = iter.next();
-        Snapshots {
-            chain_iter: iter,
-            chain: first_chain,
-            snapshot_id: 0,
-            ug_cache: &self.ug_cache,
+    /// Opens a signature chain from signature chain files, by using a backend.
+    ///
+    /// The given signature chain file names are read by using the given backend, to build the
+    /// corresponding `Chain` instance.
+    pub fn from_sigchain<B: Backend>(coll: &SignatureChain, backend: &B) -> io::Result<Self> {
+        let mut chain = Chain::new();
+        // add to the chain the full signature and all the incremental signatures
+        // if an error occurs in the full signature exit
+        let file = try!(backend.open_file(coll.full_signature().file_name.as_ref()));
+        try!(chain.add_sigfile(file, coll.full_signature()));
+        for inc in coll.inc_signatures() {
+            // TODO(#4): if an error occurs here, do not exit with an error, instead
+            // break the iteration and store the error inside the chain
+            let file = try!(backend.open_file(inc.file_name.as_ref()));
+            try!(chain.add_sigfile(file, &inc));
         }
+        Ok(chain)
+    }
+
+    /// Returns the snapshots present in the signature chain.
+    pub fn snapshots(&self) -> Snapshots {
+        Snapshots {
+            chain: self,
+            snapshot_id: 0,
+        }
+    }
+
+    fn add_sigfile<R: Read>(&mut self, file: R, sigfile: &SignatureFile) -> io::Result<()> {
+        let result = {
+            let snapshot_id = self.num_snapshots;
+            if sigfile.compressed {
+                let gz_decoder = try!(GzDecoder::new(file));
+                self.add_sigtar_to_snapshots(tar::Archive::new(gz_decoder), snapshot_id)
+            } else {
+                self.add_sigtar_to_snapshots(tar::Archive::new(file), snapshot_id)
+            }
+        };
+        if result.is_ok() {
+            // add to the list of snapshots only if everything is ok
+            // we do not need to cleanup the chain if someting went wrong, because if the
+            // number of signatures is not updated, the change is not observable
+            self.num_snapshots += 1;
+        }
+        result
+    }
+
+    fn add_sigtar_to_snapshots<R: Read>(&mut self,
+                                        mut tar: tar::Archive<R>,
+                                        snapshot_id: u8)
+                                        -> io::Result<()> {
+        let mut new_files: Vec<PathSnapshots> = Vec::new();
+        {
+            let mut old_snapshots = self.files.iter_mut().peekable();
+            for tarfile in tarext::GnuEntries::new(try!(tar.files_mut())) {
+                // we can ignore paths with errors
+                // the only problem here is that we miss some change in the chain, but it is
+                // better than abort the whole signature
+                let mut tarfile = unwrap_or_continue!(tarfile);
+                let size_hint = compute_size_hint(&mut tarfile);
+                let path = unwrap_or_continue!(tarfile.path());
+                let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
+                let info = match difftype {
+                    DiffType::Signature | DiffType::Snapshot => {
+                        let header = tarfile.header();
+                        let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
+                        if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
+                            self.ug_map.add_user(uid, name.to_owned());
+                        }
+                        if let (Ok(gid), Some(name)) = (header.gid(), header.groupname()) {
+                            self.ug_map.add_group(gid, name.to_owned());
+                        }
+                        let link = match tarext::link_name(header) {
+                            Ok(Some(path)) => Some(path.to_path_buf()),
+                            _ => None,
+                        };
+                        Some(PathInfo {
+                            mtime: time,
+                            uid: header.uid().ok(),
+                            gid: header.gid().ok(),
+                            mode: header.mode().ok(),
+                            size_hint: size_hint,
+                            // TODO #25: refactor when tar is updated
+                            entry_type: header.link[0],
+                            link: link,
+                        })
+                    }
+                    _ => None,
+                };
+                let new_snapshot = PathSnapshot {
+                    info: info,
+                    index: snapshot_id,
+                };
+                // find the current path in the old snapshots
+                // note: they are ordered
+                let position = {
+                    let mut position: Option<&mut PathSnapshots> = None;
+                    loop {
+                        let mut found = false;
+                        if let Some(path_snapshots) = old_snapshots.peek() {
+                            let old_path = path_snapshots.path.as_path();
+                            if old_path == path {
+                                // this path is already present in old snapshots: update them
+                                found = true;
+                            } else if old_path > path {
+                                // we've already reached the first item next to the current path
+                                // so, the path is not present in old snapshots
+                                break;
+                            }
+                        }
+                        if found {
+                            let path_snapshots = old_snapshots.next().unwrap();
+                            position = Some(path_snapshots);
+                        } else {
+                            // we have not found the element, so 'old_path < path' or there are no
+                            // more paths to check:
+                            // continue the loop if there are more elements
+                            if !old_snapshots.next().is_some() {
+                                break;
+                            }
+                        }
+                    }
+                    position
+                };
+                if let Some(path_snapshots) = position {
+                    path_snapshots.snapshots.push(new_snapshot);
+                } else {
+                    // the path is not present in the old snapshots: add to new list
+                    new_files.push(PathSnapshots {
+                        path: path.to_path_buf(),
+                        snapshots: vec![new_snapshot],
+                    });
+                }
+            }
+        }
+        // merge the new files with old snapshots
+        if !new_files.is_empty() {
+            // TODO: Performance hurt here: we have two sorted arrays to merge,
+            // better to use this algorithm: http://stackoverflow.com/a/4553321/1667955
+            self.files.extend(new_files.into_iter());
+            self.files.sort_by(|a, b| a.path.cmp(&b.path));
+        }
+        Ok(())
     }
 }
 
 
+// some optimizations are implemented for snapshots iteration, like `nth` and `ExactSizeIterator`.
 impl<'a> Iterator for Snapshots<'a> {
     type Item = Snapshot<'a>;
 
     fn next(&mut self) -> Option<Snapshot<'a>> {
-        loop {
-            if let Some(chain) = self.chain {
-                if let Some(_) = chain.timestamps.get(self.snapshot_id as usize) {
-                    let result = Some(Snapshot {
-                        index: self.snapshot_id,
-                        chain: chain,
-                        ug_cache: self.ug_cache,
-                    });
-                    self.snapshot_id += 1;
-                    return result;
-                } else {
-                    // this chain is completed
-                    // go to next chain
-                    self.chain = self.chain_iter.next();
-                    self.snapshot_id = 0;
-                }
-            } else {
-                // no other chains are present
-                return None;
-            }
+        if self.snapshot_id < self.chain.num_snapshots {
+            self.snapshot_id += 1;
+            Some(Snapshot {
+                chain: self.chain,
+                index: self.snapshot_id - 1,
+            })
+        } else {
+            None
         }
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Snapshot<'a>> {
+        use std::u8;
+
+        // check for u8 overflow to be fool-proof
+        if n + self.snapshot_id as usize >= u8::MAX as usize {
+            return None;
+        }
+        let id = self.snapshot_id + n as u8;
+        if id < self.chain.num_snapshots {
+            self.snapshot_id = id + 1;
+            Some(Snapshot {
+                chain: self.chain,
+                index: id,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> ExactSizeIterator for Snapshots<'a> {
+    fn len(&self) -> usize {
+        (self.chain.num_snapshots - self.snapshot_id) as usize
     }
 }
 
 
 impl<'a> Snapshot<'a> {
-    pub fn time(&self) -> Timespec {
-        self.chain.timestamps[self.index as usize]
-    }
-
-    pub fn files(&self) -> SnapshotFiles<'a> {
-        SnapshotFiles {
+    /// Returns the files inside this backup snapshot.
+    pub fn files(&self) -> SnapshotEntries<'a> {
+        SnapshotEntries {
             index: self.index,
             iter: self.chain.files.iter(),
-            ug_cache: self.ug_cache,
+            chain: self.chain,
         }
     }
 }
 
 
-impl<'a> Iterator for SnapshotFiles<'a> {
-    type Item = File<'a>;
+impl<'a> Display for Snapshot<'a> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.files().into_display())
+    }
+}
 
-    fn next(&mut self) -> Option<File<'a>> {
+
+impl<'a> SnapshotEntries<'a> {
+    /// Returns a displayable struct for the files.
+    ///
+    /// Needs to consume `self`, because it has to iterate over all the files to align the output
+    /// columns properly.
+    pub fn into_display(self) -> SnapshotEntriesDisplay<'a> {
+        SnapshotEntriesDisplay(self)
+    }
+}
+
+impl<'a> Iterator for SnapshotEntries<'a> {
+    type Item = Entry<'a>;
+
+    fn next(&mut self) -> Option<Entry<'a>> {
         let index = self.index;     // prevents borrow checker complains
         for path_snapshots in &mut self.iter {
             if let Some(s) = path_snapshots.snapshots.iter().rev().find(|s| s.index <= index) {
                 // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
-                    return Some(File {
+                    return Some(Entry {
                         path: path_snapshots.path.as_ref(),
                         info: info,
-                        ug_cache: self.ug_cache,
+                        ug_map: &self.chain.ug_map,
                     });
                 }
             }
@@ -208,75 +381,133 @@ impl<'a> Iterator for SnapshotFiles<'a> {
     }
 }
 
+impl<'a> Display for SnapshotEntriesDisplay<'a> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        use std::io::Write;
+        use tabwriter::TabWriter;
 
-impl<'a> File<'a> {
-    /// Returns the full path of the file.
+        let mut tw = TabWriter::new(Vec::new());
+        for file in self.0.clone() {
+            try_or_fmt_err!(write!(&mut tw, "{}\n", file));
+        }
+        try_or_fmt_err!(tw.flush());
+        let written = try_or_fmt_err!(String::from_utf8(tw.unwrap()));
+        write!(f, "{}", written)
+    }
+}
+
+
+impl<'a> Entry<'a> {
+    /// Returns the full path of the entry.
     pub fn path(&self) -> &'a Path {
         self.path
     }
 
+    /// Returns the value of the owner's user ID field.
     pub fn userid(&self) -> Option<u32> {
         self.info.uid
     }
 
+    /// Returns the value of the group's user ID field.
     pub fn groupid(&self) -> Option<u32> {
         self.info.gid
     }
 
+    /// Returns the mode bits for this file.
     pub fn mode(&self) -> Option<u32> {
         self.info.mode
     }
 
     /// Returns the name of the owner user.
     pub fn username(&self) -> Option<&'a str> {
-        self.info.uid.and_then(|uid| self.ug_cache.get_user_name(uid))
+        self.info.uid.and_then(|uid| self.ug_map.get_user_name(uid))
     }
 
     /// Returns the name of the group.
     pub fn groupname(&self) -> Option<&'a str> {
-        self.info.gid.and_then(|gid| self.ug_cache.get_group_name(gid))
+        self.info.gid.and_then(|gid| self.ug_map.get_group_name(gid))
     }
 
-    /// Returns the time of the last modification.
+    /// Returns the last modification time.
     pub fn mtime(&self) -> Timespec {
         self.info.mtime
     }
 
-    /// Returns a lower and upper bound in bytes on the file size.
+    /// Returns a lower and upper bound in bytes on the entry size.
+    ///
+    /// Note that for directories, this returns a size of zero, even if on Linux directories are
+    /// often considered to have a 4096 bytes size.
     pub fn size_hint(&self) -> Option<(usize, usize)> {
         self.info.size_hint
     }
+
+    /// Returns the type of the entry.
+    pub fn entry_type(&self) -> EntryType {
+        EntryType::new(self.info.entry_type)
+    }
+
+    /// Returns the path that this entry points to.
+    ///
+    /// This will return some path only if this entry is a symbolic link.
+    pub fn linked_path(&self) -> Option<&'a Path> {
+        self.info.link.as_ref().map(|p| p.as_path())
+    }
 }
 
-impl<'a> Display for File<'a> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+impl<'a> Display for Entry<'a> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f,
-               "{:<4} {:<10} {:<10} {} {}",
-               self.mode().unwrap_or(0),
+               "{}{}\t{}\t{}\t{}\t{}\t{}",
+               self.entry_type(),
+               ModeDisplay(self.mode()),
                self.username().unwrap_or("?"),
                self.groupname().unwrap_or("?"),
-               // FIXME: Workaround for rust <= 1.4
-               // Alignment is ignored by custom formatters
-               // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
-               format!("{}", to_pretty_local(self.mtime())),
+               self.size_hint().map_or("?".to_owned(), |hint| format!("{}", hint.1)),
+               self.mtime().into_local_display(),
                // handle special case for the root:
                // the path is empty, return "." instead
                self.path()
                    .to_str()
-                   .map_or("?", |p| {
-                       if p.is_empty() {
-                           "."
-                       } else {
-                           p
-                       }
-                   }))
+                   .map_or("?", |p| if p.is_empty() { "." } else { p }))
     }
 }
 
 
-impl UserGroupNameCache {
+impl EntryType {
+    /// Creates a new entry type from a raw byte.
+    ///
+    /// The enumeration is taken from TAR file specification.
+    pub fn new(byte: u8) -> EntryType {
+        match byte {
+            0 | b'0' => EntryType::File,
+            b'5' => EntryType::Dir,
+            b'1' => EntryType::HardLink,
+            b'2' => EntryType::SymLink,
+            b'6' => EntryType::Fifo,
+            _ => EntryType::Unknown(byte),
+        }
+    }
+}
+
+impl Display for EntryType {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f,
+               "{}",
+               match *self {
+                   EntryType::File => '-',
+                   EntryType::Dir => 'd',
+                   EntryType::HardLink => '-',
+                   EntryType::SymLink => 'l',
+                   EntryType::Fifo => 'p',
+                   EntryType::Unknown(_) => '?',
+               })
+    }
+}
+
+
+impl UserGroupMap {
     pub fn new() -> Self {
-        UserGroupNameCache {
+        UserGroupMap {
             uid_map: HashMap::new(),
             gid_map: HashMap::new(),
         }
@@ -300,126 +531,32 @@ impl UserGroupNameCache {
 }
 
 
-fn add_sigfile_to_chain<R: Read>(chain: &mut Chain,
-                                 ug_cache: &mut UserGroupNameCache,
-                                 file: R,
-                                 sigfile: &SignatureFile)
-                                 -> io::Result<()> {
-    let result = {
-        let snapshot_id = chain.timestamps.len() as u8;
-        if sigfile.compressed {
-            let gz_decoder = try!(GzDecoder::new(file));
-            add_sigtar_to_snapshots(&mut chain.files,
-                                    ug_cache,
-                                    tar::Archive::new(gz_decoder),
-                                    snapshot_id)
+impl Display for ModeDisplay {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        // from octal permissions to rwx ls style
+        if let Some(mode) = self.0 {
+            let special = mode >> 9;
+            // index iterates over user, group, other
+            for i in (0..3).rev() {
+                let curr = mode >> (i * 3);
+                let r = if curr & 0b100 > 0 { "r" } else { "-" };
+                let w = if curr & 0b010 > 0 { "w" } else { "-" };
+                // executable must handle the special permissions
+                let x = match (curr & 0b001 > 0, special & (1 << i) > 0) {
+                    (true, false) => "x",
+                    (false, false) => "-",
+                    (true, true) => if i == 0 { "t" } else { "s" },
+                    (false, true) => if i == 0 { "T" } else { "S" },
+                };
+                try!(write!(f, "{}{}{}", r, w, x));
+            }
+            Ok(())
         } else {
-            add_sigtar_to_snapshots(&mut chain.files,
-                                    ug_cache,
-                                    tar::Archive::new(file),
-                                    snapshot_id)
+            write!(f, "?")
         }
-    };
-    if result.is_ok() {
-        // add to the list of signatures only if everything is ok
-        // we do not need to cleanup the chain if someting went wrong, because if the
-        // list of signatures is not updated, the change is not observable
-        chain.timestamps.push(sigfile.time);
     }
-    result
 }
 
-fn add_sigtar_to_snapshots<R: Read>(snapshots: &mut Vec<PathSnapshots>,
-                                    ug_cache: &mut UserGroupNameCache,
-                                    mut tar: tar::Archive<R>,
-                                    snapshot_id: u8)
-                                    -> io::Result<()> {
-    let mut new_files: Vec<PathSnapshots> = Vec::new();
-    {
-        let mut old_snapshots = snapshots.iter_mut().peekable();
-        for tarfile in try!(tar.files_mut()) {
-            // we can ignore paths with errors
-            // the only problem here is that we miss some change in the chain, but it is
-            // better than abort the whole signature
-            let mut tarfile = unwrap_or_continue!(tarfile);
-            let size_hint = compute_size_hint(&mut tarfile);
-            let path = unwrap_or_continue!(tarfile.header().path());
-            let (difftype, path) = unwrap_opt_or_continue!(parse_snapshot_path(&path));
-            let info = match difftype {
-                DiffType::Signature | DiffType::Snapshot => {
-                    let header = tarfile.header();
-                    let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
-                    if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
-                        ug_cache.add_user(uid, name.to_owned());
-                    }
-                    if let (Ok(gid), Some(name)) = (header.gid(), header.groupname()) {
-                        ug_cache.add_group(gid, name.to_owned());
-                    }
-                    Some(PathInfo {
-                        mtime: time,
-                        uid: header.uid().ok(),
-                        gid: header.gid().ok(),
-                        mode: header.mode().ok(),
-                        size_hint: size_hint,
-                    })
-                }
-                _ => None,
-            };
-            let new_snapshot = PathSnapshot {
-                info: info,
-                index: snapshot_id,
-            };
-            // find the current path in the old snapshots
-            // note: they are ordered
-            let position = {
-                let mut position: Option<&mut PathSnapshots> = None;
-                loop {
-                    let mut found = false;
-                    if let Some(path_snapshots) = old_snapshots.peek() {
-                        let old_path = path_snapshots.path.as_path();
-                        if old_path == path {
-                            // this path is already present in old snapshots: update them
-                            found = true;
-                        } else if old_path > path {
-                            // we've already reached the first item next to the current path
-                            // so, the path is not present in old snapshots
-                            break;
-                        }
-                    }
-                    if found {
-                        let path_snapshots = old_snapshots.next().unwrap();
-                        position = Some(path_snapshots);
-                    } else {
-                        // we have not found the element, so 'old_path < path' or there are no
-                        // more paths to check:
-                        // continue the loop if there are more elements
-                        if !old_snapshots.next().is_some() {
-                            break;
-                        }
-                    }
-                }
-                position
-            };
-            if let Some(path_snapshots) = position {
-                path_snapshots.snapshots.push(new_snapshot);
-            } else {
-                // the path is not present in the old snapshots: add to new list
-                new_files.push(PathSnapshots {
-                    path: path.to_path_buf(),
-                    snapshots: vec![new_snapshot],
-                });
-            }
-        }
-    }
-    // merge the new files with old snapshots
-    if !new_files.is_empty() {
-        // TODO: Performance hurt here: we have two sorted arrays to merge,
-        // better to use this algorithm: http://stackoverflow.com/a/4553321/1667955
-        snapshots.extend(new_files.into_iter());
-        snapshots.sort_by(|a, b| a.path.cmp(&b.path));
-    }
-    Ok(())
-}
 
 fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     // split the path in (first directory, the remaining path)
@@ -442,7 +579,7 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     }
 }
 
-fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)> {
+fn compute_size_hint<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
     let difftype = {
         let path = try_opt!(file.header().path().ok());
         let (difftype, _) = try_opt!(parse_snapshot_path(&path));
@@ -459,20 +596,7 @@ fn compute_size_hint<R: Read>(file: &mut tar::File<R>) -> Option<(usize, usize)>
 ///
 /// This function returns the lower and upper bound of the file size in bytes. On error returns
 /// `None`.
-///
-/// # Examples
-///
-/// ```rust
-/// use std::io::Cursor;
-/// use ruplicity::signatures::compute_size_hint_signature;
-///
-/// let bytes = vec![0x72, 0x73, 0x01, 0x36, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x08,
-///                  0xaf, 0xb8, 0x99, 0x27, 0x6f, 0x3a, 0x17, 0xc2, 0xc1, 0x4e, 0x76, 0x83];
-/// let mut cursor = Cursor::new(bytes);
-/// let computed = compute_size_hint_signature(&mut cursor);
-/// assert_eq!(computed, Some((0, 512)));
-/// ```
-pub fn compute_size_hint_signature<R: Read>(file: &mut R) -> Option<(usize, usize)> {
+fn compute_size_hint_signature<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
@@ -485,7 +609,8 @@ pub fn compute_size_hint_signature<R: Read>(file: &mut R) -> Option<(usize, usiz
         let ss_len = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
         let sign_block_len_bytes = 4 + ss_len;
         // the remaining part of the file are blocks
-        let num_blocks = file.bytes().count() / sign_block_len_bytes;
+        let file_size = try_opt!(file.header().size().ok()) as usize;
+        let num_blocks = (file_size - 8) / sign_block_len_bytes;
 
         let max_file_len = file_block_len_bytes * num_blocks;
         if max_file_len > file_block_len_bytes {
@@ -497,111 +622,151 @@ pub fn compute_size_hint_signature<R: Read>(file: &mut R) -> Option<(usize, usiz
     }
 }
 
-fn compute_size_hint_snapshot<R: Read>(file: &mut R) -> Option<(usize, usize)> {
-    let bytes = file.bytes().count();
+fn compute_size_hint_snapshot<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
+    let bytes = try_opt!(file.header().size().ok()) as usize;
     Some((bytes, bytes))
+}
+
+// used for tests only
+#[cfg(test)]
+#[doc(hidden)]
+pub fn _mode_display(mode: Option<u32>) -> String {
+    format!("{}", ModeDisplay(mode))
 }
 
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use backend::Backend;
     use backend::local::LocalBackend;
-    use time_utils::{parse_time_str, to_pretty_local};
-    use time_utils::test_utils::set_time_zone;
+    use collections::Collections;
+    use time_utils::parse_time_str;
 
     use std::path::Path;
     use time::Timespec;
 
 
     #[derive(Debug, Clone, Eq, PartialEq)]
-    struct FileTest<'a> {
+    struct EntryTest<'a> {
         path: &'a Path,
         mtime: Timespec,
         uname: &'a str,
         gname: &'a str,
+        entry_type: EntryType,
+        link: Option<&'a Path>,
     }
 
-    impl<'a> FileTest<'a> {
-        pub fn from_file(file: &File<'a>) -> Self {
-            FileTest {
+    impl<'a> EntryTest<'a> {
+        pub fn from_entry(file: &Entry<'a>) -> Self {
+            EntryTest {
                 path: file.path(),
                 mtime: file.mtime(),
                 uname: file.username().unwrap(),
                 gname: file.groupname().unwrap(),
+                entry_type: file.entry_type(),
+                link: file.linked_path(),
             }
         }
 
-        pub fn from_info(path: &'a Path, mtime: &'a str, uname: &'a str, gname: &'a str) -> Self {
-            FileTest {
+        pub fn from_info(path: &'a Path,
+                         mtime: &'a str,
+                         uname: &'a str,
+                         gname: &'a str,
+                         etype: EntryType,
+                         link: Option<&'a Path>)
+                         -> Self {
+            EntryTest {
                 path: path,
                 mtime: parse_time_str(mtime).unwrap(),
                 uname: uname,
                 gname: gname,
+                entry_type: etype,
+                link: link,
             }
         }
     }
 
-    fn make_ftest<'a>(path: &'a str, time: &'a str) -> FileTest<'a> {
-        FileTest::from_info(Path::new(path), time, "michele", "michele")
+    fn make_ftest<'a>(path: &'a str, time: &'a str, etype: EntryType) -> EntryTest<'a> {
+        EntryTest::from_info(Path::new(path), time, "michele", "michele", etype, None)
     }
 
-    fn get_single_vol_files() -> Vec<Vec<FileTest<'static>>> {
+    fn make_ftest_link<'a>(path: &'a str, time: &'a str, link: &'a str) -> EntryTest<'a> {
+        EntryTest::from_info(Path::new(path),
+                             time,
+                             "michele",
+                             "michele",
+                             EntryType::SymLink,
+                             Some(Path::new(link)))
+    }
+
+    fn single_vol_expected_files() -> Vec<Vec<EntryTest<'static>>> {
         // the utf-8 invalid path name is apparently not testable
         // so, we are going to ignore it
         //
         // snapshot 1
-        let s1 = vec![make_ftest("", "20020928t183059z"),
-                      make_ftest("changeable_permission", "20010828t182330z"),
-                      make_ftest("deleted_file", "20020727t230005z"),
-                      make_ftest("directory_to_file", "20020727t230036z"),
-                      make_ftest("directory_to_file/file", "20020727t230036z"),
-                      make_ftest("executable", "20010828t073429z"),
-                      make_ftest("executable2", "20010828t181927z"),
-                      make_ftest("fifo", "20010828t073246z"),
-                      make_ftest("file_to_directory", "20020727t232354z"),
-                      make_ftest("largefile", "20020731t015430z"),
-                      make_ftest("regular_file", "20010828t073052z"),
-                      make_ftest("regular_file.sig", "20010830t004037z"),
-                      make_ftest("symbolic_link", "20021101t044447z"),
-                      make_ftest("test", "20010828t215638z"),
-                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
-                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
+        let s1 = vec![make_ftest("", "20020928t183059z", EntryType::Dir),
+                      make_ftest("changeable_permission", "20010828t182330z", EntryType::File),
+                      make_ftest("deleted_file", "20020727t230005z", EntryType::File),
+                      make_ftest("directory_to_file", "20020727t230036z", EntryType::Dir),
+                      make_ftest("directory_to_file/file",
+                                 "20020727t230036z",
+                                 EntryType::File),
+                      make_ftest("executable", "20010828t073429z", EntryType::File),
+                      make_ftest("executable2", "20010828t181927z", EntryType::File),
+                      make_ftest("fifo", "20010828t073246z", EntryType::Fifo),
+                      make_ftest("file_to_directory", "20020727t232354z", EntryType::File),
+                      make_ftest("largefile", "20020731t015430z", EntryType::File),
+                      make_ftest("regular_file", "20010828t073052z", EntryType::File),
+                      make_ftest("regular_file.sig", "20010830t004037z", EntryType::File),
+                      make_ftest_link("symbolic_link", "20021101t044447z", "regular_file"),
+                      make_ftest("test", "20010828t215638z", EntryType::File),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z", EntryType::File),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z", EntryType::File)];
         // snapshot 2
-        let s2 = vec![make_ftest("", "20020731t015532z"),
-                      make_ftest("changeable_permission", "20010828t182330z"),
-                      make_ftest("directory_to_file", "20020727t230048z"),
-                      make_ftest("executable", "20010828t073429z"),
-                      make_ftest("executable2", "20020727t230133z"),
-                      make_ftest("executable2/another_file", "20020727t230133z"),
-                      make_ftest("fifo", "20010828t073246z"),
-                      make_ftest("file_to_directory", "20020727t232406z"),
-                      make_ftest("largefile", "20020731t015524z"),
-                      make_ftest("new_file", "20020727t230018z"),
-                      make_ftest("regular_file", "20020727t225932z"),
-                      make_ftest("regular_file.sig", "20010830t004037z"),
-                      make_ftest("symbolic_link", "20020727t225946z"),
-                      make_ftest("test", "20010828t215638z"),
-                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
-                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
+        let s2 = vec![make_ftest("", "20020731t015532z", EntryType::Dir),
+                      make_ftest("changeable_permission", "20010828t182330z", EntryType::File),
+                      make_ftest("directory_to_file", "20020727t230048z", EntryType::File),
+                      make_ftest("executable", "20010828t073429z", EntryType::File),
+                      make_ftest("executable2", "20020727t230133z", EntryType::Dir),
+                      make_ftest("executable2/another_file",
+                                 "20020727t230133z",
+                                 EntryType::File),
+                      make_ftest("fifo", "20010828t073246z", EntryType::Fifo),
+                      make_ftest("file_to_directory", "20020727t232406z", EntryType::Dir),
+                      make_ftest("largefile", "20020731t015524z", EntryType::File),
+                      make_ftest("new_file", "20020727t230018z", EntryType::File),
+                      make_ftest("regular_file", "20020727t225932z", EntryType::File),
+                      make_ftest("regular_file.sig", "20010830t004037z", EntryType::File),
+                      make_ftest("symbolic_link", "20020727t225946z", EntryType::Dir),
+                      make_ftest("test", "20010828t215638z", EntryType::File),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z", EntryType::File),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z", EntryType::File)];
         // snapshot 3
-        let s3 = vec![make_ftest("", "20020928t183059z"),
-                      make_ftest("changeable_permission", "20010828t182330z"),
-                      make_ftest("executable", "20010828t073429z"),
-                      make_ftest("executable2", "20010828t181927z"),
-                      make_ftest("fifo", "20010828t073246z"),
-                      make_ftest("largefile", "20020731t034334z"),
-                      make_ftest("regular_file", "20010828t073052z"),
-                      make_ftest("regular_file.sig", "20010830t004037z"),
-                      make_ftest("symbolic_link", "20021101t044448z"),
-                      make_ftest("test", "20010828t215638z"),
-                      make_ftest("two_hardlinked_files1", "20010828t073142z"),
-                      make_ftest("two_hardlinked_files2", "20010828t073142z")];
+        let s3 = vec![make_ftest("", "20020928t183059z", EntryType::Dir),
+                      make_ftest("changeable_permission", "20010828t182330z", EntryType::File),
+                      make_ftest("executable", "20010828t073429z", EntryType::File),
+                      make_ftest("executable2", "20010828t181927z", EntryType::File),
+                      make_ftest("fifo", "20010828t073246z", EntryType::Fifo),
+                      make_ftest("largefile", "20020731t034334z", EntryType::File),
+                      make_ftest("regular_file", "20010828t073052z", EntryType::File),
+                      make_ftest("regular_file.sig", "20010830t004037z", EntryType::File),
+                      make_ftest_link("symbolic_link", "20021101t044448z", "regular_file"),
+                      make_ftest("test", "20010828t215638z", EntryType::File),
+                      make_ftest("two_hardlinked_files1", "20010828t073142z", EntryType::File),
+                      make_ftest("two_hardlinked_files2", "20010828t073142z", EntryType::File)];
 
         vec![s1, s2, s3]
     }
 
-    fn get_single_vol_sizes() -> Vec<Vec<usize>> {
+    fn single_vol_files() -> Chain {
+        let backend = LocalBackend::new("tests/backups/single_vol");
+        let filenames = backend.file_names().unwrap();
+        let coll = Collections::from_filenames(filenames);
+        Chain::from_sigchain(coll.signature_chains().next().unwrap(), &backend).unwrap()
+    }
+
+    fn single_vol_sizes_unix() -> Vec<Vec<usize>> {
         // note that `ls -l` returns 4096 for directory size, but we consider directories to be
         // null sized.
         // note also that symbolic links are considered to be null sized. This is an open question
@@ -611,15 +776,30 @@ mod test {
              vec![0, 0, 30, 30, 0, 3500000, 75650, 456, 0, 0, 11, 11, 0]]
     }
 
+    #[cfg(windows)]
+    fn single_vol_sizes() -> Vec<Vec<usize>> {
+        let mut result = single_vol_sizes_unix();
+        // remove the last element
+        for s in &mut result {
+            s.pop();
+        }
+        result
+    }
+
+    #[cfg(unix)]
+    fn single_vol_sizes() -> Vec<Vec<usize>> {
+        single_vol_sizes_unix()
+    }
+
+
     #[test]
     fn file_list() {
-        let expected_files = get_single_vol_files();
-        let backend = LocalBackend::new("tests/backups/single_vol");
-        let files = BackupFiles::new(&backend).unwrap();
+        let expected_files = single_vol_expected_files();
+        let files = single_vol_files();
         // println!("debug files\n---------\n{:#?}\n----------", files);
         let actual_files = files.snapshots().map(|s| {
             s.files()
-             .map(|f| FileTest::from_file(&f))
+             .map(|f| EntryTest::from_entry(&f))
              .filter(|f| f.path.to_str().is_some())
              .collect::<Vec<_>>()
         });
@@ -632,19 +812,18 @@ mod test {
 
     #[test]
     fn size_hint() {
-        let backend = LocalBackend::new("tests/backups/single_vol");
-        let files = BackupFiles::new(&backend).unwrap();
+        let files = single_vol_files();
         let actual_sizes = files.snapshots().map(|s| {
             s.files()
              .map(|f| f.size_hint().unwrap())
              .collect::<Vec<_>>()
         });
-        let expected_sizes = get_single_vol_sizes();
+        let expected_sizes = single_vol_sizes();
 
         // iterate all over the snapshots
         for (actual, expected) in actual_sizes.zip(expected_sizes) {
+            // println!("debug {:?}", actual);
             assert_eq!(actual.len(), expected.len());
-            println!("debug {:?}", actual);
             // iterate all the files
             for (actual, expected) in actual.iter().zip(expected) {
                 assert!(actual.0 <= expected && actual.1 >= expected,
@@ -658,17 +837,31 @@ mod test {
 
     #[test]
     fn display() {
-        // avoid test differences for time zones
-        let _lock = set_time_zone("Europe/Rome");
-
-        let backend = LocalBackend::new("tests/backups/single_vol");
-        let files = BackupFiles::new(&backend).unwrap();
-        println!("Backup snapshots:");
+        // NOTE: this is actually not a proper test
+        //       here we are only printing out the snapshots.
+        //       however not panicking is already something :)
+        //       Display is not properly testable due to time zones differencies;
+        //       we want to avoid using global mutexes in test code
+        let files = single_vol_files();
+        println!("Backup snapshots:\n");
         for snapshot in files.snapshots() {
-            println!("Snapshot {}", to_pretty_local(snapshot.time()));
-            for file in snapshot.files() {
-                println!("{}", file);
-            }
+            println!("Snapshot\n{}", snapshot.files().into_display());
         }
+    }
+
+    #[test]
+    fn mode_display() {
+        // see http://permissions-calculator.org/symbolic/
+        // for help on permissions
+        assert_eq!(_mode_display(None), "?");
+        assert_eq!(_mode_display(Some(0o777)), "rwxrwxrwx");
+        assert_eq!(_mode_display(Some(0o000)), "---------");
+        assert_eq!(_mode_display(Some(0o444)), "r--r--r--");
+        assert_eq!(_mode_display(Some(0o700)), "rwx------");
+        assert_eq!(_mode_display(Some(0o542)), "r-xr---w-");
+        assert_eq!(_mode_display(Some(0o4100)), "--s------");
+        assert_eq!(_mode_display(Some(0o4000)), "--S------");
+        assert_eq!(_mode_display(Some(0o7000)), "--S--S--T");
+        assert_eq!(_mode_display(Some(0o7111)), "--s--s--t");
     }
 }

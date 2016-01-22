@@ -1,11 +1,37 @@
+//! Local file system backend.
+//!
+//! This sub-module provides types for accessing the local file system as a backend.
+//!
+//! # Example
+//!
+//! ```
+//! use ruplicity::backend::Backend;
+//! use ruplicity::backend::local::LocalBackend;
+//! use std::io::Read;
+//! use std::path::Path;
+//!
+//! let backend = LocalBackend::new("tests/backend");
+//! for file in backend.file_names().unwrap() {
+//!     // print the current path
+//!     let path: &Path = file.as_ref();
+//!     println!("file: {}", path.to_str().unwrap());
+//!     // print file contents
+//!     let mut file = backend.open_file(path).unwrap();
+//!     let mut contents = Vec::new();
+//!     file.read_to_end(&mut contents).unwrap();
+//!     println!("contents: {}", String::from_utf8(contents).unwrap());
+//! }
+//! ```
+
 use super::Backend;
 use std::fs::{self, File};
+use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::ffi::OsString;
 
 
-/// Backend operating on the local filesystem.
+/// Backend for some directory in the local file system.
+#[derive(Debug)]
 pub struct LocalBackend {
     base_path: PathBuf,
 }
@@ -15,7 +41,7 @@ pub struct FileNameIterator(fs::ReadDir);
 
 
 impl LocalBackend {
-    /// Create a new LocalBackend that operates on the given directory.
+    /// Creates a new local backend for the given directory.
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         LocalBackend { base_path: path.as_ref().to_path_buf() }
     }
@@ -26,7 +52,7 @@ impl Backend for LocalBackend {
     type FileNameIter = FileNameIterator;
     type FileStream = File;
 
-    fn get_file_names(&self) -> io::Result<Self::FileNameIter> {
+    fn file_names(&self) -> io::Result<Self::FileNameIter> {
         let dir = try!(fs::read_dir(self.base_path.as_path()));
         Ok(FileNameIterator(dir))
     }
@@ -48,5 +74,39 @@ impl Iterator for FileNameIterator {
             }
         }
         None
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use backend::Backend;
+
+    #[test]
+    fn multi_chain_files() {
+        let backend = LocalBackend::new("tests/backups/multi_chain");
+        let files = backend.file_names().unwrap().collect::<Vec<_>>();
+        let actual = {
+            let mut r = files.iter()
+                             .map(|p| p.to_str().unwrap())
+                             .filter(|p| p.starts_with("duplicity-"))
+                             .collect::<Vec<_>>();
+            r.sort();
+            r
+        };
+        let expected = vec!["duplicity-full-signatures.20160108T223144Z.sigtar.gz",
+                            "duplicity-full-signatures.20160108T223209Z.sigtar.gz",
+                            "duplicity-full.20160108T223144Z.manifest",
+                            "duplicity-full.20160108T223144Z.vol1.difftar.gz",
+                            "duplicity-full.20160108T223209Z.manifest",
+                            "duplicity-full.20160108T223209Z.vol1.difftar.gz",
+                            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+                            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.vol1.difftar.gz",
+                            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
+                            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.vol1.difftar.gz",
+                            "duplicity-new-signatures.20160108T223144Z.to.20160108T223159Z.sigtar.gz",
+                            "duplicity-new-signatures.20160108T223209Z.to.20160108T223217Z.sigtar.gz"];
+        assert_eq!(actual, expected);
     }
 }
