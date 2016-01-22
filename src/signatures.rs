@@ -17,7 +17,6 @@ use time::Timespec;
 use backend::Backend;
 use collections::{SignatureChain, SignatureFile};
 use time_utils::TimeDisplay;
-use tarext;
 
 
 /// Stores information about paths in a backup chain.
@@ -194,7 +193,7 @@ impl Chain {
         let mut new_files: Vec<PathSnapshots> = Vec::new();
         {
             let mut old_snapshots = self.files.iter_mut().peekable();
-            for tarfile in tarext::GnuEntries::new(try!(tar.files_mut())) {
+            for tarfile in try!(tar.entries()) {
                 // we can ignore paths with errors
                 // the only problem here is that we miss some change in the chain, but it is
                 // better than abort the whole signature
@@ -206,13 +205,13 @@ impl Chain {
                     DiffType::Signature | DiffType::Snapshot => {
                         let header = tarfile.header();
                         let time = Timespec::new(header.mtime().unwrap_or(0) as i64, 0);
-                        if let (Ok(uid), Some(name)) = (header.uid(), header.username()) {
+                        if let (Ok(uid), Ok(Some(name))) = (header.uid(), header.username()) {
                             self.ug_map.add_user(uid, name.to_owned());
                         }
-                        if let (Ok(gid), Some(name)) = (header.gid(), header.groupname()) {
+                        if let (Ok(gid), Ok(Some(name))) = (header.gid(), header.groupname()) {
                             self.ug_map.add_group(gid, name.to_owned());
                         }
-                        let link = match tarext::link_name(header) {
+                        let link = match tarfile.link_name() {
                             Ok(Some(path)) => Some(path.to_path_buf()),
                             _ => None,
                         };
@@ -222,8 +221,7 @@ impl Chain {
                             gid: header.gid().ok(),
                             mode: header.mode().ok(),
                             size_hint: size_hint,
-                            // TODO #25: refactor when tar is updated
-                            entry_type: header.link[0],
+                            entry_type: tarfile.header().entry_type().as_byte(),
                             link: link,
                         })
                     }
@@ -579,7 +577,7 @@ fn parse_snapshot_path(path: &Path) -> Option<(DiffType, &Path)> {
     }
 }
 
-fn compute_size_hint<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
+fn compute_size_hint<R: Read>(file: &mut tar::Entry<R>) -> Option<(usize, usize)> {
     let difftype = {
         let path = try_opt!(file.header().path().ok());
         let (difftype, _) = try_opt!(parse_snapshot_path(&path));
@@ -596,7 +594,7 @@ fn compute_size_hint<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, 
 ///
 /// This function returns the lower and upper bound of the file size in bytes. On error returns
 /// `None`.
-fn compute_size_hint_signature<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
+fn compute_size_hint_signature<R: Read>(file: &mut tar::Entry<R>) -> Option<(usize, usize)> {
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
@@ -622,7 +620,7 @@ fn compute_size_hint_signature<R: Read>(file: &mut tarext::GnuEntry<R>) -> Optio
     }
 }
 
-fn compute_size_hint_snapshot<R: Read>(file: &mut tarext::GnuEntry<R>) -> Option<(usize, usize)> {
+fn compute_size_hint_snapshot<R: Read>(file: &mut tar::Entry<R>) -> Option<(usize, usize)> {
     let bytes = try_opt!(file.header().size().ok()) as usize;
     Some((bytes, bytes))
 }

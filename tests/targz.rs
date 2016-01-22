@@ -21,7 +21,7 @@ fn targz() {
     let gz_decoder = GzDecoder::new(file).unwrap();
     let mut tar = Archive::new(gz_decoder);
     let expected = ["a", "b", "c/", "c/d"];
-    let actual = tar.files_mut()
+    let actual = tar.entries()
                     .unwrap()
                     .map(|f| f.unwrap().header().path().unwrap().to_str().unwrap().to_owned())
                     .collect::<Vec<_>>();
@@ -29,13 +29,14 @@ fn targz() {
 }
 
 #[test]
+#[ignore]
 fn single_vol_names() {
     let file =
         File::open("tests/backups/single_vol/duplicity-full.20150617T182545Z.vol1.difftar.gz")
             .unwrap();
     let gz_decoder = GzDecoder::new(file).unwrap();
     let mut tar = Archive::new(gz_decoder);
-    for file in tar.files_mut().unwrap() {
+    for file in tar.entries().unwrap() {
         if let Ok(f) = file {
             println!("{:?} {:?}",
                      f.header().mode(),
@@ -49,9 +50,9 @@ fn link() {
     use std::io::Read;
 
     let file = File::open("tests/link.tar").unwrap();
-    let tar = Archive::new(file);
+    let mut tar = Archive::new(file);
     let contents: Vec<_> = {
-        tar.files()
+        tar.entries()
            .unwrap()
            .map(|f| {
                let mut f = f.unwrap();
@@ -70,13 +71,14 @@ fn link() {
     assert_eq!(contents, expected);
 }
 
+
 #[test]
 fn long_path() {
-    let file = File::open("tests/long_path.tar") .unwrap();
+    let file = File::open("tests/long_path.tar").unwrap();
     let mut tar = Archive::new(file);
-    for file in tar.files_mut().unwrap() {
-        if let Ok(f) = file {
-            println!("{:?}",  f.header().path().unwrap())
-        }
-    }
+    let last_entry = tar.entries().unwrap().last().unwrap().unwrap();
+    let path = last_entry.path().unwrap();
+    assert_eq!(path.to_str().unwrap(),
+               "home/michele/Documenti/Development/Progetti/MetaCloudExperiment\
+                   /Reference/duplicati/BuildTools/WixIncludeMake/Program.cs");
 }
