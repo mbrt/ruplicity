@@ -1,3 +1,5 @@
+# Documentation and remarks on duplicity
+
 ## Useful links
 
 * tutorial on using FUSE filesystem in rust [part I](http://zsiciarz.github.io/24daysofrust/book/day15.html) and [part II](http://zsiciarz.github.io/24daysofrust/book/day16.html) and related [source code](https://github.com/zsiciarz/24daysofrust/blob/master/src/day15.rs);
@@ -131,11 +133,11 @@ For example:
 Hostname dellxps
 Localdir /
 Volume 1:
-    StartingPath   .  
+    StartingPath   .
     EndingPath     "home/michele/Documents/My\x20Important\x20Docs\big_file.tar" 15
     Hash SHA1 012886c20a9670cff933ee1724104a8f24c09253
 Volume 2:
-    StartingPath   "home/michele/Documents/My\x20Important\x20Docs\big_file.tar" 16  
+    StartingPath   "home/michele/Documents/My\x20Important\x20Docs\big_file.tar" 16
     EndingPath     home/michele/Z
     Hash SHA1 e7feba722cb4309878e8f6731f8bcd7cb346a7c4
 ```

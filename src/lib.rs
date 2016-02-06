@@ -52,6 +52,7 @@ mod tarext; // TODO #25: remove when tar crate is available
 pub mod time_utils;
 pub mod backend;
 pub mod collections;
+pub mod manifest;
 pub mod signatures;
 
 use std::cell::{Ref, RefCell};
