@@ -141,8 +141,8 @@ impl<R: BufRead> ManifestParser<R> {
             let (pos, end) = {
                 let buf = try!(self.input.fill_buf());
                 match buf.iter().cloned().position(|b| b != b' ') {
-                    Some(p) => (p, false),
-                    None => (buf.len(), true),
+                    Some(p) => (p, true),
+                    None => (buf.len(), buf.is_empty()),
                 }
             };
             self.input.consume(pos);
@@ -150,6 +150,42 @@ impl<R: BufRead> ManifestParser<R> {
                 return Ok(());
             }
         }
+    }
+
+    fn read_param(&mut self) -> io::Result<Vec<u8>> {
+        if try!(self.consume_byte(b'"')) {
+            try!(self.input.read_until(b'"', &mut self.buf));
+        } else {
+            try!(self.input.read_until(b'\n', &mut self.buf));
+        }
+        let mut result = Vec::with_capacity(self.buf.len());
+        // unescape
+        for (i, b) in self.buf.iter().cloned().enumerate() {
+            if b != b'\\' {
+                result.push(b);
+            } else {
+                let rest = self.buf.split_at(i).1;
+                if rest.starts_with(b"\\") {
+                    result.push(b'\\');
+                } else if rest.starts_with(b"%20") {
+                    result.push(b' ');
+                } else if rest.starts_with(b"\"") {
+                    result.push(b'"');
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    fn consume_byte(&mut self, expected: u8) -> io::Result<bool> {
+        let found = {
+            let buf = try!(self.input.fill_buf());
+            buf.first().map_or(false, |b| *b == expected)
+        };
+        if found {
+            self.input.consume(1);
+        }
+        Ok(found)
     }
 }
 
