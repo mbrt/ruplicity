@@ -5,6 +5,8 @@ use std::fmt::{self, Display, Formatter};
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
 use std::str;
+use std::string::FromUtf8Error;
+
 
 /// Manifest file info.
 pub struct Manifest {
@@ -27,9 +29,9 @@ pub enum ParseError {
     /// wip
     Io(io::Error),
     /// wip
-    MissingHostname,
+    MissingKeyword(String),
     /// wip
-    MissingLocaldir,
+    Utf8Error(FromUtf8Error),
 }
 
 
@@ -37,7 +39,7 @@ struct ManifestParser<R> {
     input: R,
     buf: Vec<u8>,
     hostname: String,
-    local_dir: Option<PathBuf>,
+    local_dir: Vec<u8>,
     volumes: Vec<Option<Volume>>,
 }
 
@@ -75,8 +77,8 @@ impl Error for ParseError {
     fn description(&self) -> &str {
         match *self {
             ParseError::Io(ref err) => err.description(),
-            ParseError::MissingHostname => "missing 'Hostname' keyword",
-            ParseError::MissingLocaldir => "missing 'Localdir' keyword",
+            ParseError::MissingKeyword(_) => "missing keyword in manifest",
+            ParseError::Utf8Error(ref err) => err.description(),
         }
     }
 }
@@ -85,7 +87,8 @@ impl Display for ParseError {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         match *self {
             ParseError::Io(ref e) => write!(fmt, "{}", e),
-            _ => write!(fmt, "{}", self.description()),
+            ParseError::MissingKeyword(ref e) => write!(fmt, "missing keyword '{}' in manifest", e),
+            ParseError::Utf8Error(ref e) => write!(fmt, "{}", e),
         }
     }
 }
@@ -96,6 +99,12 @@ impl From<io::Error> for ParseError {
     }
 }
 
+impl From<FromUtf8Error> for ParseError {
+    fn from(err: FromUtf8Error) -> ParseError {
+        ParseError::Utf8Error(err)
+    }
+}
+
 
 impl<R: BufRead> ManifestParser<R> {
     pub fn new(input: R) -> Self {
@@ -103,31 +112,31 @@ impl<R: BufRead> ManifestParser<R> {
             input: input,
             buf: vec![],
             hostname: String::new(),
-            local_dir: None,
+            local_dir: vec![],
             volumes: vec![],
         }
     }
 
     pub fn parse(mut self) -> Result<Manifest, ParseError> {
-        // parse hostname
-        if !try!(self.consume_keyword("Hostname")) {
-            return Err(ParseError::MissingHostname);
-        }
-        try!(self.consume_whitespace());
-        try!(self.input.read_line(&mut self.hostname));
-
-        // parse localdir
-        if !try!(self.consume_keyword("Localdir")) {
-            return Err(ParseError::MissingLocaldir);
-        }
-        try!(self.consume_whitespace());
+        self.hostname = try!(self.read_param_str("Hostname"));
+        self.local_dir = try!(self.read_param_bytes("Localdir"));
 
         // make result
-        Ok(Manifest {
-            hostname: self.hostname,
-            local_dir: self.local_dir.unwrap(),
-            volumes: self.volumes,
-        })
+        unimplemented!()
+    }
+
+    fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {
+        try!(self.consume_whitespace());
+        if !try!(self.consume_keyword(key)) {
+            return Err(ParseError::MissingKeyword(key.to_owned()));
+        }
+        try!(self.consume_whitespace());
+        self.read_param_value().map_err(From::from)
+    }
+
+    fn read_param_str(&mut self, key: &str) -> Result<String, ParseError> {
+        let bytes = try!(self.read_param_bytes(key));
+        String::from_utf8(bytes).map_err(From::from)
     }
 
     fn consume_keyword(&mut self, key: &str) -> io::Result<bool> {
@@ -139,7 +148,7 @@ impl<R: BufRead> ManifestParser<R> {
         loop {
             let (pos, end) = {
                 let buf = try!(self.input.fill_buf());
-                match buf.iter().cloned().position(|b| b != b' ') {
+                match buf.iter().cloned().position(|b| !is_whitespace(b)) {
                     Some(p) => (p, true),
                     None => (buf.len(), buf.is_empty()),
                 }
@@ -149,9 +158,16 @@ impl<R: BufRead> ManifestParser<R> {
                 return Ok(());
             }
         }
+
+        fn is_whitespace(b: u8) -> bool {
+            match b {
+                b' ' | b'\r' | b'\n' | b'\t' => true,
+                _ => false,
+            }
+        };
     }
 
-    fn read_param(&mut self) -> io::Result<Vec<u8>> {
+    fn read_param_value(&mut self) -> io::Result<Vec<u8>> {
         if try!(self.consume_byte(b'"')) {
             try!(self.input.read_until(b'"', &mut self.buf));
         } else {
@@ -163,11 +179,11 @@ impl<R: BufRead> ManifestParser<R> {
             if b != b'\\' {
                 result.push(b);
             } else {
-                // expects a \xNN where NN is a number string representing the escaped char
+                // expects a \xNN where NN is a number string representing the escaped char in hex
                 // e.g. \x20 is the space ' '
                 if self.buf.len() - i >= 4 && self.buf[i + 1] == b'x' {
                     let num = (self.buf[i + 2] - b'0') << 4 + self.buf[i + 3] - b'0';
-                    result.push(b);
+                    result.push(num);
                 }
             }
         }
