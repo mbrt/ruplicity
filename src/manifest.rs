@@ -2,7 +2,7 @@
 
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Read};
 use std::path::{Path, PathBuf};
 use std::str::{self, FromStr};
 use std::string::FromUtf8Error;
@@ -45,6 +45,8 @@ struct ManifestParser<R> {
     local_dir: Vec<u8>,
     volumes: Vec<Option<Volume>>,
 }
+
+struct LineReader<'a, R: 'a>(&'a mut R);
 
 
 impl Manifest {
@@ -247,7 +249,34 @@ impl<R: BufRead> ManifestParser<R> {
 }
 
 
+
+impl<'a, R: BufRead + 'a> BufRead for LineReader<'a, R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        let buf = try!(self.0.fill_buf());
+        Ok(filter_newline(buf))
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.0.consume(amt);
+    }
+}
+
+impl<'a, R: Read + 'a> Read for LineReader<'a, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let size = try!(self.0.read(buf));
+        Ok(filter_newline(&buf[0..size]).len())
+    }
+}
+
+
 #[inline]
 fn match_keyword(buf: &[u8], key: &str) -> bool {
     str::from_utf8(&buf).ok().map_or(false, |s| s == key)
+}
+
+fn filter_newline<'b>(buf: &[u8]) -> &[u8] {
+    match buf.iter().cloned().position(|b| b == b'\n') {
+        Some(pos) => buf.split_at(pos).0,
+        None => buf,
+    }
 }
