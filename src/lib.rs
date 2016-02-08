@@ -49,6 +49,7 @@ extern crate try_opt;
 
 mod macros;
 mod tarext; // TODO #25: remove when tar crate is available
+mod rawpath;
 pub mod time_utils;
 pub mod backend;
 pub mod collections;

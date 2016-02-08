@@ -8,18 +8,20 @@ use std::str::{self, FromStr};
 use std::string::FromUtf8Error;
 use std::usize;
 
+use rawpath::RawPath;
+
 
 /// Manifest file info.
 pub struct Manifest {
     hostname: String,
-    local_dir: PathBuf,
+    local_dir: RawPath,
     volumes: Vec<Option<Volume>>,
 }
 
 /// Volume info.
 pub struct Volume {
-    start_path: PathBuf,
-    end_path: PathBuf,
+    start_path: RawPath,
+    end_path: RawPath,
     start_block: Option<usize>,
     end_block: Option<usize>,
     hash_type: String,
@@ -46,8 +48,6 @@ struct ManifestParser<R> {
     volumes: Vec<Option<Volume>>,
 }
 
-struct LineReader<'a, R: 'a>(&'a mut R);
-
 
 impl Manifest {
     /// Parses a stream to get a manifest.
@@ -63,7 +63,7 @@ impl Manifest {
 
     /// wip
     pub fn local_dir(&self) -> Option<&Path> {
-        Some(&self.local_dir)
+        self.local_dir.as_path()
     }
 
     /// wip
@@ -249,34 +249,7 @@ impl<R: BufRead> ManifestParser<R> {
 }
 
 
-
-impl<'a, R: BufRead + 'a> BufRead for LineReader<'a, R> {
-    fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        let buf = try!(self.0.fill_buf());
-        Ok(filter_newline(buf))
-    }
-
-    fn consume(&mut self, amt: usize) {
-        self.0.consume(amt);
-    }
-}
-
-impl<'a, R: Read + 'a> Read for LineReader<'a, R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let size = try!(self.0.read(buf));
-        Ok(filter_newline(&buf[0..size]).len())
-    }
-}
-
-
 #[inline]
 fn match_keyword(buf: &[u8], key: &str) -> bool {
     str::from_utf8(&buf).ok().map_or(false, |s| s == key)
-}
-
-fn filter_newline<'b>(buf: &[u8]) -> &[u8] {
-    match buf.iter().cloned().position(|b| b == b'\n') {
-        Some(pos) => buf.split_at(pos).0,
-        None => buf,
-    }
 }
