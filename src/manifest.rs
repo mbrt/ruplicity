@@ -122,7 +122,6 @@ impl<R: BufRead> ManifestParser<R> {
         }
         try!(self.consume_whitespace());
 
-
         // make result
         Ok(Manifest {
             hostname: self.hostname,
@@ -164,13 +163,11 @@ impl<R: BufRead> ManifestParser<R> {
             if b != b'\\' {
                 result.push(b);
             } else {
-                let rest = self.buf.split_at(i).1;
-                if rest.starts_with(b"\\") {
-                    result.push(b'\\');
-                } else if rest.starts_with(b"%20") {
-                    result.push(b' ');
-                } else if rest.starts_with(b"\"") {
-                    result.push(b'"');
+                // expects a \xNN where NN is a number string representing the escaped char
+                // e.g. \x20 is the space ' '
+                if self.buf.len() - i >= 4 && self.buf[i + 1] == b'x' {
+                    let num = (self.buf[i + 2] - b'0') << 4 + self.buf[i + 3] - b'0';
+                    result.push(b);
                 }
             }
         }
