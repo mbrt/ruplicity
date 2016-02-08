@@ -4,8 +4,9 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
-use std::str;
+use std::str::{self, FromStr};
 use std::string::FromUtf8Error;
+use std::usize;
 
 
 /// Manifest file info.
@@ -19,6 +20,8 @@ pub struct Manifest {
 pub struct Volume {
     start_path: PathBuf,
     end_path: PathBuf,
+    start_block: Option<usize>,
+    end_block: Option<usize>,
     hash_type: String,
     hash: Vec<u8>,
 }
@@ -121,7 +124,29 @@ impl<R: BufRead> ManifestParser<R> {
         self.hostname = try!(self.read_param_str("Hostname"));
         self.local_dir = try!(self.read_param_bytes("Localdir"));
 
+        while let Some((vol, i)) = try!(self.read_volume()) {
+            // resize volumes if necessary
+            if i >= self.volumes.len() {
+                self.volumes.reserve(i + 1);
+                for _ in self.volumes.len()..i + 1 {
+                    self.volumes.push(None);
+                }
+            }
+            self.volumes[i] = Some(vol);
+        }
+
         // make result
+        unimplemented!()
+    }
+
+    fn read_volume(&mut self) -> Result<Option<(Volume, usize)>, ParseError> {
+        // volume number
+        let mut param = try!(self.read_param_str("Volume"));
+        if param.ends_with(":") {
+            param.pop();
+        }
+        let num = usize::from_str(&param);
+
         unimplemented!()
     }
 
@@ -131,7 +156,13 @@ impl<R: BufRead> ManifestParser<R> {
             return Err(ParseError::MissingKeyword(key.to_owned()));
         }
         try!(self.consume_whitespace());
-        self.read_param_value().map_err(From::from)
+        match self.read_param_value() {
+            Ok(res) => {
+                try!(self.consume_newline());
+                Ok(res)
+            }
+            Err(e) => Err(From::from(e)),
+        }
     }
 
     fn read_param_str(&mut self, key: &str) -> Result<String, ParseError> {
@@ -144,11 +175,31 @@ impl<R: BufRead> ManifestParser<R> {
         Ok(match_keyword(&self.buf, key))
     }
 
+    fn consume_newline(&mut self) -> io::Result<()> {
+        self.consume_until(|b| {
+            match b {
+                b' ' | b'\t' | b'\r' | b'\n' => true,
+                _ => false,
+            }
+        })
+    }
+
     fn consume_whitespace(&mut self) -> io::Result<()> {
+        self.consume_until(|b| {
+            match b {
+                b' ' | b'\t' => true,
+                _ => false,
+            }
+        })
+    }
+
+    fn consume_until<F>(&mut self, mut f: F) -> io::Result<()>
+        where F: FnMut(u8) -> bool
+    {
         loop {
             let (pos, end) = {
                 let buf = try!(self.input.fill_buf());
-                match buf.iter().cloned().position(|b| !is_whitespace(b)) {
+                match buf.iter().cloned().position(&mut f) {
                     Some(p) => (p, true),
                     None => (buf.len(), buf.is_empty()),
                 }
@@ -158,13 +209,6 @@ impl<R: BufRead> ManifestParser<R> {
                 return Ok(());
             }
         }
-
-        fn is_whitespace(b: u8) -> bool {
-            match b {
-                b' ' | b'\r' | b'\n' | b'\t' => true,
-                _ => false,
-            }
-        };
     }
 
     fn read_param_value(&mut self) -> io::Result<Vec<u8>> {
