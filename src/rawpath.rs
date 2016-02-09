@@ -6,7 +6,7 @@ use std::ffi::OsString;
 #[cfg(windows)]
 use std::str;
 
-
+#[allow(dead_code)]
 pub enum RawPath {
     Path(PathBuf),
     Bytes(Vec<u8>),
@@ -14,14 +14,19 @@ pub enum RawPath {
 
 
 impl RawPath {
-    pub fn new(bytes: Vec<u8>) -> Self {
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        RawPath::Bytes(vec![])
+    }
+
+    pub fn with_bytes(bytes: Vec<u8>) -> Self {
         Self::from_bytes(bytes)
     }
 
     pub fn as_path(&self) -> Option<&Path> {
         match *self {
             RawPath::Path(ref p) => Some(&p),
-            RawPath::Bytes(ref b) => None,
+            RawPath::Bytes(_) => None,
         }
     }
 

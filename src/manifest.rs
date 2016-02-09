@@ -2,8 +2,8 @@
 
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use std::io::{self, BufRead, Read};
-use std::path::{Path, PathBuf};
+use std::io::{self, BufRead};
+use std::path::Path;
 use std::str::{self, FromStr};
 use std::string::FromUtf8Error;
 use std::usize;
@@ -43,9 +43,6 @@ pub enum ParseError {
 struct ManifestParser<R> {
     input: R,
     buf: Vec<u8>,
-    hostname: String,
-    local_dir: Vec<u8>,
-    volumes: Vec<Option<Volume>>,
 }
 
 
@@ -74,6 +71,49 @@ impl Manifest {
     /// wip
     pub fn volume(&self, num: usize) -> Option<&Volume> {
         self.volumes.get(num).and_then(|v| v.as_ref())
+    }
+}
+
+
+impl Volume {
+    /// wip
+    pub fn start_path(&self) -> Option<&Path> {
+        self.start_path.as_path()
+    }
+
+    /// wip
+    pub fn end_path(&self) -> Option<&Path> {
+        self.end_path.as_path()
+    }
+
+    /// wip
+    pub fn start_path_bytes(&self) -> &[u8] {
+        self.start_path.as_bytes()
+    }
+
+    /// wip
+    pub fn end_path_bytes(&self) -> &[u8] {
+        self.end_path.as_bytes()
+    }
+
+    /// wip
+    pub fn start_block(&self) -> Option<usize> {
+        self.start_block
+    }
+
+    /// wip
+    pub fn end_block(&self) -> Option<usize> {
+        self.end_block
+    }
+
+    /// wip
+    pub fn hash_type(&self) -> &str {
+        &self.hash_type
+    }
+
+    /// wip
+    pub fn hash(&self) -> &[u8] {
+        &self.hash
     }
 }
 
@@ -116,29 +156,30 @@ impl<R: BufRead> ManifestParser<R> {
         ManifestParser {
             input: input,
             buf: vec![],
-            hostname: String::new(),
-            local_dir: vec![],
-            volumes: vec![],
         }
     }
 
     pub fn parse(mut self) -> Result<Manifest, ParseError> {
-        self.hostname = try!(self.read_param_str("Hostname"));
-        self.local_dir = try!(self.read_param_bytes("Localdir"));
+        let hostname = try!(self.read_param_str("Hostname"));
+        let local_dir = RawPath::with_bytes(try!(self.read_param_bytes("Localdir")));
 
+        let mut volumes = Vec::new();
         while let Some((vol, i)) = try!(self.read_volume()) {
             // resize volumes if necessary
-            if i >= self.volumes.len() {
-                self.volumes.reserve(i + 1);
-                for _ in self.volumes.len()..i + 1 {
-                    self.volumes.push(None);
+            if i >= volumes.len() {
+                volumes.reserve(i + 1);
+                for _ in volumes.len()..i + 1 {
+                    volumes.push(None);
                 }
             }
-            self.volumes[i] = Some(vol);
+            volumes[i] = Some(vol);
         }
 
-        // make result
-        unimplemented!()
+        Ok(Manifest {
+            hostname: hostname,
+            local_dir: local_dir,
+            volumes: volumes,
+        })
     }
 
     fn read_volume(&mut self) -> Result<Option<(Volume, usize)>, ParseError> {
