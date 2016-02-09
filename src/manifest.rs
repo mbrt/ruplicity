@@ -269,7 +269,7 @@ impl<R: BufRead> ManifestParser<R> {
                 // expects a \xNN where NN is a number string representing the escaped char in hex
                 // e.g. \x20 is the space ' '
                 if self.buf.len() - i >= 4 && self.buf[i + 1] == b'x' {
-                    let num = (self.buf[i + 2] - b'0') << 4 + self.buf[i + 3] - b'0';
+                    let num = ((self.buf[i + 2] - b'0') << 4) + self.buf[i + 3] - b'0';
                     result.push(num);
                 }
             }
