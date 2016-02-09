@@ -35,10 +35,9 @@ impl RawPath {
     #[cfg(windows)]
     fn from_bytes(bytes: Vec<u8>) -> Self {
         if let Ok(s) = str::from_utf8(&bytes) {
-            RawPath::Path(PathBuf::from(s))
-        } else {
-            RawPath::Bytes(bytes)
+            return RawPath::Path(PathBuf::from(s));
         }
+        RawPath::Bytes(bytes)
     }
 
     #[cfg(unix)]
