@@ -205,13 +205,13 @@ impl<R: BufRead> ManifestParser<R> {
         let num = try!(usize::from_str(&param));
         let start_path = try!(self.read_path_block("StartingPath"));
         let end_path = try!(self.read_path_block("EndingPath"));
+        let (htype, h) = try!(self.read_hash_param());
 
-        // TODO: missing fields
         let vol = Volume {
             start_path: start_path,
             end_path: end_path,
-            hash_type: String::new(),
-            hash: vec![],
+            hash_type: htype,
+            hash: h,
         };
         Ok(Some((vol, num)))
     }
@@ -236,6 +236,19 @@ impl<R: BufRead> ManifestParser<R> {
             path: RawPath::with_bytes(path),
             block: block,
         })
+    }
+
+    fn read_hash_param(&mut self) -> Result<(String, Vec<u8>), ParseError> {
+        try!(self.consume_whitespace());
+        if !try!(self.consume_keyword("Hash")) {
+            return Err(ParseError::MissingKeyword("Hash".to_owned()));
+        }
+        try!(self.consume_whitespace());
+        let bytes = try!(self.read_param_value());
+        let path = try!(String::from_utf8(bytes));
+        try!(self.consume_whitespace());
+
+        unimplemented!()
     }
 
     fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {
