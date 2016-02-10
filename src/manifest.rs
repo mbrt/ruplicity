@@ -3,6 +3,7 @@
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, BufRead};
+use std::num::ParseIntError;
 use std::path::Path;
 use std::str::{self, FromStr};
 use std::string::FromUtf8Error;
@@ -20,10 +21,8 @@ pub struct Manifest {
 
 /// Volume info.
 pub struct Volume {
-    start_path: RawPath,
-    end_path: RawPath,
-    start_block: Option<usize>,
-    end_block: Option<usize>,
+    start_path: PathBlock,
+    end_path: PathBlock,
     hash_type: String,
     hash: Vec<u8>,
 }
@@ -36,9 +35,16 @@ pub enum ParseError {
     /// wip
     MissingKeyword(String),
     /// wip
-    Utf8Error(FromUtf8Error),
+    ParseInt(ParseIntError),
+    /// wip
+    Utf8(FromUtf8Error),
 }
 
+
+struct PathBlock {
+    path: RawPath,
+    block: Option<usize>,
+}
 
 struct ManifestParser<R> {
     input: R,
@@ -78,32 +84,32 @@ impl Manifest {
 impl Volume {
     /// wip
     pub fn start_path(&self) -> Option<&Path> {
-        self.start_path.as_path()
+        self.start_path.path.as_path()
     }
 
     /// wip
     pub fn end_path(&self) -> Option<&Path> {
-        self.end_path.as_path()
+        self.end_path.path.as_path()
     }
 
     /// wip
     pub fn start_path_bytes(&self) -> &[u8] {
-        self.start_path.as_bytes()
+        self.start_path.path.as_bytes()
     }
 
     /// wip
     pub fn end_path_bytes(&self) -> &[u8] {
-        self.end_path.as_bytes()
+        self.end_path.path.as_bytes()
     }
 
     /// wip
     pub fn start_block(&self) -> Option<usize> {
-        self.start_block
+        self.start_path.block
     }
 
     /// wip
     pub fn end_block(&self) -> Option<usize> {
-        self.end_block
+        self.end_path.block
     }
 
     /// wip
@@ -123,7 +129,8 @@ impl Error for ParseError {
         match *self {
             ParseError::Io(ref err) => err.description(),
             ParseError::MissingKeyword(_) => "missing keyword in manifest",
-            ParseError::Utf8Error(ref err) => err.description(),
+            ParseError::ParseInt(ref err) => err.description(),
+            ParseError::Utf8(ref err) => err.description(),
         }
     }
 }
@@ -133,7 +140,8 @@ impl Display for ParseError {
         match *self {
             ParseError::Io(ref e) => write!(fmt, "{}", e),
             ParseError::MissingKeyword(ref e) => write!(fmt, "missing keyword '{}' in manifest", e),
-            ParseError::Utf8Error(ref e) => write!(fmt, "{}", e),
+            ParseError::ParseInt(ref e) => write!(fmt, "{}", e),
+            ParseError::Utf8(ref e) => write!(fmt, "{}", e),
         }
     }
 }
@@ -144,9 +152,15 @@ impl From<io::Error> for ParseError {
     }
 }
 
+impl From<ParseIntError> for ParseError {
+    fn from(err: ParseIntError) -> ParseError {
+        ParseError::ParseInt(err)
+    }
+}
+
 impl From<FromUtf8Error> for ParseError {
     fn from(err: FromUtf8Error) -> ParseError {
-        ParseError::Utf8Error(err)
+        ParseError::Utf8(err)
     }
 }
 
@@ -188,9 +202,40 @@ impl<R: BufRead> ManifestParser<R> {
         if param.ends_with(":") {
             param.pop();
         }
-        let num = usize::from_str(&param);
+        let num = try!(usize::from_str(&param));
+        let start_path = try!(self.read_path_block("StartingPath"));
+        let end_path = try!(self.read_path_block("EndingPath"));
 
-        unimplemented!()
+        // TODO: missing fields
+        let vol = Volume {
+            start_path: start_path,
+            end_path: end_path,
+            hash_type: String::new(),
+            hash: vec![],
+        };
+        Ok(Some((vol, num)))
+    }
+
+    fn read_path_block(&mut self, key: &str) -> Result<PathBlock, ParseError> {
+        try!(self.consume_whitespace());
+        if !try!(self.consume_keyword(key)) {
+            return Err(ParseError::MissingKeyword(key.to_owned()));
+        }
+        try!(self.consume_whitespace());
+        let path = try!(self.read_param_value());
+        try!(self.consume_whitespace());
+        let block = if !try!(self.consume_byte(b'\n')) {
+            let bytes = try!(self.read_param_value());
+            let s = try!(String::from_utf8(bytes));
+            let num = try!(usize::from_str(&s));
+            Some(num)
+        } else {
+            None
+        };
+        Ok(PathBlock {
+            path: RawPath::with_bytes(path),
+            block: block,
+        })
     }
 
     fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {
