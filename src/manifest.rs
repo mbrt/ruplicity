@@ -276,15 +276,18 @@ impl<R: BufRead> ManifestParser<R> {
     }
 
     fn consume_keyword(&mut self, key: &str) -> io::Result<bool> {
-        try!(self.input.read_until(b' ', &mut self.buf));
-        Ok(match_keyword(&self.buf, key))
+        let mut size = try!(self.input.read_until(b' ', &mut self.buf));
+        if size > 0 && self.buf[size - 1] == b' ' {
+            size -= 1
+        }
+        Ok(match_keyword(&self.buf[..size], key))
     }
 
     fn consume_newline(&mut self) -> io::Result<()> {
         self.consume_until(|b| {
             match b {
-                b' ' | b'\t' | b'\r' | b'\n' => true,
-                _ => false,
+                b' ' | b'\t' | b'\r' | b'\n' => false,
+                _ => true,
             }
         })
     }
@@ -292,8 +295,8 @@ impl<R: BufRead> ManifestParser<R> {
     fn consume_whitespace(&mut self) -> io::Result<()> {
         self.consume_until(|b| {
             match b {
-                b' ' | b'\t' => true,
-                _ => false,
+                b' ' | b'\t' => false,
+                _ => true,
             }
         })
     }
