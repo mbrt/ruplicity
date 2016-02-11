@@ -244,11 +244,15 @@ impl<R: BufRead> ManifestParser<R> {
             return Err(ParseError::MissingKeyword("Hash".to_owned()));
         }
         try!(self.consume_whitespace());
-        let bytes = try!(self.read_param_value());
-        let path = try!(String::from_utf8(bytes));
+        let htype = try!(self.read_param_value_str());
         try!(self.consume_whitespace());
+        let mut hash = try!(self.read_param_value());
+        for b in &mut hash {
+            *b -= b'0'
+        }
+        try!(self.consume_newline());
 
-        unimplemented!()
+        Ok((htype, hash))
     }
 
     fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {
@@ -312,6 +316,11 @@ impl<R: BufRead> ManifestParser<R> {
         }
     }
 
+    fn read_param_value_str(&mut self) -> Result<String, ParseError> {
+        let bytes = try!(self.read_param_value());
+        String::from_utf8(bytes).map_err(From::from)
+    }
+
     fn read_param_value(&mut self) -> io::Result<Vec<u8>> {
         if try!(self.consume_byte(b'"')) {
             try!(self.input.read_until(b'"', &mut self.buf));
@@ -351,4 +360,19 @@ impl<R: BufRead> ManifestParser<R> {
 #[inline]
 fn match_keyword(buf: &[u8], key: &str) -> bool {
     str::from_utf8(&buf).ok().map_or(false, |s| s == key)
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::fs::File;
+    use std::io::BufReader;
+
+    #[test]
+    fn parse_no_err() {
+        let file = File::open("tests/manifest/full1.manifest").unwrap();
+        let mut bfile = BufReader::new(file);
+        Manifest::parse(&mut bfile).unwrap();
+    }
 }
