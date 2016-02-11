@@ -325,21 +325,29 @@ impl<R: BufRead> ManifestParser<R> {
     }
 
     fn read_param_value(&mut self) -> io::Result<Vec<u8>> {
-        if try!(self.consume_byte(b'"')) {
-            try!(self.input.read_until(b'"', &mut self.buf));
-        } else {
-            try!(self.input.read_until(b'\n', &mut self.buf));
+        let (mut size, term) = {
+            if try!(self.consume_byte(b'"')) {
+                let s = try!(self.input.read_until(b'"', &mut self.buf));
+                (s, b'"')
+            } else {
+                let s = try!(self.input.read_until(b'\n', &mut self.buf));
+                (s, b'\n')
+            }
+        };
+        if size > 0 && self.buf[size - 1] == term {
+            size -= 1;
         }
-        let mut result = Vec::with_capacity(self.buf.len());
+        let buf = &self.buf[..size];
+        let mut result = Vec::with_capacity(size);
         // unescape
-        for (i, b) in self.buf.iter().cloned().enumerate() {
+        for (i, b) in buf.iter().cloned().enumerate() {
             if b != b'\\' {
                 result.push(b);
             } else {
                 // expects a \xNN where NN is a number string representing the escaped char in hex
                 // e.g. \x20 is the space ' '
-                if self.buf.len() - i >= 4 && self.buf[i + 1] == b'x' {
-                    let num = ((self.buf[i + 2] - b'0') << 4) + self.buf[i + 3] - b'0';
+                if buf.len() - i >= 4 && self.buf[i + 1] == b'x' {
+                    let num = ((buf[i + 2] - b'0') << 4) + buf[i + 3] - b'0';
                     result.push(num);
                 }
             }
