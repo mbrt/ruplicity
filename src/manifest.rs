@@ -5,14 +5,14 @@ use std::fmt::{self, Display, Formatter};
 use std::io::{self, BufRead};
 use std::num::ParseIntError;
 use std::path::Path;
-use std::str::{self, FromStr};
-use std::string::FromUtf8Error;
+use std::str::{self, FromStr, Utf8Error};
 use std::usize;
 
 use rawpath::RawPath;
 
 
 /// Manifest file info.
+#[derive(Debug)]
 pub struct Manifest {
     hostname: String,
     local_dir: RawPath,
@@ -20,6 +20,7 @@ pub struct Manifest {
 }
 
 /// Volume info.
+#[derive(Debug)]
 pub struct Volume {
     start_path: PathBlock,
     end_path: PathBlock,
@@ -35,12 +36,19 @@ pub enum ParseError {
     /// wip
     MissingKeyword(String),
     /// wip
+    MissingHash,
+    /// wip
+    MissingHashType,
+    /// wip
+    MissingPath,
+    /// wip
     ParseInt(ParseIntError),
     /// wip
-    Utf8(FromUtf8Error),
+    Utf8(Utf8Error),
 }
 
 
+#[derive(Debug)]
 struct PathBlock {
     path: RawPath,
     block: Option<usize>,
@@ -50,6 +58,8 @@ struct ManifestParser<R> {
     input: R,
     buf: Vec<u8>,
 }
+
+struct WordIter<'a>(&'a [u8]);
 
 
 impl Manifest {
@@ -129,6 +139,9 @@ impl Error for ParseError {
         match *self {
             ParseError::Io(ref err) => err.description(),
             ParseError::MissingKeyword(_) => "missing keyword in manifest",
+            ParseError::MissingHash => "missing required hash",
+            ParseError::MissingHashType => "missing required hash type",
+            ParseError::MissingPath => "missing required path",
             ParseError::ParseInt(ref err) => err.description(),
             ParseError::Utf8(ref err) => err.description(),
         }
@@ -142,6 +155,7 @@ impl Display for ParseError {
             ParseError::MissingKeyword(ref e) => write!(fmt, "missing keyword '{}' in manifest", e),
             ParseError::ParseInt(ref e) => write!(fmt, "{}", e),
             ParseError::Utf8(ref e) => write!(fmt, "{}", e),
+            _ => write!(fmt, "{}", self.description()),
         }
     }
 }
@@ -158,11 +172,21 @@ impl From<ParseIntError> for ParseError {
     }
 }
 
-impl From<FromUtf8Error> for ParseError {
-    fn from(err: FromUtf8Error) -> ParseError {
+impl From<Utf8Error> for ParseError {
+    fn from(err: Utf8Error) -> ParseError {
         ParseError::Utf8(err)
     }
 }
+
+
+macro_rules! check_eof(
+    ($e:expr) => (
+        if !try!($e) {
+            return Err(From::from(io::Error::new(io::ErrorKind::UnexpectedEof,
+                                                 "file ends unexpectedly")));
+        }
+    )
+);
 
 
 impl<R: BufRead> ManifestParser<R> {
@@ -174,8 +198,10 @@ impl<R: BufRead> ManifestParser<R> {
     }
 
     pub fn parse(mut self) -> Result<Manifest, ParseError> {
+        check_eof!(self.read_line());
         let hostname = try!(self.read_param_str("Hostname"));
-        let local_dir = RawPath::with_bytes(try!(self.read_param_bytes("Localdir")));
+        check_eof!(self.read_line());
+        let local_dir = RawPath::from_bytes(try!(self.read_param_bytes("Localdir")));
 
         let mut volumes = Vec::new();
         while let Some((vol, i)) = try!(self.read_volume()) {
@@ -197,14 +223,22 @@ impl<R: BufRead> ManifestParser<R> {
     }
 
     fn read_volume(&mut self) -> Result<Option<(Volume, usize)>, ParseError> {
+        if !try!(self.read_line()) {
+            // EOF
+            return Ok(None);
+        }
+
         // volume number
         let mut param = try!(self.read_param_str("Volume"));
         if param.ends_with(":") {
             param.pop();
         }
         let num = try!(usize::from_str(&param));
+        check_eof!(self.read_line());
         let start_path = try!(self.read_path_block("StartingPath"));
+        check_eof!(self.read_line());
         let end_path = try!(self.read_path_block("EndingPath"));
+        check_eof!(self.read_line());
         let (htype, h) = try!(self.read_hash_param());
 
         let vol = Volume {
@@ -216,161 +250,154 @@ impl<R: BufRead> ManifestParser<R> {
         Ok(Some((vol, num)))
     }
 
-    fn read_path_block(&mut self, key: &str) -> Result<PathBlock, ParseError> {
-        try!(self.consume_whitespace());
-        if !try!(self.consume_keyword(key)) {
+    fn read_line(&mut self) -> io::Result<bool> {
+        self.buf.clear();
+        let len = try!(self.input.read_until(b'\n', &mut self.buf));
+        if len <= 1 {
+            return Ok(false);
+        }
+        if self.buf[len - 1] == b'\n' {
+            self.buf.pop();
+        }
+        Ok(true)
+    }
+
+    fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {
+        let mut words = WordIter(&self.buf);
+        let kw = match words.next() {
+            Some(word) => try!(str::from_utf8(word)),
+            None => "",
+        };
+        if kw != key {
             return Err(ParseError::MissingKeyword(key.to_owned()));
         }
-        try!(self.consume_whitespace());
-        let path = try!(self.read_param_value());
-        try!(self.consume_whitespace());
-        let block = if !try!(self.consume_byte(b'\n')) {
-            let bytes = try!(self.read_param_value());
-            let s = try!(String::from_utf8(bytes));
-            let num = try!(usize::from_str(&s));
-            Some(num)
-        } else {
-            None
+        let param = match words.next() {
+            Some(word) => word,
+            None => {
+                return Ok(vec![]);
+            }
         };
+        Ok(unescape(param))
+    }
+
+    fn read_param_str(&mut self, key: &str) -> Result<String, ParseError> {
+        let bytes = try!(self.read_param_bytes(key));
+        String::from_utf8(bytes).map_err(|e| From::from(e.utf8_error()))
+    }
+
+    fn read_path_block(&mut self, key: &str) -> Result<PathBlock, ParseError> {
+        let mut words = WordIter(&self.buf);
+        let kw = match words.next() {
+            Some(word) => try!(str::from_utf8(word)),
+            None => "",
+        };
+        if kw != key {
+            return Err(ParseError::MissingKeyword(key.to_owned()));
+        }
+        let path = match words.next() {
+            Some(word) => RawPath::from_bytes(unescape(word)),
+            None => {
+                return Err(ParseError::MissingPath);
+            }
+        };
+        let block = match words.next() {
+            Some(word) => {
+                let s = try!(str::from_utf8(word));
+                Some(try!(usize::from_str(s)))
+            }
+            None => None,
+        };
+
         Ok(PathBlock {
-            path: RawPath::with_bytes(path),
+            path: path,
             block: block,
         })
     }
 
     fn read_hash_param(&mut self) -> Result<(String, Vec<u8>), ParseError> {
-        try!(self.consume_whitespace());
-        if !try!(self.consume_keyword("Hash")) {
+        let mut words = WordIter(&self.buf);
+        let kw = match words.next() {
+            Some(word) => try!(str::from_utf8(word)),
+            None => "",
+        };
+        if kw != "Hash" {
             return Err(ParseError::MissingKeyword("Hash".to_owned()));
         }
-        try!(self.consume_whitespace());
-        let htype = try!(self.read_param_value_str());
-        try!(self.consume_whitespace());
-        let mut hash = try!(self.read_param_value());
-        for b in &mut hash {
-            *b -= b'0'
-        }
-        try!(self.consume_newline());
+        let htype = match words.next() {
+            Some(word) => try!(str::from_utf8(word)).to_owned(),
+            None => {
+                return Err(ParseError::MissingHashType);
+            }
+        };
+        let hash = match words.next() {
+            Some(word) => word.iter().cloned().map(|b| b - b'0').collect(),
+            None => {
+                return Err(ParseError::MissingHash);
+            }
+        };
 
         Ok((htype, hash))
-    }
-
-    fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {
-        try!(self.consume_whitespace());
-        if !try!(self.consume_keyword(key)) {
-            return Err(ParseError::MissingKeyword(key.to_owned()));
-        }
-        try!(self.consume_whitespace());
-        match self.read_param_value() {
-            Ok(res) => {
-                try!(self.consume_newline());
-                Ok(res)
-            }
-            Err(e) => Err(From::from(e)),
-        }
-    }
-
-    fn read_param_str(&mut self, key: &str) -> Result<String, ParseError> {
-        let bytes = try!(self.read_param_bytes(key));
-        String::from_utf8(bytes).map_err(From::from)
-    }
-
-    fn consume_keyword(&mut self, key: &str) -> io::Result<bool> {
-        let mut size = try!(self.input.read_until(b' ', &mut self.buf));
-        if size > 0 && self.buf[size - 1] == b' ' {
-            size -= 1
-        }
-        Ok(match_keyword(&self.buf[..size], key))
-    }
-
-    fn consume_newline(&mut self) -> io::Result<()> {
-        self.consume_until(|b| {
-            match b {
-                b' ' | b'\t' | b'\r' | b'\n' => false,
-                _ => true,
-            }
-        })
-    }
-
-    fn consume_whitespace(&mut self) -> io::Result<()> {
-        self.consume_until(|b| {
-            match b {
-                b' ' | b'\t' => false,
-                _ => true,
-            }
-        })
-    }
-
-    fn consume_until<F>(&mut self, mut f: F) -> io::Result<()>
-        where F: FnMut(u8) -> bool
-    {
-        loop {
-            let (pos, end) = {
-                let buf = try!(self.input.fill_buf());
-                match buf.iter().cloned().position(&mut f) {
-                    Some(p) => (p, true),
-                    None => (buf.len(), buf.is_empty()),
-                }
-            };
-            self.input.consume(pos);
-            if end {
-                return Ok(());
-            }
-        }
-    }
-
-    fn read_param_value_str(&mut self) -> Result<String, ParseError> {
-        let bytes = try!(self.read_param_value());
-        String::from_utf8(bytes).map_err(From::from)
-    }
-
-    fn read_param_value(&mut self) -> io::Result<Vec<u8>> {
-        let (mut size, term) = {
-            if try!(self.consume_byte(b'"')) {
-                let s = try!(self.input.read_until(b'"', &mut self.buf));
-                (s, b'"')
-            } else {
-                let s = try!(self.input.read_until(b'\n', &mut self.buf));
-                (s, b'\n')
-            }
-        };
-        if size > 0 && self.buf[size - 1] == term {
-            size -= 1;
-        }
-        let buf = &self.buf[..size];
-        let mut result = Vec::with_capacity(size);
-        // unescape
-        for (i, b) in buf.iter().cloned().enumerate() {
-            if b != b'\\' {
-                result.push(b);
-            } else {
-                // expects a \xNN where NN is a number string representing the escaped char in hex
-                // e.g. \x20 is the space ' '
-                if buf.len() - i >= 4 && self.buf[i + 1] == b'x' {
-                    let num = ((buf[i + 2] - b'0') << 4) + buf[i + 3] - b'0';
-                    result.push(num);
-                }
-            }
-        }
-        Ok(result)
-    }
-
-    fn consume_byte(&mut self, expected: u8) -> io::Result<bool> {
-        let found = {
-            let buf = try!(self.input.fill_buf());
-            buf.first().map_or(false, |b| *b == expected)
-        };
-        if found {
-            self.input.consume(1);
-        }
-        Ok(found)
     }
 }
 
 
-#[inline]
-fn match_keyword(buf: &[u8], key: &str) -> bool {
-    str::from_utf8(&buf).ok().map_or(false, |s| s == key)
+impl<'a> Iterator for WordIter<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.0.is_empty() {
+                return None;
+            }
+            let pos = self.0.iter().position(|b| *b == b' ').unwrap_or(self.0.len());
+            let (w, rest) = {
+                let (w, rest) = self.0.split_at(pos);
+                // skip all the spaces from rest
+                let pos = rest.iter().position(|b| *b != b' ').unwrap_or(rest.len());
+                (w, &rest[pos..])
+            };
+            self.0 = rest;
+            if !w.is_empty() {
+                return Some(w);
+            }
+        }
+    }
+}
+
+
+fn unescape(mut buf: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(buf.len());
+    buf = match (buf.first().cloned(), buf.last().cloned()) {
+        // quoted
+        (Some(b'"'), _) if buf.len() > 1 => &buf[1..buf.len() - 1],
+        // unquoted or invalid single "
+        (Some(_), _) => buf,
+        // empty
+        _ => {
+            return result;
+        }
+    };
+
+    // unescape
+    let mut i = 0;
+    let len = buf.len();
+    while i < len {
+        let b = buf[i];
+        if b != b'\\' {
+            result.push(b);
+        } else {
+            // expects a \xNN where NN is a number string representing the escaped char in hex
+            // e.g. \x20 is the space ' '
+            if buf.len() - i >= 4 && buf[i + 1] == b'x' {
+                let num = ((buf[i + 2] - b'0') << 4) + buf[i + 3] - b'0';
+                result.push(num);
+                i += 3;
+            }
+        }
+        i += 1;
+    }
+
+    result
 }
 
 
@@ -381,8 +408,15 @@ mod test {
     use std::io::BufReader;
 
     #[test]
-    fn parse_no_err() {
+    fn parse_no_err_full() {
         let file = File::open("tests/manifest/full1.manifest").unwrap();
+        let mut bfile = BufReader::new(file);
+        Manifest::parse(&mut bfile).unwrap();
+    }
+
+    #[test]
+    fn parse_no_err_inc() {
+        let file = File::open("tests/manifest/inc1.manifest").unwrap();
         let mut bfile = BufReader::new(file);
         Manifest::parse(&mut bfile).unwrap();
     }

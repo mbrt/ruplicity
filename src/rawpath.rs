@@ -7,6 +7,7 @@ use std::ffi::OsString;
 use std::str;
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub enum RawPath {
     Path(PathBuf),
     Bytes(Vec<u8>),
@@ -19,8 +20,8 @@ impl RawPath {
         RawPath::Bytes(vec![])
     }
 
-    pub fn with_bytes(bytes: Vec<u8>) -> Self {
-        Self::from_bytes(bytes)
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self::from_bytes_(bytes)
     }
 
     pub fn as_path(&self) -> Option<&Path> {
@@ -38,7 +39,7 @@ impl RawPath {
     }
 
     #[cfg(windows)]
-    fn from_bytes(bytes: Vec<u8>) -> Self {
+    fn from_bytes_(bytes: Vec<u8>) -> Self {
         if let Ok(s) = str::from_utf8(&bytes) {
             return RawPath::Path(PathBuf::from(s));
         }
@@ -46,7 +47,7 @@ impl RawPath {
     }
 
     #[cfg(unix)]
-    fn from_bytes(bytes: Vec<u8>) -> Self {
+    fn from_bytes_(bytes: Vec<u8>) -> Self {
         RawPath::Path(PathBuf::from(OsString::from_vec(bytes)))
     }
 }
