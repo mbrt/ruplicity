@@ -115,6 +115,27 @@ impl Manifest {
             .map(|idx| idx + 1)
             .ok()
     }
+
+    /// wip
+    pub fn last_volume_of_path(&self, path: &[u8]) -> Option<usize> {
+        self.volumes
+            .binary_search_by(|v| {
+                match path.cmp(v.end_path_bytes()) {
+                    Ordering::Greater => Ordering::Less,
+                    Ordering::Less => {
+                        match path.cmp(v.start_path_bytes()) {
+                            Ordering::Greater | Ordering::Equal => Ordering::Equal,
+                            Ordering::Less => Ordering::Greater,
+                        }
+                    }
+                    Ordering::Equal => {
+                        if v.end_path.block.is_some() { Ordering::Less } else { Ordering::Equal }
+                    }
+                }
+            })
+            .map(|idx| idx + 1)
+            .ok()
+    }
 }
 
 
@@ -471,5 +492,22 @@ mod test {
                                                  Calcolo Numerico/octave docs/tutorial.pdf")
                            .unwrap(),
                    18);
+    }
+
+    #[test]
+    fn last_volume_of_path() {
+        let manifest = inc1_manifest().unwrap();
+        assert_eq!(manifest.last_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
+                           .unwrap(),
+                   28);
+        assert_eq!(manifest.last_volume_of_path(b"home/michele/Documenti/Scuola/Open Class\
+                                                /Epfl/Principles of Reactive Programming/\
+                                                lectures/week7/lecture_slides_week7-1-annotated.pdf")
+                           .unwrap(),
+                   2);
+        assert_eq!(manifest.last_volume_of_path(b"home/michele/Documenti/Scuola/Uni/\
+                                                Calcolo Numerico/octave docs/tutorial.pdf")
+                           .unwrap(),
+                   19);
     }
 }
