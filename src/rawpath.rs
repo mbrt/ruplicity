@@ -34,10 +34,11 @@ mod os {
 
 #[cfg(windows)]
 mod os {
+    use std::cmp::{Ordering, PartialOrd};
     use std::path::{Path, PathBuf};
     use std::str;
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug, Eq, PartialEq)]
     pub enum RawPath {
         Path(PathBuf),
         Bytes(Vec<u8>),
@@ -69,6 +70,18 @@ mod os {
                 RawPath::Path(ref p) => p.as_os_str().to_str().unwrap().as_bytes(),
                 RawPath::Bytes(ref b) => b,
             }
+        }
+    }
+
+    impl PartialOrd<RawPath> for RawPath {
+        fn partial_cmp(&self, other: &RawPath) -> Option<Ordering> {
+            self.as_bytes().partial_cmp(other.as_bytes())
+        }
+    }
+
+    impl Ord for RawPath {
+        fn cmp(&self, other: &RawPath) -> Ordering {
+            self.as_bytes().cmp(other.as_bytes())
         }
     }
 }
