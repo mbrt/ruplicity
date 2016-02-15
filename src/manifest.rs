@@ -252,14 +252,16 @@ impl<R: BufRead> ManifestParser<R> {
 
     fn read_line(&mut self) -> io::Result<bool> {
         self.buf.clear();
-        let len = try!(self.input.read_until(b'\n', &mut self.buf));
-        if len <= 1 {
-            return Ok(false);
+        let mut len = try!(self.input.read_until(b'\n', &mut self.buf));
+        if len > 0 && self.buf[len - 1] == b'\n' {
+            len -= 1;
         }
-        if self.buf[len - 1] == b'\n' {
-            self.buf.pop();
+        if len > 0 && self.buf[len - 1] == b'\r' {
+            len -= 1;
         }
-        Ok(true)
+        self.buf.truncate(len);
+
+        Ok(!self.buf.is_empty())
     }
 
     fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {

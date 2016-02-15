@@ -7,7 +7,7 @@ mod os {
     use std::os::unix::prelude::*;
     use std::ffi::OsString;
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
     pub struct RawPath(PathBuf);
 
 
