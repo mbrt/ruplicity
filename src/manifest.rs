@@ -29,24 +29,24 @@ pub struct Volume {
     hash: Vec<u8>,
 }
 
-/// wip
+/// Enumeration of parsing errors.
 #[derive(Debug)]
 pub enum ParseError {
-    /// wip
+    /// An IO error.
     Io(io::Error),
-    /// wip
+    /// A keyword was missing.
     MissingKeyword(String),
-    /// wip
+    /// A volume hash was missing.
     MissingHash,
-    /// wip
+    /// A volume hash type was missing.
     MissingHashType,
-    /// wip
+    /// A path was missing.
     MissingPath,
-    /// wip
+    /// The list of volumes is not sorted.
     OutOfOrderVolume(usize),
-    /// wip
+    /// An integer parsing error.
     ParseInt(ParseIntError),
-    /// wip
+    /// An error parsing an UTF-8 string.
     Utf8(Utf8Error),
 }
 
@@ -72,27 +72,38 @@ impl Manifest {
         parser.parse()
     }
 
-    /// wip
+    /// The hostname produced the backup.
     pub fn hostname(&self) -> Option<&str> {
         Some(&self.hostname)
     }
 
-    /// wip
+    /// The original backup root path.
     pub fn local_dir(&self) -> Option<&Path> {
         self.local_dir.as_path()
     }
 
-    /// wip
-    pub fn max_vol_num(&self) -> usize {
+    /// The number of volumes.
+    ///
+    /// Note that volumes are counting starting from one, so the last volume number is equal to the
+    /// number of volumes.
+    pub fn volumes_len(&self) -> usize {
         self.volumes.len()
     }
 
-    /// wip
+    /// Returns the volume corresponding to the given index if present.
+    ///
+    /// Note that volumes are counting starting from one, so the last volume number is equal to the
+    /// number of volumes. If no volume corresponds to the given number, `None` is returned.
     pub fn volume(&self, num: usize) -> Option<&Volume> {
         if num == 0 { None } else { self.volumes.get(num - 1) }
     }
 
-    /// wip
+    /// Returns the index of the first volume containing the given path, if present.
+    ///
+    /// The given path is represented with a byte array, because:
+    ///
+    /// * duplicity supports non-UTF8 paths;
+    /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn first_volume_of_path(&self, path: &[u8]) -> Option<usize> {
         self.volumes
             .binary_search_by(|v| {
@@ -116,7 +127,12 @@ impl Manifest {
             .ok()
     }
 
-    /// wip
+    /// Returns the index of the last volume containing the given path, if present.
+    ///
+    /// The given path is represented with a byte array, because:
+    ///
+    /// * duplicity supports non-UTF8 paths;
+    /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn last_volume_of_path(&self, path: &[u8]) -> Option<usize> {
         self.volumes
             .binary_search_by(|v| {
@@ -140,42 +156,56 @@ impl Manifest {
 
 
 impl Volume {
-    /// wip
+    /// Returns the first path handled by this volume.
+    ///
+    /// Note that the path can be `None` under Windows, in case it is non-UTF8. Use
+    /// `start_path_bytes` if you need the byte array representing the path. This function never
+    /// fails under *nix systems.
     pub fn start_path(&self) -> Option<&Path> {
         self.start_path.path.as_path()
     }
 
-    /// wip
+    /// Returns the last path handled by this volume.
+    ///
+    /// Note that the path can be `None` under Windows, in case it is non-UTF8. Use
+    /// `start_path_bytes` if you need the byte array representing the path. This function never
+    /// fails under *nix systems.
     pub fn end_path(&self) -> Option<&Path> {
         self.end_path.path.as_path()
     }
 
-    /// wip
+    /// Returns the first path handled by this volume, represented as a byte array.
     pub fn start_path_bytes(&self) -> &[u8] {
         self.start_path.path.as_bytes()
     }
 
-    /// wip
+    /// Returns the first path handled by this volume, represented as a byte array.
     pub fn end_path_bytes(&self) -> &[u8] {
         self.end_path.path.as_bytes()
     }
 
-    /// wip
+    /// Returns the number of the starting block of the first path.
+    ///
+    /// If the first path is divided in multiple blocks and this volume does not start with the
+    /// first block of that path, this function returns that block number.
     pub fn start_block(&self) -> Option<usize> {
         self.start_path.block
     }
 
-    /// wip
+    /// Returns the number of the last block of the last path.
+    ///
+    /// If the last path is divided in multiple blocks and this volume does not ends with the
+    /// last block of that path, this function returns that block number.
     pub fn end_block(&self) -> Option<usize> {
         self.end_path.block
     }
 
-    /// wip
+    /// Returns a string representing the hash type of this volume.
     pub fn hash_type(&self) -> &str {
         &self.hash_type
     }
 
-    /// wip
+    /// Returns the hash value of this volume.
     pub fn hash(&self) -> &[u8] {
         &self.hash
     }
