@@ -17,7 +17,7 @@ use rawpath::RawPath;
 pub struct Manifest {
     hostname: String,
     local_dir: RawPath,
-    volumes: Vec<Option<Volume>>,
+    volumes: Vec<Volume>,
 }
 
 /// Volume info.
@@ -42,6 +42,8 @@ pub enum ParseError {
     MissingHashType,
     /// wip
     MissingPath,
+    /// wip
+    OutOfOrderVolume(usize),
     /// wip
     ParseInt(ParseIntError),
     /// wip
@@ -87,22 +89,13 @@ impl Manifest {
 
     /// wip
     pub fn volume(&self, num: usize) -> Option<&Volume> {
-        self.volumes.get(num).and_then(|v| v.as_ref())
+        if num == 0 { None } else { self.volumes.get(num - 1) }
     }
 
     /// wip
     pub fn first_volume_of_path(&self, path: &[u8]) -> Option<usize> {
         self.volumes
             .binary_search_by(|v| {
-                let v: &Volume = match *v {
-                    Some(ref v) => v,
-                    None => {
-                        // assume this was the item '0'
-                        // so the given v is less than any other
-                        return Ordering::Less;
-                    }
-                };
-
                 match path.cmp(v.start_path_bytes()) {
                     Ordering::Less => Ordering::Greater,
                     Ordering::Greater => {
@@ -119,6 +112,7 @@ impl Manifest {
                     }
                 }
             })
+            .map(|idx| idx + 1)
             .ok()
     }
 }
@@ -175,6 +169,7 @@ impl Error for ParseError {
             ParseError::MissingHash => "missing required hash",
             ParseError::MissingHashType => "missing required hash type",
             ParseError::MissingPath => "missing required path",
+            ParseError::OutOfOrderVolume(_) => "a volume is missing or volumes are unsorted",
             ParseError::ParseInt(ref err) => err.description(),
             ParseError::Utf8(ref err) => err.description(),
         }
@@ -186,6 +181,9 @@ impl Display for ParseError {
         match *self {
             ParseError::Io(ref e) => write!(fmt, "{}", e),
             ParseError::MissingKeyword(ref e) => write!(fmt, "missing keyword '{}' in manifest", e),
+            ParseError::OutOfOrderVolume(v) => {
+                write!(fmt, "volumes are not sorted around volume {}", v)
+            }
             ParseError::ParseInt(ref e) => write!(fmt, "{}", e),
             ParseError::Utf8(ref e) => write!(fmt, "{}", e),
             _ => write!(fmt, "{}", self.description()),
@@ -238,14 +236,11 @@ impl<R: BufRead> ManifestParser<R> {
 
         let mut volumes = Vec::new();
         while let Some((vol, i)) = try!(self.read_volume()) {
-            // resize volumes if necessary
-            if i >= volumes.len() {
-                volumes.reserve(i + 1);
-                for _ in volumes.len()..i + 1 {
-                    volumes.push(None);
-                }
+            // check if out of order
+            if i != volumes.len() + 1 {
+                return Err(ParseError::OutOfOrderVolume(i));
             }
-            volumes[i] = Some(vol);
+            volumes.push(vol);
         }
 
         Ok(Manifest {
@@ -467,5 +462,14 @@ mod test {
         assert_eq!(manifest.first_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
                            .unwrap(),
                    28);
+        assert_eq!(manifest.first_volume_of_path(b"home/michele/Documenti/Scuola/Open Class\
+                                                 /Epfl/Principles of Reactive Programming/\
+                                                 lectures/week7/lecture_slides_week7-1-annotated.pdf")
+                           .unwrap(),
+                   1);
+        assert_eq!(manifest.first_volume_of_path(b"home/michele/Documenti/Scuola/Uni/\
+                                                 Calcolo Numerico/octave docs/tutorial.pdf")
+                           .unwrap(),
+                   18);
     }
 }
