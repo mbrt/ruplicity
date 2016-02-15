@@ -1,64 +1,74 @@
-use std::path::{Path, PathBuf};
+pub use self::os::RawPath;
+
+
 #[cfg(unix)]
-use std::os::unix::prelude::*;
-#[cfg(unix)]
-use std::ffi::OsString;
-#[cfg(windows)]
-use std::str;
+mod os {
+    use std::path::{Path, PathBuf};
+    use std::os::unix::prelude::*;
+    use std::ffi::OsString;
 
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum RawPath {
-    Path(PathBuf),
-    Bytes(Vec<u8>),
-}
+    #[derive(Debug)]
+    pub struct RawPath(PathBuf);
 
 
-impl RawPath {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        RawPath::Bytes(vec![])
-    }
-
-    pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self::from_bytes_(bytes)
-    }
-
-    pub fn as_path(&self) -> Option<&Path> {
-        match *self {
-            RawPath::Path(ref p) => Some(&p),
-            RawPath::Bytes(_) => None,
+    impl RawPath {
+        #[allow(dead_code)]
+        pub fn new() -> Self {
+            Self::from_bytes(vec![])
         }
-    }
 
-    pub fn as_bytes(&self) -> &[u8] {
-        match *self {
-            RawPath::Path(ref p) => path2bytes(p),
-            RawPath::Bytes(ref b) => b,
+        pub fn from_bytes(bytes: Vec<u8>) -> Self {
+            RawPath(PathBuf::from(OsString::from_vec(bytes)))
         }
-    }
 
-    #[cfg(windows)]
-    fn from_bytes_(bytes: Vec<u8>) -> Self {
-        if let Ok(s) = str::from_utf8(&bytes) {
-            return RawPath::Path(PathBuf::from(s));
+        pub fn as_path(&self) -> Option<&Path> {
+            Some(&self.0)
         }
-        RawPath::Bytes(bytes)
-    }
 
-    #[cfg(unix)]
-    fn from_bytes_(bytes: Vec<u8>) -> Self {
-        RawPath::Path(PathBuf::from(OsString::from_vec(bytes)))
+        pub fn as_bytes(&self) -> &[u8] {
+            self.0.as_os_str().as_bytes()
+        }
     }
 }
 
 
 #[cfg(windows)]
-fn path2bytes(p: &Path) -> &[u8] {
-    p.as_os_str().to_str().unwrap().as_bytes()
-}
+mod os {
+    use std::path::{Path, PathBuf};
+    use std::str;
 
-#[cfg(unix)]
-fn path2bytes(p: &Path) -> &[u8] {
-    p.as_os_str().as_bytes()
+    #[derive(Debug)]
+    pub enum RawPath {
+        Path(PathBuf),
+        Bytes(Vec<u8>),
+    }
+
+
+    impl RawPath {
+        #[allow(dead_code)]
+        pub fn new() -> Self {
+            RawPath::Bytes(vec![])
+        }
+
+        pub fn from_bytes(bytes: Vec<u8>) -> Self {
+            if let Ok(s) = str::from_utf8(&bytes) {
+                return RawPath::Path(PathBuf::from(s));
+            }
+            RawPath::Bytes(bytes)
+        }
+
+        pub fn as_path(&self) -> Option<&Path> {
+            match *self {
+                RawPath::Path(ref p) => Some(&p),
+                RawPath::Bytes(_) => None,
+            }
+        }
+
+        pub fn as_bytes(&self) -> &[u8] {
+            match *self {
+                RawPath::Path(ref p) => p.as_os_str().to_str().unwrap().as_bytes(),
+                RawPath::Bytes(ref b) => b,
+            }
+        }
+    }
 }
