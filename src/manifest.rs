@@ -73,8 +73,8 @@ impl Manifest {
     }
 
     /// The hostname produced the backup.
-    pub fn hostname(&self) -> Option<&str> {
-        Some(&self.hostname)
+    pub fn hostname(&self) -> &str {
+        &self.hostname
     }
 
     /// The original backup root path.
@@ -487,6 +487,14 @@ mod test {
     use super::*;
     use std::fs::File;
     use std::io::BufReader;
+    use std::path::Path;
+
+
+    fn full1_manifest() -> Result<Manifest, ParseError> {
+        let file = File::open("tests/manifest/full1.manifest").unwrap();
+        let mut bfile = BufReader::new(file);
+        Manifest::parse(&mut bfile)
+    }
 
     fn inc1_manifest() -> Result<Manifest, ParseError> {
         let file = File::open("tests/manifest/inc1.manifest").unwrap();
@@ -497,9 +505,7 @@ mod test {
 
     #[test]
     fn parse_no_err_full() {
-        let file = File::open("tests/manifest/full1.manifest").unwrap();
-        let mut bfile = BufReader::new(file);
-        Manifest::parse(&mut bfile).unwrap();
+        full1_manifest().unwrap();
     }
 
     #[test]
@@ -539,5 +545,32 @@ mod test {
                                                 Calcolo Numerico/octave docs/tutorial.pdf")
                            .unwrap(),
                    19);
+        assert_eq!(manifest.last_volume_of_path(b"home/michele/Immagini/Foto/foto1.jpg"),
+                   None);
+    }
+
+    #[test]
+    fn full1_data() {
+        let manifest = full1_manifest().unwrap();
+        assert_eq!(manifest.hostname(), "dellxps");
+        assert_eq!(manifest.local_dir().unwrap(), Path::new("dir1"));
+        assert_eq!(manifest.volumes_len(), 1);
+        let vol = manifest.volume(1).unwrap();
+        assert_eq!(vol.start_path().unwrap(), Path::new("."));
+        let path = vec![0xd8, 0xab, 0xb1, 0x57, 0x62, 0xae, 0xc5, 0x5d, 0x8a, 0xbb, 0x15, 0x76,
+                        0x2a, 0xf4, 0x0f, 0x21, 0xf9, 0x3e, 0xe2, 0x59, 0x86, 0xbb, 0xab, 0xdb,
+                        0x70, 0xb0, 0x84, 0x13, 0x6b, 0x1d, 0xc2, 0xf1, 0xf5, 0x65, 0xa5, 0x55,
+                        0x82, 0x9a, 0x55, 0x56, 0xa0, 0xf4, 0xdf, 0x34, 0xba, 0xfd, 0x58, 0x03,
+                        0x82, 0x07, 0x73, 0xce, 0x9e, 0x8b, 0xb3, 0x34, 0x04, 0x9f, 0x17, 0x20,
+                        0xf4, 0x8f, 0xa6, 0xfa, 0x97, 0xab, 0xd8, 0xac, 0xda, 0x85, 0xdc, 0x4b,
+                        0x76, 0x43, 0xfa, 0x23, 0x94, 0x92, 0x9e, 0xc9, 0xb7, 0xc3, 0x5f, 0x0f,
+                        0x84, 0x67, 0x9a, 0x42, 0x11, 0x3c, 0x3d, 0x5e, 0xdb, 0x4d, 0x13, 0x96,
+                        0x63, 0x8b, 0xa7, 0x7c, 0x2a, 0x22, 0x5c, 0x27, 0x5e, 0x24, 0x40, 0x23,
+                        0x21, 0x28, 0x29, 0x7b, 0x7d, 0x3f, 0x2b, 0x20, 0x7e, 0x60, 0x20];
+        assert_eq!(vol.end_path_bytes().to_vec(), path);
+        assert_eq!(vol.hash_type(), "SHA1");
+        let hash = vec![0xe4, 0xa2, 0xe8, 0xe2, 0xab, 0xfb, 0xa2, 0xcb, 0x24, 0x77, 0x2e, 0x5f,
+                        0xf9, 0xda, 0x4b, 0x85, 0xb3, 0xc1, 0x9a, 0x0c];
+        assert_eq!(vol.hash().to_vec(), hash);
     }
 }
