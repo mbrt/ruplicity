@@ -1,5 +1,6 @@
 //! Operations on manifest files.
 
+use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, BufRead};
@@ -87,6 +88,38 @@ impl Manifest {
     /// wip
     pub fn volume(&self, num: usize) -> Option<&Volume> {
         self.volumes.get(num).and_then(|v| v.as_ref())
+    }
+
+    /// wip
+    pub fn first_volume_of_path(&self, path: &[u8]) -> Option<usize> {
+        self.volumes
+            .binary_search_by(|v| {
+                let v: &Volume = match *v {
+                    Some(ref v) => v,
+                    None => {
+                        // assume this was the item '0'
+                        // so the given v is less than any other
+                        return Ordering::Less;
+                    }
+                };
+
+                match path.cmp(v.start_path_bytes()) {
+                    Ordering::Less => Ordering::Greater,
+                    Ordering::Greater => {
+                        match path.cmp(v.end_path_bytes()) {
+                            Ordering::Less | Ordering::Equal => Ordering::Equal,
+                            Ordering::Greater => Ordering::Less,
+                        }
+                    }
+                    Ordering::Equal => {
+                        match v.start_path.block {
+                            Some(n) if n > 0 => Ordering::Greater,
+                            _ => Ordering::Equal,
+                        }
+                    }
+                }
+            })
+            .ok()
     }
 }
 
@@ -409,6 +442,13 @@ mod test {
     use std::fs::File;
     use std::io::BufReader;
 
+    fn inc1_manifest() -> Result<Manifest, ParseError> {
+        let file = File::open("tests/manifest/inc1.manifest").unwrap();
+        let mut bfile = BufReader::new(file);
+        Manifest::parse(&mut bfile)
+    }
+
+
     #[test]
     fn parse_no_err_full() {
         let file = File::open("tests/manifest/full1.manifest").unwrap();
@@ -418,8 +458,14 @@ mod test {
 
     #[test]
     fn parse_no_err_inc() {
-        let file = File::open("tests/manifest/inc1.manifest").unwrap();
-        let mut bfile = BufReader::new(file);
-        Manifest::parse(&mut bfile).unwrap();
+        inc1_manifest().unwrap();
+    }
+
+    #[test]
+    fn first_volume_of_path() {
+        let manifest = inc1_manifest().unwrap();
+        assert_eq!(manifest.first_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
+                           .unwrap(),
+                   28);
     }
 }
