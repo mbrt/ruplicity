@@ -470,7 +470,7 @@ fn unescape(mut buf: &[u8]) -> Vec<u8> {
             // expects a \xNN where NN is a number string representing the escaped char in hex
             // e.g. \x20 is the space ' '
             if buf.len() - i >= 4 && buf[i + 1] == b'x' {
-                let num = ((buf[i + 2] - b'0') << 4) + buf[i + 3] - b'0';
+                let num = (nibble(buf[i + 2]) << 4) | nibble(buf[i + 3]);
                 result.push(num);
                 i += 3;
             }
@@ -487,12 +487,7 @@ fn from_hex(s: &[u8]) -> Vec<u8> {
 
     for (idx, byte) in s.iter().cloned().enumerate() {
         buf <<= 4;
-
-        match byte {
-            b'a'...b'f' => buf |= byte - b'a' + 10,
-            b'0'...b'9' => buf |= byte - b'0',
-            _ => (),
-        }
+        buf |= nibble(byte);
 
         if idx % 2 == 1 {
             res.push(buf);
@@ -500,6 +495,14 @@ fn from_hex(s: &[u8]) -> Vec<u8> {
         }
     }
     res
+}
+
+fn nibble(b: u8) -> u8 {
+    match b {
+        b'a'...b'f' => b - b'a' + 10,
+        b'0'...b'9' => b - b'0',
+        _ => 0,
+    }
 }
 
 
@@ -541,8 +544,8 @@ mod test {
                            .unwrap(),
                    28);
         assert_eq!(manifest.first_volume_of_path(b"home/michele/Documenti/Scuola/Open Class\
-                                                 /Epfl/Principles of Reactive Programming/\
-                                                 lectures/week7/lecture_slides_week7-1-annotated.pdf")
+                                                 /Epfl/Principles of Reactive Programming/lectures/\
+                                                 week7/lecture_slides_week7-1-annotated.pdf")
                            .unwrap(),
                    1);
         assert_eq!(manifest.first_volume_of_path(b"home/michele/Documenti/Scuola/Uni/\
@@ -558,8 +561,8 @@ mod test {
                            .unwrap(),
                    28);
         assert_eq!(manifest.last_volume_of_path(b"home/michele/Documenti/Scuola/Open Class\
-                                                /Epfl/Principles of Reactive Programming/\
-                                                lectures/week7/lecture_slides_week7-1-annotated.pdf")
+                                                /Epfl/Principles of Reactive Programming/lectures/\
+                                                week7/lecture_slides_week7-1-annotated.pdf")
                            .unwrap(),
                    2);
         assert_eq!(manifest.last_volume_of_path(b"home/michele/Documenti/Scuola/Uni/\
