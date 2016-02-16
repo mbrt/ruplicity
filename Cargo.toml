@@ -1,6 +1,6 @@
 [package]
 name = "ruplicity"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Michele Bertasi <@brt_device>"]
 description = "Library to read duplicity backups"
 repository = "https://github.com/mbrt/ruplicity"
@@ -17,7 +17,7 @@ unstable = ["lints", "nightly"] # for building with travis-cargo
 
 [dependencies]
 flate2 = "0.2"
-tar = "0.3"
+tar = "0.4.2"
 regex = "0.1"
 try_opt = "0.1"
 time = "0.1"
