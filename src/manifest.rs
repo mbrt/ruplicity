@@ -411,7 +411,7 @@ impl<R: BufRead> ManifestParser<R> {
             }
         };
         let hash = match words.next() {
-            Some(word) => word.iter().cloned().map(|b| b - b'0').collect(),
+            Some(word) => from_hex(word),
             None => {
                 return Err(ParseError::MissingHash);
             }
@@ -479,6 +479,27 @@ fn unescape(mut buf: &[u8]) -> Vec<u8> {
     }
 
     result
+}
+
+fn from_hex(s: &[u8]) -> Vec<u8> {
+    let mut res = Vec::with_capacity(s.len() / 2);
+    let mut buf: u8 = 0;
+
+    for (idx, byte) in s.iter().cloned().enumerate() {
+        buf <<= 4;
+
+        match byte {
+            b'a'...b'f' => buf |= byte - b'a' + 10,
+            b'0'...b'9' => buf |= byte - b'0',
+            _ => (),
+        }
+
+        if idx % 2 == 1 {
+            res.push(buf);
+            buf = 0;
+        }
+    }
+    res
 }
 
 
