@@ -543,8 +543,8 @@ mod test {
         assert_eq!(manifest.first_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
                            .unwrap(),
                    28);
-        assert_eq!(manifest.first_volume_of_path(b"home/michele/Documenti/Scuola/Open Class\
-                                                 /Epfl/Principles of Reactive Programming/lectures/\
+        assert_eq!(manifest.first_volume_of_path(b"home/michele/Documenti/Scuola/Open Class/\
+                                                 Epfl/Principles of Reactive Programming/lectures/\
                                                  week7/lecture_slides_week7-1-annotated.pdf")
                            .unwrap(),
                    1);
@@ -560,8 +560,8 @@ mod test {
         assert_eq!(manifest.last_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
                            .unwrap(),
                    28);
-        assert_eq!(manifest.last_volume_of_path(b"home/michele/Documenti/Scuola/Open Class\
-                                                /Epfl/Principles of Reactive Programming/lectures/\
+        assert_eq!(manifest.last_volume_of_path(b"home/michele/Documenti/Scuola/Open Class/\
+                                                Epfl/Principles of Reactive Programming/lectures/\
                                                 week7/lecture_slides_week7-1-annotated.pdf")
                            .unwrap(),
                    2);
