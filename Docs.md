@@ -150,12 +150,36 @@ Volume 2:
 
 ## Volumes
 
-A volume stores file contents for some paths. Contents are stored in form of patches from previous contents. Therefore, file contents can be retreived by applying an ordered sequence of patches.
+A volume file is a tar file (compressed and/or encrypted) with a defined structure.
+Every entry in the tar is in one of the following directories:
 
-Given a certain patch, to retreive the patch sequence (see `patchdir.normalyze_ps`), given the complete ordered sequence:
+* `deleted`;
+* `diff`;
+* `multivol_diff`;
+* `snapshot`;
+* `multivol_snapshot`.
+
+Any other folder is ignored.
+
+If an entry is inside the `deleted` directory, means that it has been deleted in the current
+snapshot.
+If an entry is inside `snapshot`, means that it is stored "as-is", without the need
+to compute patches from previous versions.
+Similarly, if the entry is inside `multivol_snapshot`. The only difference is that the file is splitted
+in multiple numbered parts. For example, the path `my/file` is stored in `multivol_diff/my/file/1`,
+`multivol_diff/my/file/2`, etc. These chunks could span multiple volumes.
+If an entry is inside `diff`, means that it is a librsync's delta w.r.t the previous version of the
+file.
+Similarly if the entry is inside `multivol_diff`. The only difference is that the file is splitted
+in multiple numbered parts. Note that the delta file is valid only when all the chunks are
+available, and these could span multiple volumes.
+
+For `diff` like-files, contents can be retreived by applying an ordered sequence of patches.
+
+Given a certain delta, to retreive the patch sequence (see `patchdir.normalyze_ps`), given the complete ordered sequence:
 * iterate backwards in time;
-* remove blank diffs;
-* add every delta diff until a full diff is found;
+* remove blank deltas;
+* add every delta diff until a snapshot (or multivol snapshot) is found;
 * return also the full diff and break the iteration.
 
 To have a patched file, we need to apply librsync patches (see `librsync.PatchedFile`).
