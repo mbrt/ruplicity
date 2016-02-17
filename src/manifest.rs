@@ -13,7 +13,7 @@ use rawpath::RawPath;
 
 
 /// Manifest file info.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Manifest {
     hostname: String,
     local_dir: RawPath,
@@ -21,7 +21,7 @@ pub struct Manifest {
 }
 
 /// Volume info.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Volume {
     start_path: PathBlock,
     end_path: PathBlock,
@@ -51,7 +51,7 @@ pub enum ParseError {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 struct PathBlock {
     path: RawPath,
     block: Option<usize>,

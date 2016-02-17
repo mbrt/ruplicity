@@ -58,11 +58,14 @@ pub mod signatures;
 use std::cell::{Ref, RefCell};
 use std::fmt::{self, Display, Formatter};
 use std::io;
+use std::ops::Deref;
+use std::path::Path;
 
 use time::Timespec;
 
 pub use backend::Backend;
 use collections::{BackupChain, BackupSet, Collections};
+use manifest::Manifest;
 use signatures::Chain;
 
 
@@ -72,6 +75,7 @@ pub struct Backup<B> {
     backend: B,
     collections: Collections,
     signatures: Vec<RefCell<Option<Chain>>>,
+    manifests: Vec<RefCell<Option<Manifest>>>,
 }
 
 /// An iterator over the snapshots in a backup.
@@ -97,6 +101,9 @@ pub struct SnapshotEntries<'a> {
     sig_id: usize,
 }
 
+/// Reference to a Manifest.
+pub struct ManifestRef<'a>(Ref<'a, Option<Manifest>>);
+
 
 struct CollectionsIter<'a> {
     chain_iter: collections::ChainIter<'a, BackupChain>,
@@ -110,6 +117,10 @@ struct CollectionsIter<'a> {
 trait ResourceCache {
     fn _collections(&self) -> &Collections;
     fn _signature_chain(&self, chain_id: usize) -> io::Result<Ref<Option<Chain>>>;
+    fn _manifest(&self,
+                 chain_id: usize,
+                 manifest_path: &str)
+                 -> Result<Ref<Option<Manifest>>, manifest::ParseError>;
 }
 
 
@@ -135,10 +146,12 @@ impl<B: Backend> Backup<B> {
         let files = try!(backend.file_names());
         let collections = Collections::from_filenames(files);
         let signatures = collections.signature_chains().map(|_| RefCell::new(None)).collect();
+        let manifests = collections.signature_chains().map(|_| RefCell::new(None)).collect();
         Ok(Backup {
             backend: backend,
             collections: collections,
             signatures: signatures,
+            manifests: manifests,
         })
     }
 
@@ -251,6 +264,13 @@ impl<'a> Snapshot<'a> {
             Err(not_found("The signature chain is incomplete"))
         }
     }
+
+    /// Returns the manifest for this snapshot.
+    ///
+    /// The relative manifest file is read on demand and cached for subsequent uses.
+    pub fn manifest(&self) -> Result<ManifestRef, manifest::ParseError> {
+        Ok(ManifestRef(try!(self.backup._manifest(self.chain_id, self.set.manifest_path()))))
+    }
 }
 
 
@@ -266,6 +286,14 @@ impl<'a> SnapshotEntries<'a> {
 impl<'a> Display for SnapshotEntries<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.as_signature().into_display().fmt(f)
+    }
+}
+
+impl<'a> Deref for ManifestRef<'a> {
+    type Target = Manifest;
+
+    fn deref(&self) -> &Manifest {
+        self.0.as_ref().unwrap()
     }
 }
 
@@ -294,6 +322,25 @@ impl<B: Backend> ResourceCache for Backup<B> {
         // need to close previous scope to borrow again
         // return the cached value
         Ok(self.signatures[chain_id].borrow())
+    }
+
+    fn _manifest(&self,
+                 chain_id: usize,
+                 path: &str)
+                 -> Result<Ref<Option<Manifest>>, manifest::ParseError> {
+        {
+            // check if there is a cached value
+            let mut sig = self.manifests[chain_id].borrow_mut();
+            if sig.is_none() {
+                // compute manifest now
+                let mut file = io::BufReader::new(try!(self.backend.open_file(Path::new(path))));
+                *sig = Some(try!(Manifest::parse(&mut file)));
+            }
+        }
+
+        // need to close previous scope to borrow again
+        // return the cached value
+        Ok(self.manifests[chain_id].borrow())
     }
 }
 
@@ -340,11 +387,7 @@ mod test {
             }
         }
 
-        pub fn from_info(path: &str,
-                         mtime: &str,
-                         uname: &str,
-                         gname: &str)
-                         -> Self {
+        pub fn from_info(path: &str, mtime: &str, uname: &str, gname: &str) -> Self {
             EntryTest {
                 path: Path::new(path).to_path_buf(),
                 mtime: parse_time_str(mtime).unwrap(),
