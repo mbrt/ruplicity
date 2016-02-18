@@ -523,6 +523,15 @@ impl Collections {
     pub fn signature_chains(&self) -> ChainIter<SignatureChain> {
         self.sig_chains.iter()
     }
+
+    /// Returns the total number of snapshots.
+    pub fn num_snapshots(&self) -> usize {
+        let mut i = 0;
+        for c in self.backup_chains.iter() {
+            i += 1 + c.inc_sets().len();
+        }
+        i
+    }
 }
 
 fn compute_filename_infos<'a, I, E>(filenames: I) -> Vec<FileNameInfo<'a>>

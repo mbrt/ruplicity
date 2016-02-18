@@ -80,6 +80,11 @@ pub struct Backup<B> {
 
 /// An iterator over the snapshots in a backup.
 pub struct Snapshots<'a> {
+    backup: &'a ResourceCache,
+}
+
+/// wip
+pub struct SnapshotsIter<'a> {
     set_iter: CollectionsIter<'a>,
     chain_id: usize,
     sig_id: usize,
@@ -141,13 +146,13 @@ impl<B: Backend> Backup<B> {
     /// // use the local backend to open a path in the file system containing a backup
     /// let backend = LocalBackend::new("tests/backups/single_vol");
     /// let backup = Backup::new(backend).unwrap();
-    /// println!("Got backup with {} snapshots!", backup.snapshots().unwrap().count());
+    /// println!("Got backup with {} snapshots!", backup.snapshots().unwrap().into_iter().count());
     /// ```
     pub fn new(backend: B) -> io::Result<Self> {
         let files = try!(backend.file_names());
         let collections = Collections::from_filenames(files);
         let signatures = collections.signature_chains().map(|_| RefCell::new(None)).collect();
-        let manifests = collections.signature_chains().map(|_| RefCell::new(None)).collect();
+        let manifests = (0..collections.num_snapshots()).map(|_| RefCell::new(None)).collect();
         Ok(Backup {
             backend: backend,
             collections: collections,
@@ -158,23 +163,42 @@ impl<B: Backend> Backup<B> {
 
     /// Constructs an iterator over the snapshots currently present in this backup.
     pub fn snapshots(&self) -> io::Result<Snapshots> {
-        let set_iter = CollectionsIter {
-            chain_iter: self.collections.backup_chains(),
-            incset_iter: None,
-        };
         // in future, when we will add lazy collections,
         // this could fail, so we add a Result in advance
-        Ok(Snapshots {
-            set_iter: set_iter,
-            chain_id: 0,
-            sig_id: 0,
-            backup: self,
-        })
+        Ok(Snapshots { backup: self })
     }
 }
 
 
-impl<'a> Iterator for Snapshots<'a> {
+impl<'a> Snapshots<'a> {
+    /// Returns the low level representation of the snapshots.
+    pub fn as_collections(&self) -> &'a Collections {
+        self.backup._collections()
+    }
+}
+
+impl<'a> IntoIterator for Snapshots<'a> {
+    type Item = Snapshot<'a>;
+    type IntoIter = SnapshotsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let set_iter = CollectionsIter {
+            chain_iter: self.backup._collections().backup_chains(),
+            incset_iter: None,
+        };
+        // in future, when we will add lazy collections,
+        // this could fail, so we add a Result in advance
+        SnapshotsIter {
+            set_iter: set_iter,
+            chain_id: 0,
+            sig_id: 0,
+            backup: self.backup,
+        }
+    }
+}
+
+
+impl<'a> Iterator for SnapshotsIter<'a> {
     type Item = Snapshot<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -208,13 +232,6 @@ impl<'a> Iterator for Snapshots<'a> {
             }
             None => None,
         }
-    }
-}
-
-impl<'a> Snapshots<'a> {
-    /// Returns the low level representation of the snapshots.
-    pub fn as_collections(&self) -> &'a Collections {
-        self.backup._collections()
     }
 }
 
@@ -425,6 +442,7 @@ mod test {
     fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<SnapshotTest> {
         backup.snapshots()
               .unwrap()
+              .into_iter()
               .map(|s| {
                   assert!(s.is_full() != s.is_incremental());
                   SnapshotTest {
@@ -457,6 +475,7 @@ mod test {
     fn from_backup<B: Backend>(backup: &Backup<B>) -> Vec<Vec<EntryTest>> {
         backup.snapshots()
               .unwrap()
+              .into_iter()
               .map(|s| {
                   s.entries()
                    .unwrap()
@@ -531,6 +550,7 @@ mod test {
         let backup = Backup::new(backend).unwrap();
         let actual = backup.snapshots()
                            .unwrap()
+                           .into_iter()
                            .map(|snapshot| snapshot.manifest().unwrap());
         let names = vec!["duplicity-full.20160108T223144Z.manifest",
                          "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
