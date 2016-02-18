@@ -192,7 +192,7 @@ fn is_compressed(s: &str) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use time_utils::parse_time_str;
+    use timefmt::parse_time_str;
 
     #[test]
     fn parser_test() {

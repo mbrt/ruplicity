@@ -637,7 +637,7 @@ mod test {
     use backend::Backend;
     use backend::local::LocalBackend;
     use collections::Collections;
-    use time_utils::parse_time_str;
+    use timefmt::parse_time_str;
 
     use std::path::Path;
     use time::Timespec;

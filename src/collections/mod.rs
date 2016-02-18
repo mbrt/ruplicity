@@ -658,7 +658,7 @@ impl Type {
 mod test {
     use super::*;
     use super::file_naming::{FileNameInfo, FileNameParser};
-    use time_utils::parse_time_str;
+    use timefmt::parse_time_str;
 
     fn get_test_filenames() -> Vec<&'static str> {
         vec!["duplicity-full.20150617T182545Z.manifest",
