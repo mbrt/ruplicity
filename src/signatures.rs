@@ -251,13 +251,11 @@ impl Chain {
                         if found {
                             let path_snapshots = old_snapshots.next().unwrap();
                             position = Some(path_snapshots);
-                        } else {
+                        } else if !old_snapshots.next().is_some() {
                             // we have not found the element, so 'old_path < path' or there are no
                             // more paths to check:
                             // continue the loop if there are more elements
-                            if !old_snapshots.next().is_some() {
-                                break;
-                            }
+                            break;
                         }
                     }
                     position

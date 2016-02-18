@@ -286,7 +286,7 @@ impl BackupChain {
     pub fn new(fullset: BackupSet) -> Self {
         let time = {
             if let Type::Full{ time } = fullset.tp {
-                time.clone()
+                time
             } else {
                 panic!("Unexpected incremental backup set given");
             }
@@ -305,7 +305,7 @@ impl BackupChain {
     pub fn add_inc(&mut self, incset: BackupSet) -> Option<BackupSet> {
         if let Type::Inc{ start_time, end_time } = incset.tp {
             if self.end_time == start_time {
-                self.end_time = end_time.clone();
+                self.end_time = end_time;
                 self.incsets.push(incset);
                 None
             } else {
@@ -314,7 +314,7 @@ impl BackupChain {
                     start_time == last.tp.start_time() && end_time > last.tp.end_time()
                 });
                 if replace_last {
-                    self.end_time = end_time.clone();
+                    self.end_time = end_time;
                     self.incsets.pop();
                     self.incsets.push(incset);
                     None

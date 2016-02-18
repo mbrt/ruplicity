@@ -194,18 +194,19 @@ impl<'a> Iterator for Snapshots<'a> {
         // the current incset is exausted or not present,
         // we need to advance the chain and return the next full set if present,
         // otherwise the job is finished
-        if let Some(chain) = self.set_iter.chain_iter.next() {
-            self.chain_id += 1;
-            self.sig_id = 0;
-            self.set_iter.incset_iter = Some(chain.inc_sets());
-            Some(Snapshot {
-                set: chain.full_set(),
-                chain_id: self.chain_id - 1,
-                sig_id: self.sig_id,
-                backup: self.backup,
-            })
-        } else {
-            None
+        match self.set_iter.chain_iter.next() {
+            Some(chain) => {
+                self.chain_id += 1;
+                self.sig_id = 0;
+                self.set_iter.incset_iter = Some(chain.inc_sets());
+                Some(Snapshot {
+                    set: chain.full_set(),
+                    chain_id: self.chain_id - 1,
+                    sig_id: self.sig_id,
+                    backup: self.backup,
+                })
+            }
+            None => None,
         }
     }
 }
@@ -524,6 +525,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn multi_chain_manifests() {
         let backend = LocalBackend::new("tests/backups/multi_chain");
         let backup = Backup::new(backend).unwrap();

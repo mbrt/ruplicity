@@ -466,15 +466,14 @@ fn unescape(mut buf: &[u8]) -> Vec<u8> {
         let b = buf[i];
         if b != b'\\' {
             result.push(b);
-        } else {
+        } else if buf.len() - i >= 4 && buf[i + 1] == b'x' {
             // expects a \xNN where NN is a number string representing the escaped char in hex
             // e.g. \x20 is the space ' '
-            if buf.len() - i >= 4 && buf[i + 1] == b'x' {
-                let num = (nibble(buf[i + 2]) << 4) | nibble(buf[i + 3]);
-                result.push(num);
-                i += 3;
-            }
+            let num = (nibble(buf[i + 2]) << 4) | nibble(buf[i + 3]);
+            result.push(num);
+            i += 3;
         }
+        // otherwise ignore
         i += 1;
     }
 
