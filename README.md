@@ -37,7 +37,7 @@ extern crate ruplicity;
 
 use ruplicity::Backup;
 use ruplicity::backend::local::LocalBackend;
-use ruplicity::time_utils::TimeDisplay;
+use ruplicity::timefmt::TimeDisplay;
 
 fn main() {
     // use the local backend to open a path in the file system containing a backup

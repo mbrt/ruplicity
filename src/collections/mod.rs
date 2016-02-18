@@ -11,7 +11,7 @@ use std::path::Path;
 use std::slice;
 use time::Timespec;
 
-use time_utils::TimeDisplay;
+use timefmt::TimeDisplay;
 use self::file_naming as fnm;
 use self::file_naming::{FileNameInfo, FileNameParser};
 

@@ -16,7 +16,7 @@ use time::Timespec;
 
 use backend::Backend;
 use collections::{SignatureChain, SignatureFile};
-use time_utils::TimeDisplay;
+use timefmt::TimeDisplay;
 
 
 /// Stores information about paths in a backup chain.

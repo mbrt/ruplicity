@@ -1,7 +1,7 @@
 use regex::Regex;
 use time::Timespec;
 
-use time_utils::parse_time_str;
+use timefmt::parse_time_str;
 
 
 pub struct FileNameInfo<'a> {

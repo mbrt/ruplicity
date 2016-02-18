@@ -16,7 +16,7 @@
 //! ```
 //! use ruplicity::Backup;
 //! use ruplicity::backend::local::LocalBackend;
-//! use ruplicity::time_utils::TimeDisplay;
+//! use ruplicity::timefmt::TimeDisplay;
 //!
 //! // use the local backend to open a path in the file system containing a backup
 //! let backend = LocalBackend::new("tests/backups/single_vol");
@@ -49,7 +49,7 @@ extern crate try_opt;
 
 mod macros;
 mod rawpath;
-pub mod time_utils;
+pub mod timefmt;
 pub mod backend;
 pub mod collections;
 pub mod manifest;
@@ -384,7 +384,7 @@ mod test {
     use collections::{BackupSet, Collections};
     use manifest::Manifest;
     use signatures::{Chain, Entry};
-    use time_utils::parse_time_str;
+    use timefmt::parse_time_str;
 
     use std::fs::File;
     use std::io::BufReader;
