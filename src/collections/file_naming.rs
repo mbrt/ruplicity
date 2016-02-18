@@ -20,7 +20,7 @@ pub struct Info {
 pub enum Type {
     Full {
         time: Timespec,
-        volume_number: i32,
+        volume_number: usize,
     },
     FullManifest {
         time: Timespec,
@@ -29,7 +29,7 @@ pub enum Type {
     Inc {
         start_time: Timespec,
         end_time: Timespec,
-        volume_number: i32,
+        volume_number: usize,
     },
     IncManifest {
         start_time: Timespec,
@@ -176,8 +176,8 @@ impl FileNameParser {
 }
 
 
-fn get_vol_num(s: &str) -> Option<i32> {
-    s.parse::<i32>().ok()
+fn get_vol_num(s: &str) -> Option<usize> {
+    s.parse::<usize>().ok()
 }
 
 fn is_encrypted(s: &str) -> bool {
