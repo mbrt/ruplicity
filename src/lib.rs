@@ -102,6 +102,7 @@ pub struct SnapshotEntries<'a> {
 }
 
 /// Reference to a Manifest.
+#[derive(Debug)]
 pub struct ManifestRef<'a>(Ref<'a, Option<Manifest>>);
 
 
@@ -211,7 +212,7 @@ impl<'a> Iterator for Snapshots<'a> {
 
 impl<'a> Snapshots<'a> {
     /// Returns the low level representation of the snapshots.
-    pub fn as_collections(&self) -> &Collections {
+    pub fn as_collections(&self) -> &'a Collections {
         self.backup._collections()
     }
 }
@@ -244,7 +245,7 @@ impl<'a> Snapshot<'a> {
     }
 
     /// Returns the low level representation of the snapshot.
-    pub fn as_backup_set(&self) -> &BackupSet {
+    pub fn as_backup_set(&self) -> &'a BackupSet {
         self.set
     }
 
@@ -268,7 +269,7 @@ impl<'a> Snapshot<'a> {
     /// Returns the manifest for this snapshot.
     ///
     /// The relative manifest file is read on demand and cached for subsequent uses.
-    pub fn manifest(&self) -> Result<ManifestRef, manifest::ParseError> {
+    pub fn manifest(&self) -> Result<ManifestRef<'a>, manifest::ParseError> {
         Ok(ManifestRef(try!(self.backup._manifest(self.chain_id, self.set.manifest_path()))))
     }
 }
@@ -288,6 +289,7 @@ impl<'a> Display for SnapshotEntries<'a> {
         self.as_signature().into_display().fmt(f)
     }
 }
+
 
 impl<'a> Deref for ManifestRef<'a> {
     type Target = Manifest;
@@ -355,9 +357,12 @@ mod test {
     use super::*;
     use backend::local::LocalBackend;
     use collections::{BackupSet, Collections};
+    use manifest::Manifest;
     use signatures::{Chain, Entry};
     use time_utils::parse_time_str;
 
+    use std::fs::File;
+    use std::io::BufReader;
     use std::path::{Path, PathBuf};
     use time::Timespec;
 
@@ -515,6 +520,29 @@ mod test {
 
         fn make_entry_test(path: &str, mtime: &str) -> EntryTest {
             EntryTest::from_info(path, mtime, "michele", "michele")
+        }
+    }
+
+    #[test]
+    fn multi_chain_manifests() {
+        let backend = LocalBackend::new("tests/backups/multi_chain");
+        let backup = Backup::new(backend).unwrap();
+        let actual = backup.snapshots()
+                           .unwrap()
+                           .map(|snapshot| snapshot.manifest().unwrap());
+        let names = vec!["duplicity-full.20160108T223144Z.manifest",
+                         "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+                         "duplicity-full.20160108T223209Z.manifest",
+                         "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest"];
+        let expected = names.iter()
+                            .map(|name| {
+                                let mut path = Path::new("tests/backups/multi_chain").to_owned();
+                                path.push(name);
+                                let mut file = BufReader::new(File::open(path).unwrap());
+                                Manifest::parse(&mut file).unwrap()
+                            });
+        for (e, a) in expected.zip(actual) {
+            assert_eq!(e, *a);
         }
     }
 }
