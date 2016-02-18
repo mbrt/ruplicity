@@ -88,6 +88,7 @@ pub struct SnapshotsIter<'a> {
     set_iter: CollectionsIter<'a>,
     chain_id: usize,
     sig_id: usize,
+    man_id: usize,
     backup: &'a ResourceCache,
 }
 
@@ -97,6 +98,7 @@ pub struct Snapshot<'a> {
     // the number of the parent backup chain, starting from zero
     chain_id: usize,
     sig_id: usize,
+    man_id: usize,
     backup: &'a ResourceCache,
 }
 
@@ -192,6 +194,7 @@ impl<'a> IntoIterator for Snapshots<'a> {
             set_iter: set_iter,
             chain_id: 0,
             sig_id: 0,
+            man_id: 0,
             backup: self.backup,
         }
     }
@@ -207,10 +210,12 @@ impl<'a> Iterator for SnapshotsIter<'a> {
             // we have a set iter, so return the next element if present
             if let Some(inc_set) = incset_iter.next() {
                 self.sig_id += 1;
+                self.man_id += 1;
                 return Some(Snapshot {
                     set: inc_set,
                     chain_id: self.chain_id - 1,
                     sig_id: self.sig_id,
+                    man_id: self.man_id - 1,
                     backup: self.backup,
                 });
             }
@@ -222,11 +227,13 @@ impl<'a> Iterator for SnapshotsIter<'a> {
             Some(chain) => {
                 self.chain_id += 1;
                 self.sig_id = 0;
+                self.man_id += 1;
                 self.set_iter.incset_iter = Some(chain.inc_sets());
                 Some(Snapshot {
                     set: chain.full_set(),
                     chain_id: self.chain_id - 1,
                     sig_id: self.sig_id,
+                    man_id: self.man_id - 1,
                     backup: self.backup,
                 })
             }
@@ -288,7 +295,7 @@ impl<'a> Snapshot<'a> {
     ///
     /// The relative manifest file is read on demand and cached for subsequent uses.
     pub fn manifest(&self) -> Result<ManifestRef<'a>, manifest::ParseError> {
-        Ok(ManifestRef(try!(self.backup._manifest(self.chain_id, self.set.manifest_path()))))
+        Ok(ManifestRef(try!(self.backup._manifest(self.man_id, self.set.manifest_path()))))
     }
 }
 
@@ -345,12 +352,12 @@ impl<B: Backend> ResourceCache for Backup<B> {
     }
 
     fn _manifest(&self,
-                 chain_id: usize,
+                 id: usize,
                  path: &str)
                  -> Result<Ref<Option<Manifest>>, manifest::ParseError> {
         {
             // check if there is a cached value
-            let mut sig = self.manifests[chain_id].borrow_mut();
+            let mut sig = self.manifests[id].borrow_mut();
             if sig.is_none() {
                 // compute manifest now
                 let mut file = io::BufReader::new(try!(self.backend.open_file(Path::new(path))));
@@ -360,7 +367,7 @@ impl<B: Backend> ResourceCache for Backup<B> {
 
         // need to close previous scope to borrow again
         // return the cached value
-        Ok(self.manifests[chain_id].borrow())
+        Ok(self.manifests[id].borrow())
     }
 }
 
@@ -544,7 +551,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn multi_chain_manifests() {
         let backend = LocalBackend::new("tests/backups/multi_chain");
         let backup = Backup::new(backend).unwrap();
