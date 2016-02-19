@@ -533,7 +533,7 @@ impl Collections {
     /// Returns the total number of snapshots.
     pub fn num_snapshots(&self) -> usize {
         let mut i = 0;
-        for c in self.backup_chains.iter() {
+        for c in &self.backup_chains {
             i += 1 + c.inc_sets().len();
         }
         i

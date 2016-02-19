@@ -3,9 +3,10 @@ pub use self::os::RawPath;
 
 #[cfg(unix)]
 mod os {
-    use std::path::{Path, PathBuf};
-    use std::os::unix::prelude::*;
     use std::ffi::OsString;
+    use std::fmt::{self, Display, Formatter};
+    use std::os::unix::prelude::*;
+    use std::path::{Path, PathBuf};
 
     #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
     pub struct RawPath(PathBuf);
@@ -29,12 +30,26 @@ mod os {
             self.0.as_os_str().as_bytes()
         }
     }
+
+    impl Display for RawPath {
+        fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+            if self.as_bytes().is_empty() {
+                write!(f, ".")
+            } else {
+                match self.0.to_str() {
+                    Some(s) => write!(f, "{}", s),
+                    None => write!(f, "?"),
+                }
+            }
+        }
+    }
 }
 
 
 #[cfg(windows)]
 mod os {
     use std::cmp::{Ordering, PartialOrd};
+    use std::fmt::{self, Display, Formatter};
     use std::path::{Path, PathBuf};
     use std::str;
 
@@ -82,6 +97,15 @@ mod os {
     impl Ord for RawPath {
         fn cmp(&self, other: &RawPath) -> Ordering {
             self.as_bytes().cmp(other.as_bytes())
+        }
+    }
+
+    impl Display for RawPath {
+        fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+            match *self {
+                RawPath::Path(ref p) => write!(f, "{}", p.as_os_str().to_str().unwrap()),
+                RawPath::Bytes(_) => write!(f, "?"),
+            }
         }
     }
 }

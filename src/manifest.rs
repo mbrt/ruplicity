@@ -309,7 +309,7 @@ impl<R: BufRead> ManifestParser<R> {
 
         // volume number
         let mut param = try!(self.read_param_str("Volume"));
-        if param.ends_with(":") {
+        if param.ends_with(':') {
             param.pop();
         }
         let num = try!(usize::from_str(&param));

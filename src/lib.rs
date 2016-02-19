@@ -383,12 +383,13 @@ mod test {
     use backend::local::LocalBackend;
     use collections::{BackupSet, Collections};
     use manifest::Manifest;
+    use rawpath::RawPath;
     use signatures::{Chain, Entry};
     use timefmt::parse_time_str;
 
     use std::fs::File;
     use std::io::BufReader;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use time::Timespec;
 
 
@@ -401,7 +402,7 @@ mod test {
 
     #[derive(Debug, Clone, Eq, PartialEq)]
     struct EntryTest {
-        path: PathBuf,
+        path: RawPath,
         mtime: Timespec,
         uname: String,
         gname: String,
@@ -410,16 +411,16 @@ mod test {
     impl EntryTest {
         pub fn from_entry(file: &Entry) -> Self {
             EntryTest {
-                path: file.path().to_owned(),
+                path: RawPath::from_bytes(file.path_bytes().to_owned()),
                 mtime: file.mtime(),
                 uname: file.username().unwrap().to_owned(),
                 gname: file.groupname().unwrap().to_owned(),
             }
         }
 
-        pub fn from_info(path: &str, mtime: &str, uname: &str, gname: &str) -> Self {
+        pub fn from_info(path: &[u8], mtime: &str, uname: &str, gname: &str) -> Self {
             EntryTest {
-                path: Path::new(path).to_path_buf(),
+                path: RawPath::from_bytes(path.to_owned()),
                 mtime: parse_time_str(mtime).unwrap(),
                 uname: uname.to_owned(),
                 gname: gname.to_owned(),
@@ -473,7 +474,6 @@ mod test {
              .map(|s| {
                  s.files()
                   .map(|f| EntryTest::from_entry(&f))
-                  .filter(|f| f.path.to_str().is_some())
                   .collect::<Vec<_>>()
              })
              .collect::<Vec<_>>()
@@ -488,7 +488,6 @@ mod test {
                    .unwrap()
                    .as_signature()
                    .map(|f| EntryTest::from_entry(&f))
-                   .filter(|f| f.path.to_str().is_some())
                    .collect::<Vec<_>>()
               })
               .collect::<Vec<_>>()
@@ -535,17 +534,17 @@ mod test {
         let backend = LocalBackend::new("tests/backups/multi_chain");
         let backup = Backup::new(backend).unwrap();
         let actual = from_backup(&backup);
-        let expected = vec![vec![make_entry_test("", "20160108t223141z"),
-                                 make_entry_test("file", "20160108t222924z")],
-                            vec![make_entry_test("", "20160108t223153z"),
-                                 make_entry_test("file", "20160108t223153z")],
-                            vec![make_entry_test("", "20160108t223206z"),
-                                 make_entry_test("file", "20160108t223206z")],
-                            vec![make_entry_test("", "20160108t223215z"),
-                                 make_entry_test("file", "20160108t223215z")]];
+        let expected = vec![vec![make_entry_test(b"", "20160108t223141z"),
+                                 make_entry_test(b"file", "20160108t222924z")],
+                            vec![make_entry_test(b"", "20160108t223153z"),
+                                 make_entry_test(b"file", "20160108t223153z")],
+                            vec![make_entry_test(b"", "20160108t223206z"),
+                                 make_entry_test(b"file", "20160108t223206z")],
+                            vec![make_entry_test(b"", "20160108t223215z"),
+                                 make_entry_test(b"file", "20160108t223215z")]];
         assert_eq!(actual, expected);
 
-        fn make_entry_test(path: &str, mtime: &str) -> EntryTest {
+        fn make_entry_test(path: &[u8], mtime: &str) -> EntryTest {
             EntryTest::from_info(path, mtime, "michele", "michele")
         }
     }
