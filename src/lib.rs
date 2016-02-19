@@ -49,11 +49,13 @@ extern crate try_opt;
 
 mod macros;
 mod rawpath;
-pub mod timefmt;
+mod read;
+
 pub mod backend;
 pub mod collections;
 pub mod manifest;
 pub mod signatures;
+pub mod timefmt;
 
 use std::cell::{Ref, RefCell};
 use std::fmt::{self, Display, Formatter};
@@ -78,12 +80,12 @@ pub struct Backup<B> {
     manifests: Vec<RefCell<Option<Manifest>>>,
 }
 
-/// An iterator over the snapshots in a backup.
+/// Represents all the snapshots in a backup.
 pub struct Snapshots<'a> {
     backup: &'a ResourceCache,
 }
 
-/// wip
+/// An iterator over the snapshots in a backup.
 pub struct SnapshotsIter<'a> {
     set_iter: CollectionsIter<'a>,
     chain_id: usize,
@@ -168,6 +170,11 @@ impl<B: Backend> Backup<B> {
         // in future, when we will add lazy collections,
         // this could fail, so we add a Result in advance
         Ok(Snapshots { backup: self })
+    }
+
+    /// Unwraps this backup and returns the inner backend.
+    pub fn into_inner(self) -> B {
+        self.backend
     }
 }
 

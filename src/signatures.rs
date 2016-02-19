@@ -394,11 +394,14 @@ impl<'a> Display for SnapshotEntriesDisplay<'a> {
 
 impl<'a> Entry<'a> {
     /// Returns the full path of the entry.
+    ///
+    /// The path could be `None` if it is not UTF-8 representable under Windows. In that case use
+    /// the byte representation with `path_bytes`.
     pub fn path(&self) -> Option<&'a Path> {
         self.path.as_path()
     }
 
-    /// wip
+    /// Returns the full path of the entry in bytes.
     pub fn path_bytes(&self) -> &'a [u8] {
         self.path.as_bytes()
     }
