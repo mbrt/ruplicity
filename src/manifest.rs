@@ -574,7 +574,7 @@ mod test {
         let manifest = full1_manifest().unwrap();
         assert_eq!(manifest.hostname(), "dellxps");
         assert_eq!(manifest.local_dir().unwrap(), Path::new("dir1"));
-        assert_eq!(manifest.volumes_len(), 1);
+        assert_eq!(manifest.last_volume_index(), 1);
         let vol = manifest.volume(1).unwrap();
         assert_eq!(vol.start_path().unwrap(), Path::new("."));
         let path = vec![0xd8, 0xab, 0xb1, 0x57, 0x62, 0xae, 0xc5, 0x5d, 0x8a, 0xbb, 0x15, 0x76,
