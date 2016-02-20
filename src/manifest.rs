@@ -82,11 +82,8 @@ impl Manifest {
         self.local_dir.as_path()
     }
 
-    /// The number of volumes.
-    ///
-    /// Note that volumes are counting starting from one, so the last volume number is equal to the
-    /// number of volumes.
-    pub fn volumes_len(&self) -> usize {
+    /// The index of the last volume.
+    pub fn last_volume_index(&self) -> usize {
         self.volumes.len()
     }
 

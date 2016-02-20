@@ -3,6 +3,7 @@ use std::io::{self, Read};
 
 use tar;
 
+use backend::Backend;
 use collections::BackupSet;
 use manifest::Manifest;
 
@@ -17,11 +18,14 @@ pub struct MultiReader<R, I> {
     iter: I,
 }
 
+pub struct VolumeIter<'a, B: 'a> {
+    backend: &'a B,
+}
+
 pub type MultiBlockReader<'e, 'p, R> = MultiReader<tar::Entry<'e, R>, MultiBlockIter<'e, 'p, R>>;
 
 
-impl<'e, 'p, R> MultiBlockIter<'e, 'p, R> where R: Read + 'e
-{
+impl<'e, 'p, R: Read + 'e> MultiBlockIter<'e, 'p, R> {
     pub fn new(vol: tar::Entries<'e, R>, path: &'p [u8]) -> MultiBlockIter<'e, 'p, R> {
         MultiBlockIter {
             archive: vol,
@@ -30,8 +34,7 @@ impl<'e, 'p, R> MultiBlockIter<'e, 'p, R> where R: Read + 'e
     }
 }
 
-impl<'e, 'p, R> Iterator for MultiBlockIter<'e, 'p, R> where R: Read + 'e
-{
+impl<'e, 'p, R: Read + 'e> Iterator for MultiBlockIter<'e, 'p, R> {
     type Item = tar::Entry<'e, R>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -83,7 +86,7 @@ impl<R, I> Read for MultiReader<R, I>
                     if len > 0 {
                         return Ok(len);
                     }
-                },
+                }
                 None => {
                     return Ok(0);
                 }
@@ -94,12 +97,33 @@ impl<R, I> Read for MultiReader<R, I>
 }
 
 
-pub fn volume_path_of_entry<'a>(chain: &'a BackupSet,
-                                manifest: &Manifest,
-                                entry_path: &[u8])
-                                -> Option<&'a str> {
-    let vol_num = try_opt!(manifest.first_volume_of_path(entry_path));
-    chain.volume_path(vol_num)
+pub fn volume_paths_of_entry<'a>(chain: &'a BackupSet,
+                                 manifest: &Manifest,
+                                 entry_path: &[u8])
+                                 -> Vec<&'a str> {
+    let first = match manifest.first_volume_of_path(entry_path) {
+        Some(idx) => idx,
+        None => {
+            return vec![];
+        }
+    };
+    let last = match manifest.last_volume_of_path(entry_path) {
+        Some(idx) => idx,
+        None => manifest.last_volume_index(),
+    };
+    let mut result = Vec::new();
+    for vol_num in first..last + 1 {
+        match chain.volume_path(vol_num) {
+            Some(path) => {
+                result.push(path);
+            }
+            None => {
+                // missing volume: break the iteration here to avoid holes
+                break;
+            }
+        }
+    }
+    result
 }
 
 pub fn multiblock_reader<'e, 'p, R: Read + 'e>(entries: tar::Entries<'e, R>,
