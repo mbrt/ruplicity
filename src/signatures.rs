@@ -806,9 +806,7 @@ mod test {
     }
 
 
-    // FIXME(alexcrichton/tar-rs#57): Enable the test when TAR issue is closed
     #[test]
-    #[ignore]
     fn file_list() {
         let expected_files = single_vol_expected_files();
         let files = single_vol_files();
