@@ -166,12 +166,13 @@ snapshot.
 If an entry is inside `snapshot`, means that it is stored "as-is", without the need
 to compute patches from previous versions.
 Similarly, if the entry is inside `multivol_snapshot`. The only difference is that the file is splitted
-in multiple numbered parts. For example, the path `my/file` is stored in `multivol_diff/my/file/1`,
-`multivol_diff/my/file/2`, etc. These chunks could span multiple volumes.
+in multiple numbered blocks. For example, the path `my/file` is stored in `multivol_diff/my/file/1`,
+`multivol_diff/my/file/2`, etc. These blocks could span multiple volumes. A block has always a fixed size
+of 65536 bytes (64 KB).
 If an entry is inside `diff`, means that it is a librsync's delta w.r.t the previous version of the
 file.
 Similarly if the entry is inside `multivol_diff`. The only difference is that the file is splitted
-in multiple numbered parts. Note that the delta file is valid only when all the chunks are
+in multiple numbered blocks. Note that the delta file is valid only when all the blocks are
 available, and these could span multiple volumes.
 
 For `diff` like-files, contents can be retreived by applying an ordered sequence of patches.
