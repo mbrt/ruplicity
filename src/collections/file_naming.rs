@@ -16,7 +16,7 @@ pub struct Info {
     pub encrypted: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Type {
     Full {
         time: Timespec,
