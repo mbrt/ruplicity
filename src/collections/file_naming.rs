@@ -9,14 +9,15 @@ pub struct FileNameInfo<'a> {
     pub info: Info,
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Info {
     pub tp: Type,
     pub compressed: bool,
     pub encrypted: bool,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(missing_copy_implementations)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Full {
         time: Timespec,
