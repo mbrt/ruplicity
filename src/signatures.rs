@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, Read};
-use std::iter::Iterator;
+use std::iter::{Enumerate, Iterator};
 use std::path::Path;
 use std::slice;
 
@@ -20,13 +20,16 @@ use rawpath::RawPath;
 use timefmt::TimeDisplay;
 
 
+/// Identificator for an entry.
+pub type EntryId = (usize, u8);
+
 /// Stores information about paths in a backup chain.
 ///
 /// The information is reused among different snapshots if possible.
 #[derive(Debug)]
 pub struct Chain {
     num_snapshots: u8,
-    files: Vec<PathSnapshots>,
+    entries: Vec<PathSnapshots>,
     ug_map: UserGroupMap,
 }
 
@@ -45,17 +48,24 @@ pub struct Snapshot<'a> {
 }
 
 /// Files and directories inside a backup snapshot.
-#[derive(Clone)]
 pub struct SnapshotEntries<'a> {
     index: u8,
-    iter: slice::Iter<'a, PathSnapshots>,
+    entries: &'a [PathSnapshots],
     chain: &'a Chain,
 }
 
-/// Allows to display files of a snapshot.
+/// An iterator over files and directories inside a backup snapshot.
+#[derive(Clone)]
+pub struct SnapshotEntriesIter<'a> {
+    index: u8,
+    iter: Enumerate<slice::Iter<'a, PathSnapshots>>,
+    chain: &'a Chain,
+}
+
+/// Allows to display entries of a snapshot.
 ///
 /// The style used is similar to the one used by `ls -l` unix command.
-pub struct SnapshotEntriesDisplay<'a>(SnapshotEntries<'a>);
+pub struct SnapshotEntriesDisplay<'a>(SnapshotEntriesIter<'a>);
 
 /// Information about an entry inside a backup snapshot.
 ///
@@ -65,6 +75,7 @@ pub struct Entry<'a> {
     path: &'a RawPath,
     info: &'a PathInfo,
     ug_map: &'a UserGroupMap,
+    id: EntryId,
 }
 
 /// Type of entry in a backup snapshot.
@@ -136,12 +147,12 @@ impl Chain {
     pub fn new() -> Self {
         Chain {
             num_snapshots: 0,
-            files: Vec::new(),
+            entries: Vec::new(),
             ug_map: UserGroupMap::new(),
         }
     }
 
-    /// Opens a signature chain from signature chain files, by using a backend.
+    /// Opens a signature chain from signature chain entries, by using a backend.
     ///
     /// The given signature chain file names are read by using the given backend, to build the
     /// corresponding `Chain` instance.
@@ -191,9 +202,9 @@ impl Chain {
                                         mut tar: tar::Archive<R>,
                                         snapshot_id: u8)
                                         -> io::Result<()> {
-        let mut new_files: Vec<PathSnapshots> = Vec::new();
+        let mut new_entries: Vec<PathSnapshots> = Vec::new();
         {
-            let mut old_snapshots = self.files.iter_mut().peekable();
+            let mut old_snapshots = self.entries.iter_mut().peekable();
             for tarfile in try!(tar.entries()) {
                 // we can ignore paths with errors
                 // the only problem here is that we miss some change in the chain, but it is
@@ -263,19 +274,19 @@ impl Chain {
                     path_snapshots.snapshots.push(new_snapshot);
                 } else {
                     // the path is not present in the old snapshots: add to new list
-                    new_files.push(PathSnapshots {
+                    new_entries.push(PathSnapshots {
                         path: RawPath::from_bytes(path.to_owned()),
                         snapshots: vec![new_snapshot],
                     });
                 }
             }
         }
-        // merge the new files with old snapshots
-        if !new_files.is_empty() {
+        // merge the new entries with old snapshots
+        if !new_entries.is_empty() {
             // TODO: Performance hurt here: we have two sorted arrays to merge,
             // better to use this algorithm: http://stackoverflow.com/a/4553321/1667955
-            self.files.extend(new_files.into_iter());
-            self.files.sort_by(|a, b| a.path.cmp(&b.path));
+            self.entries.extend(new_entries.into_iter());
+            self.entries.sort_by(|a, b| a.path.cmp(&b.path));
         }
         Ok(())
     }
@@ -326,11 +337,11 @@ impl<'a> ExactSizeIterator for Snapshots<'a> {
 
 
 impl<'a> Snapshot<'a> {
-    /// Returns the files inside this backup snapshot.
-    pub fn files(&self) -> SnapshotEntries<'a> {
+    /// Returns the entries inside this backup snapshot.
+    pub fn entries(&self) -> SnapshotEntries<'a> {
         SnapshotEntries {
             index: self.index,
-            iter: self.chain.files.iter(),
+            entries: &self.chain.entries,
             chain: self.chain,
         }
     }
@@ -338,35 +349,68 @@ impl<'a> Snapshot<'a> {
 
 impl<'a> Display for Snapshot<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.files().into_display())
+        write!(f, "{}", self.entries().into_display())
     }
 }
 
 
 impl<'a> SnapshotEntries<'a> {
-    /// Returns a displayable struct for the files.
+    /// Returns a displayable struct for the entries.
     ///
-    /// Needs to consume `self`, because it has to iterate over all the files to align the output
+    /// Needs to consume `self`, because it has to iterate over all the entries to align the output
     /// columns properly.
     pub fn into_display(self) -> SnapshotEntriesDisplay<'a> {
-        SnapshotEntriesDisplay(self)
+        SnapshotEntriesDisplay(self.into_iter())
+    }
+
+    /// Returns the entry for the given id.
+    ///
+    /// This function is guaranteed to run in constant time.
+    pub fn entry(&self, id: EntryId) -> Entry<'a> {
+        let path_snap = &self.entries[id.0];
+        Entry {
+            path: &path_snap.path,
+            info: path_snap.snapshots[id.1 as usize].info.as_ref().unwrap(),
+            ug_map: &self.chain.ug_map,
+            id: id,
+        }
     }
 }
 
-impl<'a> Iterator for SnapshotEntries<'a> {
+impl<'a> IntoIterator for SnapshotEntries<'a> {
+    type Item = Entry<'a>;
+    type IntoIter = SnapshotEntriesIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SnapshotEntriesIter {
+            index: self.index,
+            iter: self.entries.iter().enumerate(),
+            chain: self.chain,
+        }
+    }
+}
+
+
+impl<'a> Iterator for SnapshotEntriesIter<'a> {
     type Item = Entry<'a>;
 
     fn next(&mut self) -> Option<Entry<'a>> {
         let index = self.index;     // prevents borrow checker complains
-        for path_snapshots in &mut self.iter {
-            if let Some(s) = path_snapshots.snapshots.iter().rev().find(|s| s.index <= index) {
+        for (path_id, path_snapshots) in &mut self.iter {
+            if let Some((index, s)) = path_snapshots.snapshots
+                                                    .iter()
+                                                    .rev()
+                                                    .enumerate()
+                                                    .find(|s| s.1.index <= index) {
                 // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
+                    let index = path_snapshots.snapshots.len() - index - 1;
                     return Some(Entry {
                         path: &path_snapshots.path,
                         info: info,
                         ug_map: &self.chain.ug_map,
+                        id: (path_id, index as u8),
                     });
                 }
             }
@@ -454,6 +498,11 @@ impl<'a> Entry<'a> {
     /// This will return some path only if this entry is a symbolic link.
     pub fn linked_path(&self) -> Option<&'a Path> {
         self.info.link.as_ref().and_then(|p| p.as_path())
+    }
+
+    /// Returns the path identificator.
+    pub fn id(&self) -> EntryId {
+        self.id
     }
 }
 
@@ -700,7 +749,7 @@ mod test {
                              Some(Path::new(link)))
     }
 
-    fn single_vol_expected_files() -> Vec<Vec<EntryTest>> {
+    fn single_vol_expected_entries() -> Vec<Vec<EntryTest>> {
         let nonutf8path = vec![0xd8, 0xab, 0xb1, 0x57, 0x62, 0xae, 0xc5, 0x5d, 0x8a, 0xbb, 0x15,
                                0x76, 0x2a, 0xf4, 0x0f, 0x21, 0xf9, 0x3e, 0xe2, 0x59, 0x86, 0xbb,
                                0xab, 0xdb, 0x70, 0xb0, 0x84, 0x13, 0x6b, 0x1d, 0xc2, 0xf1, 0xf5,
@@ -788,7 +837,7 @@ mod test {
         vec![s1, s2, s3]
     }
 
-    fn single_vol_files() -> Chain {
+    fn single_vol_entries() -> Chain {
         let backend = LocalBackend::new("tests/backups/single_vol");
         let filenames = backend.file_names().unwrap();
         let coll = Collections::from_filenames(filenames);
@@ -808,16 +857,17 @@ mod test {
 
     #[test]
     fn file_list() {
-        let expected_files = single_vol_expected_files();
-        let files = single_vol_files();
-        // println!("debug files\n---------\n{:#?}\n----------", files);
-        let actual_files = files.snapshots().map(|s| {
-            s.files()
+        let expected_entries = single_vol_expected_entries();
+        let entries = single_vol_entries();
+        // println!("debug entries\n---------\n{:#?}\n----------", entries);
+        let actual_entries = entries.snapshots().map(|s| {
+            s.entries()
+             .into_iter()
              .map(|f| EntryTest::from_entry(&f))
              .collect::<Vec<_>>()
         });
-        assert_eq!(files.snapshots().count(), 3);
-        for (actual, expected) in actual_files.zip(expected_files) {
+        assert_eq!(entries.snapshots().count(), 3);
+        for (actual, expected) in actual_entries.zip(expected_entries) {
             // println!("\nExpected:\n{:#?}\nActual:\n{:#?}", expected, actual);
             assert_eq!(actual, expected);
         }
@@ -825,9 +875,10 @@ mod test {
 
     #[test]
     fn size_hint() {
-        let files = single_vol_files();
-        let actual_sizes = files.snapshots().map(|s| {
-            s.files()
+        let entries = single_vol_entries();
+        let actual_sizes = entries.snapshots().map(|s| {
+            s.entries()
+             .into_iter()
              .map(|f| f.size_hint().unwrap())
              .collect::<Vec<_>>()
         });
@@ -837,7 +888,7 @@ mod test {
         for (actual, expected) in actual_sizes.zip(expected_sizes) {
             // println!("debug {:?}", actual);
             assert_eq!(actual.len(), expected.len());
-            // iterate all the files
+            // iterate all the entries
             for (actual, expected) in actual.iter().zip(expected) {
                 assert!(actual.0 <= expected && actual.1 >= expected,
                         "failed: valid interval: [{} - {}], real value: {}",
@@ -855,10 +906,10 @@ mod test {
         //       however not panicking is already something :)
         //       Display is not properly testable due to time zones differencies;
         //       we want to avoid using global mutexes in test code
-        let files = single_vol_files();
+        let entries = single_vol_entries();
         println!("Backup snapshots:\n");
-        for snapshot in files.snapshots() {
-            println!("Snapshot\n{}", snapshot.files().into_display());
+        for snapshot in entries.snapshots() {
+            println!("Snapshot\n{}", snapshot.entries().into_display());
         }
     }
 

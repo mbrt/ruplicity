@@ -312,7 +312,7 @@ impl<'a> SnapshotEntries<'a> {
     ///
     /// This function can be used to retrieve information about the files in the snapshot.
     pub fn as_signature(&self) -> signatures::SnapshotEntries {
-        self.chain.as_ref().unwrap().snapshots().nth(self.sig_id).unwrap().files()
+        self.chain.as_ref().unwrap().snapshots().nth(self.sig_id).unwrap().entries()
     }
 }
 
@@ -479,7 +479,8 @@ mod test {
     fn from_sigchain(chain: &Chain) -> Vec<Vec<EntryTest>> {
         chain.snapshots()
              .map(|s| {
-                 s.files()
+                 s.entries()
+                  .into_iter()
                   .map(|f| EntryTest::from_entry(&f))
                   .collect::<Vec<_>>()
              })
@@ -494,6 +495,7 @@ mod test {
                   s.entries()
                    .unwrap()
                    .as_signature()
+                   .into_iter()
                    .map(|f| EntryTest::from_entry(&f))
                    .collect::<Vec<_>>()
               })
