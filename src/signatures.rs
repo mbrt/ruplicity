@@ -914,6 +914,29 @@ mod test {
     }
 
     #[test]
+    fn random_access() {
+        let entries = single_vol_entries();
+        let ids = entries.snapshots().map(|s| {
+            s.entries()
+             .into_iter()
+             .map(|f| f.id())
+             .collect::<Vec<_>>()
+        });
+        assert_eq!(entries.snapshots().count(), 3);
+        for (snap_ids, snapshot) in ids.zip(entries.snapshots()) {
+            let actual = snap_ids.iter()
+                                 .cloned()
+                                 .map(|id| EntryTest::from_entry(&snapshot.entries().entry(id)))
+                                 .collect::<Vec<_>>();
+            let expected = snapshot.entries()
+                                   .into_iter()
+                                   .map(|f| EntryTest::from_entry(&f))
+                                   .collect::<Vec<_>>();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
     fn mode_display() {
         // see http://permissions-calculator.org/symbolic/
         // for help on permissions

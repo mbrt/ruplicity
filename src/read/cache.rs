@@ -9,8 +9,8 @@ const BLOCK_SIZE: usize = 64 * 1024;
 pub struct BlockCache {
     free_list: Vec<Block>,
     used_blocks: Vec<Block>,
-    size: usize,
-    max_size: usize,
+    len: usize,
+    max_len: usize,
 }
 
 pub struct BlockRef<'a> {
@@ -20,7 +20,7 @@ pub struct BlockRef<'a> {
 
 pub struct BlockRefMut<'a> {
     block: &'a mut [u8],
-    size: &'a mut usize,
+    len: &'a mut usize,
     cache: &'a BlockCache,
 }
 
@@ -31,12 +31,12 @@ struct Block {
 
 
 impl BlockCache {
-    pub fn new(max_size: usize) -> Self {
+    pub fn new(max_len: usize) -> Self {
         BlockCache {
             free_list: vec![],
             used_blocks: vec![],
-            size: 0,
-            max_size: max_size,
+            len: 0,
+            max_len: max_len,
         }
     }
 
@@ -53,23 +53,23 @@ impl BlockCache {
 
 impl<'a> BlockRefMut<'a> {
     pub fn read<R: Read>(&mut self, r: &mut R) -> io::Result<usize> {
-        let mut size = 0;
+        let mut len = 0;
         loop {
-            let len = try!(r.read(&mut self.block[size..]));
-            if len == 0 {
+            let curr_read = try!(r.read(&mut self.block[len..]));
+            if curr_read == 0 {
                 break;
             }
-            size += len;
+            len += curr_read;
         }
-        *self.size = size;
-        Ok(size)
+        *self.len = len;
+        Ok(len)
     }
 }
 
 impl<'a> Into<BlockRef<'a>> for BlockRefMut<'a> {
     fn into(self) -> BlockRef<'a> {
         BlockRef {
-            block: &self.block[0..*self.size],
+            block: &self.block[0..*self.len],
             cache: self.cache,
         }
     }
