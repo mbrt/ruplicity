@@ -318,7 +318,7 @@ impl<'a> SnapshotEntries<'a> {
 
 impl<'a> Display for SnapshotEntries<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.as_signature().into_display().fmt(f)
+        self.as_signature().fmt(f)
     }
 }
 

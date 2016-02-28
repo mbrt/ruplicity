@@ -62,11 +62,6 @@ pub struct SnapshotEntriesIter<'a> {
     chain: &'a Chain,
 }
 
-/// Allows to display entries of a snapshot.
-///
-/// The style used is similar to the one used by `ls -l` unix command.
-pub struct SnapshotEntriesDisplay<'a>(SnapshotEntriesIter<'a>);
-
 /// Information about an entry inside a backup snapshot.
 ///
 /// This could be a file, a directory, a link, etc.
@@ -349,20 +344,12 @@ impl<'a> Snapshot<'a> {
 
 impl<'a> Display for Snapshot<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.entries().into_display())
+        write!(f, "{}", self.entries())
     }
 }
 
 
 impl<'a> SnapshotEntries<'a> {
-    /// Returns a displayable struct for the entries.
-    ///
-    /// Needs to consume `self`, because it has to iterate over all the entries to align the output
-    /// columns properly.
-    pub fn into_display(self) -> SnapshotEntriesDisplay<'a> {
-        SnapshotEntriesDisplay(self.into_iter())
-    }
-
     /// Returns the entry for the given id.
     ///
     /// This function is guaranteed to run in constant time.
@@ -377,7 +364,35 @@ impl<'a> SnapshotEntries<'a> {
     }
 }
 
+impl<'a> Display for SnapshotEntries<'a> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        use std::io::Write;
+        use tabwriter::TabWriter;
+
+        let mut tw = TabWriter::new(Vec::new());
+        for file in self {
+            try_or_fmt_err!(write!(&mut tw, "{}\n", file));
+        }
+        try_or_fmt_err!(tw.flush());
+        let written = try_or_fmt_err!(String::from_utf8(tw.unwrap()));
+        write!(f, "{}", written)
+    }
+}
+
 impl<'a> IntoIterator for SnapshotEntries<'a> {
+    type Item = Entry<'a>;
+    type IntoIter = SnapshotEntriesIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SnapshotEntriesIter {
+            index: self.index,
+            iter: self.entries.iter().enumerate(),
+            chain: self.chain,
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a SnapshotEntries<'a> {
     type Item = Entry<'a>;
     type IntoIter = SnapshotEntriesIter<'a>;
 
@@ -416,22 +431,6 @@ impl<'a> Iterator for SnapshotEntriesIter<'a> {
             }
         }
         None
-    }
-}
-
-
-impl<'a> Display for SnapshotEntriesDisplay<'a> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        use std::io::Write;
-        use tabwriter::TabWriter;
-
-        let mut tw = TabWriter::new(Vec::new());
-        for file in self.0.clone() {
-            try_or_fmt_err!(write!(&mut tw, "{}\n", file));
-        }
-        try_or_fmt_err!(tw.flush());
-        let written = try_or_fmt_err!(String::from_utf8(tw.unwrap()));
-        write!(f, "{}", written)
     }
 }
 
@@ -909,7 +908,7 @@ mod test {
         let entries = single_vol_entries();
         println!("Backup snapshots:\n");
         for snapshot in entries.snapshots() {
-            println!("Snapshot\n{}", snapshot.entries().into_display());
+            println!("Snapshot\n{}", snapshot.entries());
         }
     }
 
