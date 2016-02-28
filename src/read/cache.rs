@@ -1,5 +1,7 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::{self, Read};
+use std::mem;
 
 pub type BlockId = (usize, u8);
 
@@ -7,20 +9,20 @@ const BLOCK_SIZE: usize = 64 * 1024;
 
 
 pub struct BlockCache {
-    free_list: Vec<Block>,
-    used_blocks: Vec<Block>,
-    len: usize,
-    max_len: usize,
+    // map from index to block
+    // all blocks must be indexed, even unused
+    index: RefCell<HashMap<BlockId, *const Block>>,
+    // the list of all blocks
+    // [0..first_free] -> used
+    // [first_free..] -> not used, sorted by last usage (last used is last)
+    blocks: RefCell<Vec<Box<Block>>>,
+    max_blocks: usize,
+    first_free: usize,
 }
 
 pub struct BlockRef<'a> {
+    id: BlockId,
     block: &'a [u8],
-    cache: &'a BlockCache,
-}
-
-pub struct BlockRefMut<'a> {
-    block: &'a mut [u8],
-    len: &'a mut usize,
     cache: &'a BlockCache,
 }
 
@@ -31,46 +33,64 @@ struct Block {
 
 
 impl BlockCache {
-    pub fn new(max_len: usize) -> Self {
+    pub fn new(max_blocks: usize) -> Self {
         BlockCache {
-            free_list: vec![],
-            used_blocks: vec![],
-            len: 0,
-            max_len: max_len,
+            index: RefCell::new(HashMap::new()),
+            blocks: RefCell::new(Vec::new()),
+            max_blocks: max_blocks,
+            first_free: 0,
         }
     }
 
     pub fn block(&self, id: BlockId) -> Option<BlockRef> {
-        unimplemented!()
-    }
-
-    /// Returns a cached block or a fresh one to be written
-    pub fn cached_or_free_block(&self, id: BlockId) -> Result<BlockRef, BlockRefMut> {
-        unimplemented!()
-    }
-}
-
-
-impl<'a> BlockRefMut<'a> {
-    pub fn read<R: Read>(&mut self, r: &mut R) -> io::Result<usize> {
-        let mut len = 0;
-        loop {
-            let curr_read = try!(r.read(&mut self.block[len..]));
-            if curr_read == 0 {
-                break;
+        self.index.borrow().get(&id).map(|block| {
+            let bref: &Block = unsafe { mem::transmute(block) };
+            BlockRef {
+                id: id,
+                block: bref.as_slice(),
+                cache: self,
             }
-            len += curr_read;
+        })
+    }
+
+    /// Returns a cached block or loads it with the given function.
+    pub fn block_or_load_with<F>(&self, id: BlockId, f: F) -> io::Result<BlockRef>
+        where F: FnMut(&mut [u8]) -> io::Result<usize>
+    {
+        if let Some(block) = self.index.borrow().get(&id) {
+            let bref: &Block = unsafe { mem::transmute(block) };
+            return Ok(BlockRef {
+                id: id,
+                block: bref.as_slice(),
+                cache: self,
+            });
         }
-        *self.len = len;
-        Ok(len)
+
+        // need to load the block
+        let index = self.index.borrow_mut();
+        let mut block = {
+            if index.len() >= self.max_blocks && self.first_free < index.len() {
+                // max cache size reached and some block is unused
+            } else {
+                // append a new block, because all blocks are used or the cache is not full
+                let block = Box::new(Block::new());
+            }
+        };
+
+        unimplemented!()
     }
 }
 
-impl<'a> Into<BlockRef<'a>> for BlockRefMut<'a> {
-    fn into(self) -> BlockRef<'a> {
-        BlockRef {
-            block: &self.block[0..*self.len],
-            cache: self.cache,
+
+impl Block {
+    fn new() -> Self {
+        Block {
+            data: [0; BLOCK_SIZE],
+            len: 0,
         }
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        &self.data[0..self.len]
     }
 }
