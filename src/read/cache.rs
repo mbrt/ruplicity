@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use std::io::{self, Read};
 use std::mem;
 
+use read::unslist::{self, UnsafeList};
+
+
 pub type BlockId = (usize, u8);
-
-const BLOCK_SIZE: usize = 64 * 1024;
-
 
 pub struct BlockCache {
     // map from index to block
@@ -26,10 +26,21 @@ pub struct BlockRef<'a> {
     cache: &'a BlockCache,
 }
 
+
 struct Block {
     data: [u8; BLOCK_SIZE],
     len: usize,
 }
+
+struct CacheData {
+    index: HashMap<BlockId, *const BlockNode>,
+    blocks: UnsafeList<Block>,
+    first_free: Option<*const BlockNode>,
+}
+
+const BLOCK_SIZE: usize = 64 * 1024;
+
+type BlockNode = unslist::Node<BlockCache>;
 
 
 impl BlockCache {
