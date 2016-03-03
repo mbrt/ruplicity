@@ -1,3 +1,4 @@
 //mod iter;
-mod cache;
+//mod cache;
+#[allow(dead_code)]
 mod unslist;

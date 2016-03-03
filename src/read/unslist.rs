@@ -37,7 +37,7 @@ impl<T> UnsafeList<T> {
         }
     }
 
-    pub fn push_front(&mut self, val: T) {
+    pub fn push_front(&mut self, val: T) -> &Node<T> {
         let mut new_head = Box::new(Node::new(val));
         match self.head {
             None => {
@@ -52,25 +52,33 @@ impl<T> UnsafeList<T> {
             }
         }
         self.length += 1;
+        self.head.as_ref().unwrap()
     }
 
-    pub fn push_back(&mut self, val: T) {
+    pub fn push_back(&mut self, val: T) -> &Node<T> {
         match unsafe { self.tail.resolve_mut() } {
-            None => {
-                return self.push_front(val);
-            }
+            None => self.push_front(val),
             Some(tail) => {
-                let mut new_tail = Box::new(Node::new(val));
+                let new_tail = Box::new(Node::new(val));
                 tail.set_next(new_tail);
                 self.tail = RawLink::from_link(&mut tail.next);
+                self.length += 1;
+                tail
             }
         }
-        self.length += 1;
     }
 }
 
 
 impl<T> Node<T> {
+    pub fn next(&self) -> Option<&Node<T>> {
+        self.next.as_ref().map(|bnode| &**bnode)
+    }
+
+    pub fn prev(&self) -> Option<&Node<T>> {
+        unsafe { self.prev.resolve() }
+    }
+
     fn new(val: T) -> Self {
         Node {
             next: None,
@@ -83,6 +91,14 @@ impl<T> Node<T> {
         debug_assert!(self.next.is_none());
         next.prev = RawLink::some(self);
         self.next = Some(next);
+    }
+}
+
+impl<T> Deref for Node<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.value
     }
 }
 
@@ -116,6 +132,10 @@ impl<T> RawLink<T> {
 
     fn from_link(link: &Link<T>) -> Self {
         RawLink(link.as_ref().map(|bnode| unsafe { Shared::new(mem::transmute(&bnode)) }))
+    }
+
+    unsafe fn resolve<'a>(&self) -> Option<&'a Node<T>> {
+        self.0.as_ref().map(|p| &***p)
     }
 
     unsafe fn resolve_mut<'a>(&mut self) -> Option<&'a mut Node<T>> {
