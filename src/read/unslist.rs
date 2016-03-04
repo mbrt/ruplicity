@@ -1,6 +1,7 @@
 use std::ops::Deref;
-use std::marker::PhantomData;
 use std::mem;
+
+use read::ptr::Shared;
 
 
 pub struct UnsafeList<T> {
@@ -18,14 +19,6 @@ pub struct Node<T> {
 
 type Link<T> = Option<Box<Node<T>>>;
 struct RawLink<T>(Option<Shared<Node<T>>>);
-
-
-// similar to std::ptr::Shared that is however unstable
-#[derive(Copy, Clone)]
-struct Shared<T: ?Sized> {
-    pointer: *const T,
-    _marker: PhantomData<T>,
-}
 
 
 impl<T> UnsafeList<T> {
@@ -99,24 +92,6 @@ impl<T> Deref for Node<T> {
 
     fn deref(&self) -> &T {
         &self.value
-    }
-}
-
-
-impl<T: ?Sized> Shared<T> {
-    unsafe fn new(ptr: *const T) -> Self {
-        Shared {
-            pointer: ptr,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<T: ?Sized> Deref for Shared<T> {
-    type Target = *mut T;
-
-    fn deref(&self) -> &*mut T {
-        unsafe { mem::transmute(&self.pointer) }
     }
 }
 
