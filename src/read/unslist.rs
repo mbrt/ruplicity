@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::mem;
 
 use read::ptr::Shared;
@@ -60,6 +60,14 @@ impl<T> UnsafeList<T> {
             }
         }
     }
+
+    pub unsafe fn remove(&mut self, node: &mut Node<T>) {
+        unimplemented!()
+    }
+
+    pub unsafe fn move_to_end(&mut self, node: &mut Node<T>) {
+        unimplemented!()
+    }
 }
 
 
@@ -92,6 +100,12 @@ impl<T> Deref for Node<T> {
 
     fn deref(&self) -> &T {
         &self.value
+    }
+}
+
+impl<T> DerefMut for Node<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.value
     }
 }
 

@@ -2,12 +2,14 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::mem;
+use std::rc::{Rc, Weak};
 
 use read::ptr::Shared;
 use read::unslist::{self, UnsafeList};
+use signatures::EntryId;
 
 
-pub type BlockId = (usize, u8);
+pub type BlockId = (EntryId, usize);
 
 pub struct BlockCache {
     data: RefCell<CacheData>,
@@ -15,9 +17,8 @@ pub struct BlockCache {
 }
 
 pub struct BlockRef<'a> {
-    id: BlockId,
-    block: &'a [u8],
-    cache: &'a BlockCache,
+    block: &'a Block,
+    ref_count: Rc<BlockRefCount>,
 }
 
 
@@ -35,11 +36,17 @@ struct CacheData {
 struct Block {
     data: [u8; BLOCK_SIZE],
     len: usize,
+    ref_count: Option<Weak<BlockRefCount>>,
+}
+
+struct BlockRefCount {
+    id: BlockId,
+    cache: Shared<BlockCache>,
 }
 
 const BLOCK_SIZE: usize = 64 * 1024;
 
-type BlockNode = unslist::Node<BlockCache>;
+type BlockNode = unslist::Node<Block>;
 
 
 impl BlockCache {
@@ -61,6 +68,31 @@ impl BlockCache {
     {
         unimplemented!()
     }
+
+    fn free_block(&self, id: BlockId) {
+        unimplemented!()
+/*
+        let mut data = self.data.borrow_mut();
+        let num_blocks = data.index.len();
+        let index = &mut data.index;
+        let blocks = &mut data.blocks;
+        let node = unsafe { resolve_node_mut(index.get_mut(&id).unwrap()) };
+        // if max cache size has been passed, free the block
+        if num_blocks > self.max_blocks {
+            unsafe {
+                blocks.remove(node);
+            }
+        } else {
+            // otherwise free memory for ref count,
+            // move it at the end of the list
+            debug_assert!(node.ref_count.as_ref().map_or(true, |rc| rc.upgrade().is_none()));
+            node.ref_count = None;
+            unsafe {
+                blocks.move_to_end(node);
+            }
+        }
+*/
+    }
 }
 
 
@@ -80,10 +112,25 @@ impl Block {
         Block {
             data: [0; BLOCK_SIZE],
             len: 0,
+            ref_count: None,
         }
     }
 
     fn as_slice(&self) -> &[u8] {
         &self.data[0..self.len]
     }
+}
+
+
+impl Drop for BlockRefCount {
+    fn drop(&mut self) {}
+}
+
+
+unsafe fn resolve_node(ptr: &Shared<BlockNode>) -> &BlockNode {
+    &***ptr
+}
+
+unsafe fn resolve_node_mut(ptr: &mut Shared<BlockNode>) -> &mut BlockNode {
+    &mut ***ptr
 }
