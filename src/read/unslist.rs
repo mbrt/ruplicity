@@ -31,7 +31,7 @@ impl<T> UnsafeList<T> {
         }
     }
 
-    pub fn push_front(&mut self, val: T) -> &Node<T> {
+    pub fn push_front(&mut self, val: T) -> *mut Node<T> {
         let mut new_head = Box::new(Node::new(val));
         match self.head {
             None => {
@@ -46,7 +46,7 @@ impl<T> UnsafeList<T> {
             }
         }
         self.length += 1;
-        self.head.as_ref().unwrap()
+        unsafe { mem::transmute(self.head.as_mut().unwrap()) }
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -60,7 +60,7 @@ impl<T> UnsafeList<T> {
         })
     }
 
-    pub fn push_back(&mut self, val: T) -> &Node<T> {
+    pub fn push_back(&mut self, val: T) -> *mut Node<T> {
         match unsafe { self.tail.resolve_mut() } {
             None => self.push_front(val),
             Some(tail) => {
@@ -87,19 +87,43 @@ impl<T> UnsafeList<T> {
         }
     }
 
-    // unsafe because:
-    // * the node can belong to another list
-    // * or it could be already freed
-    pub unsafe fn remove(&mut self, node: &mut Node<T>) {
+    /// unsafe because:
+    /// * the node can belong to another list
+    /// * or it could be already freed
+    pub unsafe fn remove(&mut self, node: Shared<Node<T>>) {
         self.move_to_back(node);
         self.pop_back();
     }
 
-    // unsafe because:
-    // * the node can belong to another list
-    // * or it could be already freed
-    pub unsafe fn move_to_back(&mut self, node: &mut Node<T>) {
-        unimplemented!()
+    /// unsafe because:
+    /// * the node can belong to another list
+    /// * or it could be already freed
+    pub unsafe fn move_to_back(&mut self, node: Shared<Node<T>>) {
+        if self.is_tail(node) {
+            // nothing to do
+            return;
+        }
+
+        // remove the node from its neighbors
+        if self.is_head(node) {
+            // we have to move the head
+            let mut head = self.head.take().unwrap();
+            self.head = link_no_prev(head.next.take().unwrap());
+        } else {
+            unimplemented!()
+        }
+        // link it to the tail
+    }
+
+    unsafe fn is_head(&self, node: Shared<Node<T>>) -> bool {
+        self.head.as_ref().map_or(false, |head_node| {
+            let head_ptr: *mut Node<T> = mem::transmute(&head_node);
+            head_ptr == *node
+        })
+    }
+
+    unsafe fn is_tail(&self, node: Shared<Node<T>>) -> bool {
+        self.tail.0.map_or(false, |raw_node| *raw_node == *node)
     }
 }
 

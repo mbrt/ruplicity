@@ -17,6 +17,14 @@ impl<T: ?Sized> Shared<T> {
             _marker: PhantomData,
         }
     }
+
+    pub unsafe fn resolve<'a>(&self) -> &'a T {
+       mem::transmute(self.pointer) 
+    }
+
+    pub unsafe fn resolve_mut<'a>(&mut self) -> &'a mut T {
+       mem::transmute(self.pointer) 
+    }
 }
 
 impl<T: ?Sized> Deref for Shared<T> {

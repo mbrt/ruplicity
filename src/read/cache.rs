@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::{self, Read};
-use std::mem;
+use std::io;
 use std::rc::{Rc, Weak};
 
 use read::ptr::Shared;
@@ -87,20 +86,21 @@ impl CacheData {
     fn free_block(&mut self, id: BlockId) {
         let num_blocks = self.index.len();
         let remove_node = {
-            let node = unsafe { resolve_node_mut(self.index.get_mut(&id).unwrap()) };
+            let mut node_ptr = *self.index.get_mut(&id).unwrap();
             // if max cache size has been passed, free the block
             if num_blocks > self.max_blocks {
                 unsafe {
-                    self.blocks.remove(node);
+                    self.blocks.remove(node_ptr);
                 }
                 true
             } else {
                 // otherwise free memory for ref count,
                 // move it at the end of the list
+                let node = unsafe { node_ptr.resolve_mut() };
                 debug_assert!(node.ref_count.as_ref().map_or(true, |rc| rc.upgrade().is_none()));
                 node.ref_count = None;
                 unsafe {
-                    self.blocks.move_to_back(node);
+                    self.blocks.move_to_back(node_ptr);
                 }
                 false
             }
