@@ -4,7 +4,6 @@ use std::mem;
 
 
 // similar to std::ptr::Shared that is however unstable
-#[derive(Copy, Clone)]
 pub struct Shared<T: ?Sized> {
     pointer: *const T,
     _marker: PhantomData<T>,
@@ -25,5 +24,13 @@ impl<T: ?Sized> Deref for Shared<T> {
 
     fn deref(&self) -> &*mut T {
         unsafe { mem::transmute(&self.pointer) }
+    }
+}
+
+impl<T: ?Sized> Copy for Shared<T> {}
+
+impl<T: ?Sized> Clone for Shared<T> {
+    fn clone(&self) -> Self {
+        *self
     }
 }

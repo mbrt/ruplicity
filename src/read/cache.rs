@@ -13,7 +13,6 @@ pub type BlockId = (EntryId, usize);
 
 pub struct BlockCache {
     data: RefCell<CacheData>,
-    max_blocks: usize,
 }
 
 pub struct BlockRef<'a> {
@@ -31,6 +30,7 @@ struct CacheData {
     // [first_free..] -> not used, sorted by last usage (last used is last)
     blocks: UnsafeList<Block>,
     first_free: Option<Shared<BlockNode>>,
+    max_blocks: usize,
 }
 
 struct Block {
@@ -39,6 +39,8 @@ struct Block {
     ref_count: Option<Weak<BlockRefCount>>,
 }
 
+// struct used to be shared among references to the same block
+// when goes out of scope it triggers free of the related block in the cache
 struct BlockRefCount {
     id: BlockId,
     cache: Shared<BlockCache>,
@@ -51,10 +53,7 @@ type BlockNode = unslist::Node<Block>;
 
 impl BlockCache {
     pub fn new(max_blocks: usize) -> Self {
-        BlockCache {
-            data: RefCell::new(CacheData::new()),
-            max_blocks: max_blocks,
-        }
+        BlockCache { data: RefCell::new(CacheData::new(max_blocks)) }
     }
 
     pub fn block(&self, id: BlockId) -> Option<BlockRef> {
@@ -70,38 +69,44 @@ impl BlockCache {
     }
 
     fn free_block(&self, id: BlockId) {
-        unimplemented!()
-/*
-        let mut data = self.data.borrow_mut();
-        let num_blocks = data.index.len();
-        let index = &mut data.index;
-        let blocks = &mut data.blocks;
-        let node = unsafe { resolve_node_mut(index.get_mut(&id).unwrap()) };
-        // if max cache size has been passed, free the block
-        if num_blocks > self.max_blocks {
-            unsafe {
-                blocks.remove(node);
-            }
-        } else {
-            // otherwise free memory for ref count,
-            // move it at the end of the list
-            debug_assert!(node.ref_count.as_ref().map_or(true, |rc| rc.upgrade().is_none()));
-            node.ref_count = None;
-            unsafe {
-                blocks.move_to_end(node);
-            }
-        }
-*/
+        self.data.borrow_mut().free_block(id);
     }
 }
 
 
 impl CacheData {
-    pub fn new() -> Self {
+    fn new(max_blocks: usize) -> Self {
         CacheData {
             index: HashMap::new(),
             blocks: UnsafeList::new(),
             first_free: None,
+            max_blocks: max_blocks,
+        }
+    }
+
+    fn free_block(&mut self, id: BlockId) {
+        let num_blocks = self.index.len();
+        let remove_node = {
+            let node = unsafe { resolve_node_mut(self.index.get_mut(&id).unwrap()) };
+            // if max cache size has been passed, free the block
+            if num_blocks > self.max_blocks {
+                unsafe {
+                    self.blocks.remove(node);
+                }
+                true
+            } else {
+                // otherwise free memory for ref count,
+                // move it at the end of the list
+                debug_assert!(node.ref_count.as_ref().map_or(true, |rc| rc.upgrade().is_none()));
+                node.ref_count = None;
+                unsafe {
+                    self.blocks.move_to_back(node);
+                }
+                false
+            }
+        };
+        if remove_node {
+            self.index.remove(&id);
         }
     }
 }
@@ -123,7 +128,10 @@ impl Block {
 
 
 impl Drop for BlockRefCount {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        let cache = unsafe { &**self.cache };
+        cache.free_block(self.id);
+    }
 }
 
 

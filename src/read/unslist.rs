@@ -18,6 +18,7 @@ pub struct Node<T> {
 
 
 type Link<T> = Option<Box<Node<T>>>;
+
 struct RawLink<T>(Option<Shared<Node<T>>>);
 
 
@@ -48,6 +49,17 @@ impl<T> UnsafeList<T> {
         self.head.as_ref().unwrap()
     }
 
+    pub fn pop_front(&mut self) -> Option<T> {
+        self.head.take().map(|mut front_node| {
+            self.length -= 1;
+            match front_node.next.take() {
+                Some(node) => self.head = link_no_prev(node),
+                None => self.tail = RawLink::none(),
+            }
+            front_node.value
+        })
+    }
+
     pub fn push_back(&mut self, val: T) -> &Node<T> {
         match unsafe { self.tail.resolve_mut() } {
             None => self.push_front(val),
@@ -61,11 +73,32 @@ impl<T> UnsafeList<T> {
         }
     }
 
-    pub unsafe fn remove(&mut self, node: &mut Node<T>) {
-        unimplemented!()
+    pub fn pop_back(&mut self) -> Option<T> {
+        unsafe {
+            self.tail.resolve_mut().and_then(|tail| {
+                self.length -= 1;
+                self.tail = tail.prev;
+                let opt_node = match tail.prev.resolve_mut() {
+                    None => self.head.take(),
+                    Some(tail_prev) => tail_prev.next.take(),
+                };
+                opt_node.map(|bnode| bnode.value)
+            })
+        }
     }
 
-    pub unsafe fn move_to_end(&mut self, node: &mut Node<T>) {
+    // unsafe because:
+    // * the node can belong to another list
+    // * or it could be already freed
+    pub unsafe fn remove(&mut self, node: &mut Node<T>) {
+        self.move_to_back(node);
+        self.pop_back();
+    }
+
+    // unsafe because:
+    // * the node can belong to another list
+    // * or it could be already freed
+    pub unsafe fn move_to_back(&mut self, node: &mut Node<T>) {
         unimplemented!()
     }
 }
@@ -129,6 +162,14 @@ impl<T> RawLink<T> {
 
     unsafe fn resolve_mut<'a>(&mut self) -> Option<&'a mut Node<T>> {
         self.0.as_ref().map(|p| &mut ***p)
+    }
+}
+
+impl<T> Copy for RawLink<T> {}
+
+impl<T> Clone for RawLink<T> {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
