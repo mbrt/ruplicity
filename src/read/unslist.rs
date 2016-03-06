@@ -98,32 +98,32 @@ impl<T> UnsafeList<T> {
     /// unsafe because:
     /// * the node can belong to another list
     /// * or it could be already freed
-    pub unsafe fn move_to_back(&mut self, node: Shared<Node<T>>) {
-        if self.is_tail(node) {
-            // nothing to do
-            return;
-        }
+    pub unsafe fn move_to_back(&mut self, mut node: Shared<Node<T>>) {
+        let node = node.resolve_mut();
 
-        // remove the node from its neighbors
-        if self.is_head(node) {
-            // we have to move the head
-            let mut head = self.head.take().unwrap();
-            self.head = link_no_prev(head.next.take().unwrap());
-        } else {
-            unimplemented!()
-        }
-        // link it to the tail
-    }
-
-    unsafe fn is_head(&self, node: Shared<Node<T>>) -> bool {
-        self.head.as_ref().map_or(false, |head_node| {
-            let head_ptr: *mut Node<T> = mem::transmute(&head_node);
-            head_ptr == *node
-        })
-    }
-
-    unsafe fn is_tail(&self, node: Shared<Node<T>>) -> bool {
-        self.tail.0.map_or(false, |raw_node| *raw_node == *node)
+        // take node out of its neighbors
+        let node = match (node.prev.resolve_mut(), node.next.take()) {
+            (_, None) => {
+                // nothing to do, the node is already in the back
+                return;
+            }
+            (None, Some(next_node)) => {
+                // the node is the head
+                let node = self.head.take().unwrap();
+                self.head = link_no_prev(next_node);
+                node
+            }
+            (Some(prev_node), Some(next_node)) => {
+                // the node is in the middle
+                let node = prev_node.next.take().unwrap();
+                prev_node.set_next(next_node);
+                node
+            }
+        };
+        // move node at the end
+        let tail = self.tail.resolve_mut().unwrap();
+        tail.set_next(node);
+        self.tail = RawLink::from_link(&mut tail.next);
     }
 }
 
