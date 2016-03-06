@@ -18,6 +18,7 @@ impl<T: ?Sized> Shared<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub unsafe fn resolve<'a>(&self) -> &'a T {
        mem::transmute(self.pointer) 
     }

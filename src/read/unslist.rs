@@ -31,7 +31,7 @@ impl<T> UnsafeList<T> {
         }
     }
 
-    pub fn push_front(&mut self, val: T) -> *mut Node<T> {
+    pub fn push_front(&mut self, val: T) -> Shared<Node<T>> {
         let mut new_head = Box::new(Node::new(val));
         match self.head {
             None => {
@@ -46,7 +46,7 @@ impl<T> UnsafeList<T> {
             }
         }
         self.length += 1;
-        unsafe { mem::transmute(self.head.as_mut().unwrap()) }
+        unsafe { Shared::new(mem::transmute(self.head.as_mut().unwrap())) }
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -60,7 +60,7 @@ impl<T> UnsafeList<T> {
         })
     }
 
-    pub fn push_back(&mut self, val: T) -> *mut Node<T> {
+    pub fn push_back(&mut self, val: T) -> Shared<Node<T>> {
         match unsafe { self.tail.resolve_mut() } {
             None => self.push_front(val),
             Some(tail) => {
@@ -68,7 +68,7 @@ impl<T> UnsafeList<T> {
                 tail.set_next(new_tail);
                 self.tail = RawLink::from_link(&mut tail.next);
                 self.length += 1;
-                tail
+                unsafe { Shared::new(tail) }
             }
         }
     }
@@ -124,6 +124,19 @@ impl<T> UnsafeList<T> {
         let tail = self.tail.resolve_mut().unwrap();
         tail.set_next(node);
         self.tail = RawLink::from_link(&mut tail.next);
+    }
+}
+
+impl<T> Drop for UnsafeList<T> {
+    fn drop(&mut self) {
+        // Dissolve the linked_list in a loop.
+        // Just dropping the list_head can lead to stack exhaustion
+        // when length is >> 1_000_000
+        while let Some(mut head) = self.head.take() {
+            self.head = head.next.take();
+        }
+        self.length = 0;
+        self.tail = RawLink::none();
     }
 }
 
