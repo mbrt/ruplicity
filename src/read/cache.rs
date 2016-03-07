@@ -56,7 +56,6 @@ impl BlockCache {
     }
 
     pub fn block(&self, id: BlockId) -> Option<BlockRef> {
-        let data = self.data.borrow_mut();
         unimplemented!()
     }
 
@@ -81,6 +80,16 @@ impl CacheData {
             first_free: None,
             max_blocks: max_blocks,
         }
+    }
+
+    fn block(&self, id: BlockId) -> Option<BlockRef> {
+        unimplemented!()
+    }
+
+    fn block_or_load_with<F>(&self, id: BlockId, f: F) -> io::Result<BlockRef>
+        where F: FnMut(&mut [u8]) -> io::Result<usize>
+    {
+        unimplemented!()
     }
 
     fn free_block(&mut self, id: BlockId) {

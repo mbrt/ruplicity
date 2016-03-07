@@ -87,6 +87,8 @@ impl<T> UnsafeList<T> {
         }
     }
 
+    /// Remove the given node.
+    ///
     /// unsafe because:
     /// * the node can belong to another list
     /// * or it could be already freed
@@ -95,6 +97,8 @@ impl<T> UnsafeList<T> {
         self.pop_back();
     }
 
+    /// Move the given node to the back.
+    ///
     /// unsafe because:
     /// * the node can belong to another list
     /// * or it could be already freed
@@ -185,12 +189,12 @@ impl<T> RawLink<T> {
         RawLink(None)
     }
 
-    fn some(link: &Node<T>) -> Self {
+    fn some(link: &mut Node<T>) -> Self {
         RawLink(unsafe { Some(Shared::new(mem::transmute(link))) })
     }
 
-    fn from_link(link: &Link<T>) -> Self {
-        RawLink(link.as_ref().map(|bnode| unsafe { Shared::new(mem::transmute(&bnode)) }))
+    fn from_link(link: &mut Link<T>) -> Self {
+        RawLink(link.as_ref().map(|bnode| unsafe { Shared::new(mem::transmute(&*bnode)) }))
     }
 
     unsafe fn resolve<'a>(&self) -> Option<&'a Node<T>> {
@@ -214,4 +218,34 @@ impl<T> Clone for RawLink<T> {
 fn link_no_prev<T>(mut next: Box<Node<T>>) -> Link<T> {
     next.prev = RawLink::none();
     Some(next)
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn push_pop_front() {
+        let mut list = UnsafeList::new();
+        list.push_front(1);
+        list.push_front(2);
+        list.push_front(3);
+        assert_eq!(list.pop_front(), Some(3));
+        assert_eq!(list.pop_front(), Some(2));
+        assert_eq!(list.pop_front(), Some(1));
+        assert_eq!(list.pop_front(), None);
+    }
+
+    #[test]
+    fn push_pop_back() {
+        let mut list = UnsafeList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        assert_eq!(list.pop_back(), Some(3));
+        assert_eq!(list.pop_back(), Some(2));
+        assert_eq!(list.pop_back(), Some(1));
+        assert_eq!(list.pop_back(), None);
+    }
 }
