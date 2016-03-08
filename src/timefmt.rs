@@ -7,7 +7,7 @@
 //! Parse a duplicity timestamp and display it:
 //!
 //! ```
-//! use ruplicity::time_utils::{parse_time_str, TimeDisplay};
+//! use ruplicity::timefmt::{parse_time_str, TimeDisplay};
 //!
 //! let time = parse_time_str("19881211t152000z").unwrap();
 //! println!("My birth is {}", time.into_local_display());

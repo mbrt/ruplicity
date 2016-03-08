@@ -16,7 +16,7 @@
 //! ```
 //! use ruplicity::Backup;
 //! use ruplicity::backend::local::LocalBackend;
-//! use ruplicity::time_utils::TimeDisplay;
+//! use ruplicity::timefmt::TimeDisplay;
 //!
 //! // use the local backend to open a path in the file system containing a backup
 //! let backend = LocalBackend::new("tests/backups/single_vol");
@@ -48,19 +48,26 @@ extern crate time;
 extern crate try_opt;
 
 mod macros;
-pub mod time_utils;
+mod rawpath;
+mod read;
+
 pub mod backend;
 pub mod collections;
+pub mod manifest;
 pub mod signatures;
+pub mod timefmt;
 
 use std::cell::{Ref, RefCell};
 use std::fmt::{self, Display, Formatter};
 use std::io;
+use std::ops::Deref;
+use std::path::Path;
 
 use time::Timespec;
 
 pub use backend::Backend;
 use collections::{BackupChain, BackupSet, Collections};
+use manifest::Manifest;
 use signatures::Chain;
 
 
@@ -70,13 +77,20 @@ pub struct Backup<B> {
     backend: B,
     collections: Collections,
     signatures: Vec<RefCell<Option<Chain>>>,
+    manifests: Vec<RefCell<Option<Manifest>>>,
+}
+
+/// Represents all the snapshots in a backup.
+pub struct Snapshots<'a> {
+    backup: &'a ResourceCache,
 }
 
 /// An iterator over the snapshots in a backup.
-pub struct Snapshots<'a> {
+pub struct SnapshotsIter<'a> {
     set_iter: CollectionsIter<'a>,
     chain_id: usize,
     sig_id: usize,
+    man_id: usize,
     backup: &'a ResourceCache,
 }
 
@@ -86,6 +100,7 @@ pub struct Snapshot<'a> {
     // the number of the parent backup chain, starting from zero
     chain_id: usize,
     sig_id: usize,
+    man_id: usize,
     backup: &'a ResourceCache,
 }
 
@@ -94,6 +109,10 @@ pub struct SnapshotEntries<'a> {
     chain: Ref<'a, Option<Chain>>,
     sig_id: usize,
 }
+
+/// Reference to a Manifest.
+#[derive(Debug)]
+pub struct ManifestRef<'a>(Ref<'a, Option<Manifest>>);
 
 
 struct CollectionsIter<'a> {
@@ -108,6 +127,10 @@ struct CollectionsIter<'a> {
 trait ResourceCache {
     fn _collections(&self) -> &Collections;
     fn _signature_chain(&self, chain_id: usize) -> io::Result<Ref<Option<Chain>>>;
+    fn _manifest(&self,
+                 chain_id: usize,
+                 manifest_path: &str)
+                 -> Result<Ref<Option<Manifest>>, manifest::ParseError>;
 }
 
 
@@ -127,38 +150,65 @@ impl<B: Backend> Backup<B> {
     /// // use the local backend to open a path in the file system containing a backup
     /// let backend = LocalBackend::new("tests/backups/single_vol");
     /// let backup = Backup::new(backend).unwrap();
-    /// println!("Got backup with {} snapshots!", backup.snapshots().unwrap().count());
+    /// println!("Got backup with {} snapshots!", backup.snapshots().unwrap().into_iter().count());
     /// ```
     pub fn new(backend: B) -> io::Result<Self> {
         let files = try!(backend.file_names());
         let collections = Collections::from_filenames(files);
         let signatures = collections.signature_chains().map(|_| RefCell::new(None)).collect();
+        let manifests = (0..collections.num_snapshots()).map(|_| RefCell::new(None)).collect();
         Ok(Backup {
             backend: backend,
             collections: collections,
             signatures: signatures,
+            manifests: manifests,
         })
     }
 
     /// Constructs an iterator over the snapshots currently present in this backup.
     pub fn snapshots(&self) -> io::Result<Snapshots> {
-        let set_iter = CollectionsIter {
-            chain_iter: self.collections.backup_chains(),
-            incset_iter: None,
-        };
         // in future, when we will add lazy collections,
         // this could fail, so we add a Result in advance
-        Ok(Snapshots {
-            set_iter: set_iter,
-            chain_id: 0,
-            sig_id: 0,
-            backup: self,
-        })
+        Ok(Snapshots { backup: self })
+    }
+
+    /// Unwraps this backup and returns the inner backend.
+    pub fn into_inner(self) -> B {
+        self.backend
     }
 }
 
 
-impl<'a> Iterator for Snapshots<'a> {
+impl<'a> Snapshots<'a> {
+    /// Returns the low level representation of the snapshots.
+    pub fn as_collections(&self) -> &'a Collections {
+        self.backup._collections()
+    }
+}
+
+impl<'a> IntoIterator for Snapshots<'a> {
+    type Item = Snapshot<'a>;
+    type IntoIter = SnapshotsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let set_iter = CollectionsIter {
+            chain_iter: self.backup._collections().backup_chains(),
+            incset_iter: None,
+        };
+        // in future, when we will add lazy collections,
+        // this could fail, so we add a Result in advance
+        SnapshotsIter {
+            set_iter: set_iter,
+            chain_id: 0,
+            sig_id: 0,
+            man_id: 0,
+            backup: self.backup,
+        }
+    }
+}
+
+
+impl<'a> Iterator for SnapshotsIter<'a> {
     type Item = Snapshot<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -167,10 +217,12 @@ impl<'a> Iterator for Snapshots<'a> {
             // we have a set iter, so return the next element if present
             if let Some(inc_set) = incset_iter.next() {
                 self.sig_id += 1;
+                self.man_id += 1;
                 return Some(Snapshot {
                     set: inc_set,
                     chain_id: self.chain_id - 1,
                     sig_id: self.sig_id,
+                    man_id: self.man_id - 1,
                     backup: self.backup,
                 });
             }
@@ -178,26 +230,22 @@ impl<'a> Iterator for Snapshots<'a> {
         // the current incset is exausted or not present,
         // we need to advance the chain and return the next full set if present,
         // otherwise the job is finished
-        if let Some(chain) = self.set_iter.chain_iter.next() {
-            self.chain_id += 1;
-            self.sig_id = 0;
-            self.set_iter.incset_iter = Some(chain.inc_sets());
-            Some(Snapshot {
-                set: chain.full_set(),
-                chain_id: self.chain_id - 1,
-                sig_id: self.sig_id,
-                backup: self.backup,
-            })
-        } else {
-            None
+        match self.set_iter.chain_iter.next() {
+            Some(chain) => {
+                self.chain_id += 1;
+                self.sig_id = 0;
+                self.man_id += 1;
+                self.set_iter.incset_iter = Some(chain.inc_sets());
+                Some(Snapshot {
+                    set: chain.full_set(),
+                    chain_id: self.chain_id - 1,
+                    sig_id: self.sig_id,
+                    man_id: self.man_id - 1,
+                    backup: self.backup,
+                })
+            }
+            None => None,
         }
-    }
-}
-
-impl<'a> Snapshots<'a> {
-    /// Returns the low level representation of the snapshots.
-    pub fn as_collections(&self) -> &Collections {
-        self.backup._collections()
     }
 }
 
@@ -229,7 +277,7 @@ impl<'a> Snapshot<'a> {
     }
 
     /// Returns the low level representation of the snapshot.
-    pub fn as_backup_set(&self) -> &BackupSet {
+    pub fn as_backup_set(&self) -> &'a BackupSet {
         self.set
     }
 
@@ -249,6 +297,13 @@ impl<'a> Snapshot<'a> {
             Err(not_found("The signature chain is incomplete"))
         }
     }
+
+    /// Returns the manifest for this snapshot.
+    ///
+    /// The relative manifest file is read on demand and cached for subsequent uses.
+    pub fn manifest(&self) -> Result<ManifestRef<'a>, manifest::ParseError> {
+        Ok(ManifestRef(try!(self.backup._manifest(self.man_id, self.set.manifest_path()))))
+    }
 }
 
 
@@ -264,6 +319,15 @@ impl<'a> SnapshotEntries<'a> {
 impl<'a> Display for SnapshotEntries<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.as_signature().into_display().fmt(f)
+    }
+}
+
+
+impl<'a> Deref for ManifestRef<'a> {
+    type Target = Manifest;
+
+    fn deref(&self) -> &Manifest {
+        self.0.as_ref().unwrap()
     }
 }
 
@@ -293,6 +357,25 @@ impl<B: Backend> ResourceCache for Backup<B> {
         // return the cached value
         Ok(self.signatures[chain_id].borrow())
     }
+
+    fn _manifest(&self,
+                 id: usize,
+                 path: &str)
+                 -> Result<Ref<Option<Manifest>>, manifest::ParseError> {
+        {
+            // check if there is a cached value
+            let mut sig = self.manifests[id].borrow_mut();
+            if sig.is_none() {
+                // compute manifest now
+                let mut file = io::BufReader::new(try!(self.backend.open_file(Path::new(path))));
+                *sig = Some(try!(Manifest::parse(&mut file)));
+            }
+        }
+
+        // need to close previous scope to borrow again
+        // return the cached value
+        Ok(self.manifests[id].borrow())
+    }
 }
 
 
@@ -306,10 +389,14 @@ mod test {
     use super::*;
     use backend::local::LocalBackend;
     use collections::{BackupSet, Collections};
+    use manifest::Manifest;
+    use rawpath::RawPath;
     use signatures::{Chain, Entry};
-    use time_utils::parse_time_str;
+    use timefmt::parse_time_str;
 
-    use std::path::{Path, PathBuf};
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::path::Path;
     use time::Timespec;
 
 
@@ -322,7 +409,7 @@ mod test {
 
     #[derive(Debug, Clone, Eq, PartialEq)]
     struct EntryTest {
-        path: PathBuf,
+        path: RawPath,
         mtime: Timespec,
         uname: String,
         gname: String,
@@ -331,20 +418,16 @@ mod test {
     impl EntryTest {
         pub fn from_entry(file: &Entry) -> Self {
             EntryTest {
-                path: file.path().to_owned(),
+                path: RawPath::from_bytes(file.path_bytes().to_owned()),
                 mtime: file.mtime(),
                 uname: file.username().unwrap().to_owned(),
                 gname: file.groupname().unwrap().to_owned(),
             }
         }
 
-        pub fn from_info(path: &str,
-                         mtime: &str,
-                         uname: &str,
-                         gname: &str)
-                         -> Self {
+        pub fn from_info(path: &[u8], mtime: &str, uname: &str, gname: &str) -> Self {
             EntryTest {
-                path: Path::new(path).to_path_buf(),
+                path: RawPath::from_bytes(path.to_owned()),
                 mtime: parse_time_str(mtime).unwrap(),
                 uname: uname.to_owned(),
                 gname: gname.to_owned(),
@@ -374,6 +457,7 @@ mod test {
     fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<SnapshotTest> {
         backup.snapshots()
               .unwrap()
+              .into_iter()
               .map(|s| {
                   assert!(s.is_full() != s.is_incremental());
                   SnapshotTest {
@@ -397,7 +481,6 @@ mod test {
              .map(|s| {
                  s.files()
                   .map(|f| EntryTest::from_entry(&f))
-                  .filter(|f| f.path.to_str().is_some())
                   .collect::<Vec<_>>()
              })
              .collect::<Vec<_>>()
@@ -406,12 +489,12 @@ mod test {
     fn from_backup<B: Backend>(backup: &Backup<B>) -> Vec<Vec<EntryTest>> {
         backup.snapshots()
               .unwrap()
+              .into_iter()
               .map(|s| {
                   s.entries()
                    .unwrap()
                    .as_signature()
                    .map(|f| EntryTest::from_entry(&f))
-                   .filter(|f| f.path.to_str().is_some())
                    .collect::<Vec<_>>()
               })
               .collect::<Vec<_>>()
@@ -458,18 +541,42 @@ mod test {
         let backend = LocalBackend::new("tests/backups/multi_chain");
         let backup = Backup::new(backend).unwrap();
         let actual = from_backup(&backup);
-        let expected = vec![vec![make_entry_test("", "20160108t223141z"),
-                                 make_entry_test("file", "20160108t222924z")],
-                            vec![make_entry_test("", "20160108t223153z"),
-                                 make_entry_test("file", "20160108t223153z")],
-                            vec![make_entry_test("", "20160108t223206z"),
-                                 make_entry_test("file", "20160108t223206z")],
-                            vec![make_entry_test("", "20160108t223215z"),
-                                 make_entry_test("file", "20160108t223215z")]];
+        let expected = vec![vec![make_entry_test(b"", "20160108t223141z"),
+                                 make_entry_test(b"file", "20160108t222924z")],
+                            vec![make_entry_test(b"", "20160108t223153z"),
+                                 make_entry_test(b"file", "20160108t223153z")],
+                            vec![make_entry_test(b"", "20160108t223206z"),
+                                 make_entry_test(b"file", "20160108t223206z")],
+                            vec![make_entry_test(b"", "20160108t223215z"),
+                                 make_entry_test(b"file", "20160108t223215z")]];
         assert_eq!(actual, expected);
 
-        fn make_entry_test(path: &str, mtime: &str) -> EntryTest {
+        fn make_entry_test(path: &[u8], mtime: &str) -> EntryTest {
             EntryTest::from_info(path, mtime, "michele", "michele")
+        }
+    }
+
+    #[test]
+    fn multi_chain_manifests() {
+        let backend = LocalBackend::new("tests/backups/multi_chain");
+        let backup = Backup::new(backend).unwrap();
+        let actual = backup.snapshots()
+                           .unwrap()
+                           .into_iter()
+                           .map(|snapshot| snapshot.manifest().unwrap());
+        let names = vec!["duplicity-full.20160108T223144Z.manifest",
+                         "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+                         "duplicity-full.20160108T223209Z.manifest",
+                         "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest"];
+        let expected = names.iter()
+                            .map(|name| {
+                                let mut path = Path::new("tests/backups/multi_chain").to_owned();
+                                path.push(name);
+                                let mut file = BufReader::new(File::open(path).unwrap());
+                                Manifest::parse(&mut file).unwrap()
+                            });
+        for (e, a) in expected.zip(actual) {
+            assert_eq!(e, *a);
         }
     }
 }

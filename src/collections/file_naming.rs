@@ -1,7 +1,7 @@
 use regex::Regex;
 use time::Timespec;
 
-use time_utils::parse_time_str;
+use timefmt::parse_time_str;
 
 
 pub struct FileNameInfo<'a> {
@@ -9,18 +9,19 @@ pub struct FileNameInfo<'a> {
     pub info: Info,
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Info {
     pub tp: Type,
     pub compressed: bool,
     pub encrypted: bool,
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[allow(missing_copy_implementations)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Full {
         time: Timespec,
-        volume_number: i32,
+        volume_number: usize,
     },
     FullManifest {
         time: Timespec,
@@ -29,7 +30,7 @@ pub enum Type {
     Inc {
         start_time: Timespec,
         end_time: Timespec,
-        volume_number: i32,
+        volume_number: usize,
     },
     IncManifest {
         start_time: Timespec,
@@ -176,8 +177,8 @@ impl FileNameParser {
 }
 
 
-fn get_vol_num(s: &str) -> Option<i32> {
-    s.parse::<i32>().ok()
+fn get_vol_num(s: &str) -> Option<usize> {
+    s.parse::<usize>().ok()
 }
 
 fn is_encrypted(s: &str) -> bool {
@@ -192,7 +193,7 @@ fn is_compressed(s: &str) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use time_utils::parse_time_str;
+    use timefmt::parse_time_str;
 
     #[test]
     fn parser_test() {

@@ -5,13 +5,12 @@
 
 mod file_naming;
 
-use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter};
 use std::path::Path;
 use std::slice;
 use time::Timespec;
 
-use time_utils::TimeDisplay;
+use timefmt::TimeDisplay;
 use self::file_naming as fnm;
 use self::file_naming::{FileNameInfo, FileNameParser};
 
@@ -58,7 +57,7 @@ pub struct BackupSet {
     encrypted: bool,
     partial: bool,
     manifest_path: String,
-    volumes_paths: HashMap<i32, String>,
+    volumes_paths: Vec<Option<String>>,
 }
 
 /// Information about a signature file.
@@ -145,8 +144,8 @@ impl BackupSet {
     }
 
     /// Returns the path of the given volume.
-    pub fn volume_path(&self, volume_num: i32) -> Option<&str> {
-        self.volumes_paths.get(&volume_num).map(AsRef::as_ref)
+    pub fn volume_path(&self, volume_num: usize) -> Option<&str> {
+        self.volumes_paths.get(volume_num).and_then(|v| v.as_ref().map(AsRef::as_ref))
     }
 
     /// Returns the number of volumes in the set.
@@ -221,7 +220,7 @@ impl BackupSet {
             compressed: fname.info.compressed,
             encrypted: fname.info.encrypted,
             manifest_path: String::new(),
-            volumes_paths: HashMap::new(),
+            volumes_paths: Vec::new(),
         };
         result.add_filename(fname);
         result
@@ -243,7 +242,14 @@ impl BackupSet {
             match pr.tp {
                 fnm::Type::Full{ volume_number, .. } |
                 fnm::Type::Inc{ volume_number, .. } => {
-                    self.volumes_paths.insert(volume_number, fname.to_owned());
+                    // resize volumes if necessary
+                    if volume_number >= self.volumes_paths.len() {
+                        self.volumes_paths.reserve(volume_number + 1);
+                        for _ in self.volumes_paths.len()..volume_number + 1 {
+                            self.volumes_paths.push(None);
+                        }
+                    }
+                    self.volumes_paths[volume_number] = Some(fname.to_owned());
                 }
                 fnm::Type::FullManifest{ .. } |
                 fnm::Type::IncManifest{ .. } => {
@@ -286,7 +292,7 @@ impl BackupChain {
     pub fn new(fullset: BackupSet) -> Self {
         let time = {
             if let Type::Full{ time } = fullset.tp {
-                time.clone()
+                time
             } else {
                 panic!("Unexpected incremental backup set given");
             }
@@ -305,7 +311,7 @@ impl BackupChain {
     pub fn add_inc(&mut self, incset: BackupSet) -> Option<BackupSet> {
         if let Type::Inc{ start_time, end_time } = incset.tp {
             if self.end_time == start_time {
-                self.end_time = end_time.clone();
+                self.end_time = end_time;
                 self.incsets.push(incset);
                 None
             } else {
@@ -314,7 +320,7 @@ impl BackupChain {
                     start_time == last.tp.start_time() && end_time > last.tp.end_time()
                 });
                 if replace_last {
-                    self.end_time = end_time.clone();
+                    self.end_time = end_time;
                     self.incsets.pop();
                     self.incsets.push(incset);
                     None
@@ -523,6 +529,15 @@ impl Collections {
     pub fn signature_chains(&self) -> ChainIter<SignatureChain> {
         self.sig_chains.iter()
     }
+
+    /// Returns the total number of snapshots.
+    pub fn num_snapshots(&self) -> usize {
+        let mut i = 0;
+        for c in &self.backup_chains {
+            i += 1 + c.inc_sets().len();
+        }
+        i
+    }
 }
 
 fn compute_filename_infos<'a, I, E>(filenames: I) -> Vec<FileNameInfo<'a>>
@@ -649,7 +664,7 @@ impl Type {
 mod test {
     use super::*;
     use super::file_naming::{FileNameInfo, FileNameParser};
-    use time_utils::parse_time_str;
+    use timefmt::parse_time_str;
 
     fn get_test_filenames() -> Vec<&'static str> {
         vec!["duplicity-full.20150617T182545Z.manifest",

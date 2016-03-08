@@ -1,0 +1,114 @@
+Hostname dellxps
+Localdir /
+Volume 1:
+    StartingPath   .  
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Epfl/Principles\x20of\x20Reactive\x20Programming/lectures/week7/lecture_slides_week7-1-annotated.pdf" 59
+    Hash SHA1 58bb215c2b5173c62aba2094207684dcf27db440
+Volume 2:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Epfl/Principles\x20of\x20Reactive\x20Programming/lectures/week7/lecture_slides_week7-1-annotated.pdf" 60
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Epfl/Principles\x20of\x20Reactive\x20Programming/sources/assignments/4-suggestions/lib_managed/jars/com.netflix.rxjava/rxjava-core/rxjava-core-0.15.0.jar" 6
+    Hash SHA1 cb73133b45e377c692640f938a7ef29cf3e1d929
+Volume 3:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Epfl/Principles\x20of\x20Reactive\x20Programming/sources/assignments/4-suggestions/lib_managed/jars/com.netflix.rxjava/rxjava-core/rxjava-core-0.15.0.jar"  
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/assignments/programming/simiam-coursera-week-1/manual/images/quickbot-red.png" 27
+    Hash SHA1 4080d2960b56ba651d2fb5e4c35818f3fc0588c1
+Volume 4:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/assignments/programming/simiam-coursera-week-1/manual/images/quickbot-red.png" 28
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/lectures/glue/Glue_Lecture_4_slides.pdf" 35
+    Hash SHA1 d782cdc8d2168147345615433c7b2519ecb9696b
+Volume 5:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/lectures/glue/Glue_Lecture_4_slides.pdf" 36
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/lectures/hardware/conrob_hardware_content_Hardware_lecture_2.pdf" 469
+    Hash SHA1 dd0afe0e371fb5587d7406dcc2e4aced2ae60c80
+Volume 6:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/lectures/hardware/conrob_hardware_content_Hardware_lecture_2.pdf" 470
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/lectures/hardware/conrob_hardware_content_Hardware_lecture_6.pdf" 63
+    Hash SHA1 2da55174228ef4c57f53ad475e3b8d08b6b5be48
+Volume 7:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/lectures/hardware/conrob_hardware_content_Hardware_lecture_6.pdf" 64
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/lectures/theory/Module5.pdf" 94
+    Hash SHA1 c1651fc4d36979579ff496874d80ca7cfce574e9
+Volume 8:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Georgia\x20Tech/Control\x20of\x20Mobile\x20Robots/lectures/theory/Module5.pdf" 95
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Maryland/Cryptography/Introduction\x20to\x20Modern\x20Cryptography\x20-\x20J.\x20Katz,\x20Y.\x20Lindell\x20(Chapman\x20and\x20Hall,\x202008)\x20WW.pdf" 138
+    Hash SHA1 3c138b475f6f85b7837c98bbec50f85a0eb5b10d
+Volume 9:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Maryland/Cryptography/Introduction\x20to\x20Modern\x20Cryptography\x20-\x20J.\x20Katz,\x20Y.\x20Lindell\x20(Chapman\x20and\x20Hall,\x202008)\x20WW.pdf" 139
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Maryland/Software\x20Security/lectures/week2/1-memdefense-intro.pdf" 10
+    Hash SHA1 97366df849a83633b1be31fe237366d7333f5676
+Volume 10:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Maryland/Software\x20Security/lectures/week2/1-memdefense-intro.pdf" 11
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Michigan/Model\x20Thinking/lecture1/Slides_Slides_L1E-DecideDesign.pdf" 50
+    Hash SHA1 8317c7fb12118fbe78d80a0be010b33f8fa53b85
+Volume 11:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Michigan/Model\x20Thinking/lecture1/Slides_Slides_L1E-DecideDesign.pdf" 51
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Michigan/Model\x20Thinking/lecture3/Slides_L3E.pdf" 1
+    Hash SHA1 2a2fbc697c7ea2b4c407de40ec68cb16ee867cd4
+Volume 12:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Udacity/Interactive\x203D\x20graphics/lectures/UdacityLesson6Lights.pdf" 254
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Udacity/Interactive\x203D\x20graphics/lectures/UdacityLesson8TexturesandReflections.pdf" 505
+    Hash SHA1 d2cccd97939a9a026666adc6f6364927f7f034fc
+Volume 13:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Udacity/Interactive\x203D\x20graphics/lectures/UdacityLesson8TexturesandReflections.pdf" 506
+    EndingPath     "home/michele/Documenti/Scuola/Open\x20Class/Udacity/Interactive\x203D\x20graphics/lectures/UdacityLesson9ShaderProgramming.pdf" 172
+    Hash SHA1 2d97e5218d1a4fcf451da7bada11e55a5fda8910
+Volume 14:
+    StartingPath   "home/michele/Documenti/Scuola/Open\x20Class/Udacity/Interactive\x203D\x20graphics/lectures/UdacityLesson9ShaderProgramming.pdf" 173
+    EndingPath     "home/michele/Documenti/Scuola/Uni/Algebra/Serge\x20Lang\x20-\x20Undergraduate\x20Algebra/04.pdf" 26
+    Hash SHA1 7021490014948138398fe9d67e10a6fc949e1657
+Volume 15:
+    StartingPath   "home/michele/Documenti/Scuola/Uni/Algebra/Serge\x20Lang\x20-\x20Undergraduate\x20Algebra/04.pdf" 27
+    EndingPath     home/michele/Documenti/Scuola/Uni/Analisi/Zampieri/EDOintroduzione10.pdf 92
+    Hash SHA1 c52d664d7a95312968acc9dd1ec445f9ecaa00eb
+Volume 16:
+    StartingPath   home/michele/Documenti/Scuola/Uni/Analisi/Zampieri/EDOintroduzione10.pdf 93
+    EndingPath     "home/michele/Documenti/Scuola/Uni/Architetture\x20Software/Libri/Sommerville,\x20Ian-\x20Software\x20Engineering.\x208\x20Edition.\x20Pearson\x20Education,\x202007.pdf" 57
+    Hash SHA1 898c5ace595d141ccefc22d227e35b90288d03ba
+Volume 17:
+    StartingPath   "home/michele/Documenti/Scuola/Uni/Architetture\x20Software/Libri/Sommerville,\x20Ian-\x20Software\x20Engineering.\x208\x20Edition.\x20Pearson\x20Education,\x202007.pdf" 58
+    EndingPath     "home/michele/Documenti/Scuola/Uni/Architetture\x20avanzate/Hennessy,Patterson\x20-\x20Computer\x20Architecture\x20-\x20A\x20Quantitative\x20Approach\x204e.pdf" 9
+    Hash SHA1 7874cc8812f3be818b1ca4d2cbfafa5e5e244a9e
+Volume 18:
+    StartingPath   "home/michele/Documenti/Scuola/Uni/Architetture\x20avanzate/Hennessy,Patterson\x20-\x20Computer\x20Architecture\x20-\x20A\x20Quantitative\x20Approach\x204e.pdf" 10
+    EndingPath     "home/michele/Documenti/Scuola/Uni/Calcolo\x20Numerico/octave\x20docs/tutorial.pdf" 1
+    Hash SHA1 c942d554286f12546479af83a6d1758994e5d2f8
+Volume 19:
+    StartingPath   "home/michele/Documenti/Scuola/Uni/Calcolo\x20Numerico/octave\x20docs/tutorial.pdf" 2
+    EndingPath     "home/michele/Documenti/Scuola/Uni/Documenti\x20riduzione\x20contributi/2009/borsa\x20studio/documenti.pdf" 5
+    Hash SHA1 b52559fb66153e27153e88813356d78a82fb9f4e
+Volume 20:
+    StartingPath   "home/michele/Documenti/Scuola/Uni/Documenti\x20riduzione\x20contributi/2009/borsa\x20studio/documenti.pdf" 6
+    EndingPath     "home/michele/Documenti/Scuola/Uni/Informatica\x20quantistica/Articoli/Bennett\x20Landauer\x20-\x20Computation\x20and\x202\x20law\x20thermodynamics.pdf" 136
+    Hash SHA1 cb4dd1e8c3a4151aa5cdc16a6803c7cd739af66e
+Volume 21:
+    StartingPath   "home/michele/Documenti/Scuola/Uni/Informatica\x20quantistica/Articoli/Bennett\x20Landauer\x20-\x20Computation\x20and\x202\x20law\x20thermodynamics.pdf" 137
+    EndingPath     "home/michele/Documenti/Scuola/Uni/Informatica\x20quantistica/Articoli/Kaye\x20P.,\x20Laflamme\x20R.,\x20Mosca\x20M.\x20-\x20An\x20Introduction\x20to\x20Quantum\x20Computing.pdf" 124
+    Hash SHA1 adfb215e4344f65637ca16229c6919d68026cacf
+Volume 22:
+    StartingPath   "home/michele/Documenti/Scuola/Uni/Informatica\x20quantistica/Articoli/Kaye\x20P.,\x20Laflamme\x20R.,\x20Mosca\x20M.\x20-\x20An\x20Introduction\x20to\x20Quantum\x20Computing.pdf" 125
+    EndingPath     "home/michele/Immagini/Foto/Carega\x20e\x20Pasubio\x202015/IMG_3251.JPG" 11
+    Hash SHA1 b35a4e91278bcc0879d6d0657a058f2b039e05ed
+Volume 23:
+    StartingPath   "home/michele/Immagini/Foto/Carega\x20e\x20Pasubio\x202015/IMG_3251.JPG" 12
+    EndingPath     "home/michele/Immagini/Foto/Carega\x20e\x20Pasubio\x202015/IMG_3264.JPG" 76
+    Hash SHA1 5f9b0617abe79a25b11baa4a187507c0fe8fb1ff
+Volume 24:
+    StartingPath   "home/michele/Immagini/Foto/Carega\x20e\x20Pasubio\x202015/IMG_3264.JPG" 77
+    EndingPath     "home/michele/Immagini/Foto/Carega\x20e\x20Pasubio\x202015/IMG_3278.JPG" 41
+    Hash SHA1 8b03ae4b59bad72ffc4a608863f6c014517c4441
+Volume 25:
+    StartingPath   "home/michele/Immagini/Foto/Carega\x20e\x20Pasubio\x202015/IMG_3278.JPG" 42
+    EndingPath     "home/michele/Immagini/Foto/Carega\x20e\x20Pasubio\x202015/IMG_3295.JPG" 61
+    Hash SHA1 224c9e513c236efd38b8e16b217768c08de18d9c
+Volume 26:
+    StartingPath   "home/michele/Immagini/Foto/Carega\x20e\x20Pasubio\x202015/IMG_3295.JPG" 62
+    EndingPath     "home/michele/Immagini/Foto/Sardegna\x202015/IMG_3212.JPG" 36
+    Hash SHA1 86fd9b24569d7b888cbc93ed7679e4d4238b87c8
+Volume 27:
+    StartingPath   "home/michele/Immagini/Foto/Sardegna\x202015/IMG_3212.JPG" 37
+    EndingPath     "home/michele/Immagini/Foto/Sardegna\x202015/IMG_3231.JPG" 63
+    Hash SHA1 bf40c6a9814c710abacc58bfd4fd5164a003030d
+Volume 28:
+    StartingPath   "home/michele/Immagini/Foto/Sardegna\x202015/IMG_3231.JPG" 64
+    EndingPath     home/michele/Immagini/Foto/albumfiles.txt  
+    Hash SHA1 fb0aea0b0af848ea15ed326f5ee720da26d73f3c
