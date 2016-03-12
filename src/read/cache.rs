@@ -1,5 +1,5 @@
 use std::cmp;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::sync::RwLock;
 use linked_hash_map::LinkedHashMap;
 
@@ -68,7 +68,7 @@ impl BlockCache {
 
 impl Block {
     fn new() -> Self {
-        Block(Vec::with_capacity(BLOCK_SIZE))
+        Block(Vec::new())
     }
 
     fn as_slice(&self) -> &[u8] {
@@ -80,8 +80,37 @@ impl Block {
     }
 
     fn write_max_block(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        use std::io::Write;
         let buffer = &buffer[0..cmp::min(buffer.len(), BLOCK_SIZE)];
-        self.0.write_all(buffer).map(|_| buffer.len())
+        let len = buffer.len();
+        self.0.write_all(buffer).map(|_| len)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn write_read() {
+        let cache = BlockCache::new(2);
+        let id = ((0, 0), 0);
+        let mut buf = vec![0; 5];
+
+        assert_eq!(cache.read(id, &mut buf), None);
+        assert_eq!(cache.write(id, b"pippo"), Some(5));
+        assert_eq!(cache.read(id, &mut buf), Some(5));
+        assert_eq!(&buf, b"pippo");
+    }
+
+    #[test]
+    fn send_sync() {
+        fn is_send<T: Send>(_: T) {}
+        fn is_sync<T: Sync>(_: T) {}
+
+        let cache = BlockCache::new(1);
+        is_sync(&cache);
+        is_send(&cache);
+        is_send(cache);
     }
 }
