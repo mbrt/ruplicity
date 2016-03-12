@@ -1,153 +1,87 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::io;
-use std::rc::{Rc, Weak};
+use std::cmp;
+use std::io::{self, Read};
+use std::sync::RwLock;
+use linked_hash_map::LinkedHashMap;
 
-use read::ptr::Shared;
-use read::unslist::{self, UnsafeList};
 use signatures::EntryId;
 
 
 pub type BlockId = (EntryId, usize);
 
 pub struct BlockCache {
-    data: RefCell<CacheData>,
-}
-
-pub struct BlockRef<'a> {
-    block: &'a Block,
-    ref_count: Rc<BlockRefCount>,
-}
-
-
-struct CacheData {
     // map from index to block
     // all blocks must be indexed, even unused
-    index: HashMap<BlockId, Shared<BlockNode>>,
-    // the list of all blocks
-    // [0..first_free] -> used
-    // [first_free..] -> not used, sorted by last usage (last used is last)
-    blocks: UnsafeList<Block>,
-    first_free: Option<Shared<BlockNode>>,
+    index: RwLock<LinkedHashMap<BlockId, Block>>,
     max_blocks: usize,
 }
 
-struct Block {
-    data: [u8; BLOCK_SIZE],
-    len: usize,
-    ref_count: Option<Weak<BlockRefCount>>,
-}
+struct Block(Vec<u8>);
 
-// struct used to be shared among references to the same block
-// when goes out of scope it triggers free of the related block in the cache
-struct BlockRefCount {
-    id: BlockId,
-    cache: Shared<BlockCache>,
-}
 
 const BLOCK_SIZE: usize = 64 * 1024;
-
-type BlockNode = unslist::Node<Block>;
 
 
 impl BlockCache {
     pub fn new(max_blocks: usize) -> Self {
-        BlockCache { data: RefCell::new(CacheData::new(max_blocks)) }
-    }
-
-    pub fn block(&self, id: BlockId) -> Option<BlockRef> {
-        unimplemented!()
-    }
-
-    /// Returns a cached block or loads it with the given function.
-    pub fn block_or_load_with<F>(&self, id: BlockId, f: F) -> io::Result<BlockRef>
-        where F: FnMut(&mut [u8]) -> io::Result<usize>
-    {
-        unimplemented!()
-    }
-
-    fn free_block(&self, id: BlockId) {
-        self.data.borrow_mut().free_block(id);
-    }
-}
-
-
-impl CacheData {
-    fn new(max_blocks: usize) -> Self {
-        CacheData {
-            index: HashMap::new(),
-            blocks: UnsafeList::new(),
-            first_free: None,
+        BlockCache {
+            index: RwLock::new(LinkedHashMap::new()),
             max_blocks: max_blocks,
         }
     }
 
-    fn block(&self, id: BlockId) -> Option<BlockRef> {
-        unimplemented!()
-    }
-
-    fn block_or_load_with<F>(&self, id: BlockId, f: F) -> io::Result<BlockRef>
-        where F: FnMut(&mut [u8]) -> io::Result<usize>
-    {
-        unimplemented!()
-    }
-
-    fn free_block(&mut self, id: BlockId) {
-        let num_blocks = self.index.len();
-        let remove_node = {
-            let mut node_ptr = *self.index.get_mut(&id).unwrap();
-            // if max cache size has been passed, free the block
-            if num_blocks > self.max_blocks {
-                unsafe {
-                    self.blocks.remove(node_ptr);
-                }
-                true
-            } else {
-                // otherwise free memory for ref count,
-                // move it at the end of the list
-                let node = unsafe { node_ptr.resolve_mut() };
-                debug_assert!(node.ref_count.as_ref().map_or(true, |rc| rc.upgrade().is_none()));
-                node.ref_count = None;
-                unsafe {
-                    self.blocks.move_to_back(node_ptr);
-                }
-                false
+    pub fn read(&self, id: BlockId, buffer: &mut [u8]) -> Option<usize> {
+        {
+            // first refresh the block if present, by using write lock
+            if self.index.write().unwrap().get_refresh(&id).is_none() {
+                return None;
             }
-        };
-        if remove_node {
-            self.index.remove(&id);
         }
+
+        // then read by taking the read lock only
+        let index = self.index.read().unwrap();
+        match index.get(&id) {
+            None => None, // this can be possible even with the refresh above
+            Some(block) => block.as_slice().read(buffer).ok(),
+        }
+    }
+
+    pub fn write(&self, id: BlockId, buffer: &[u8]) -> Option<usize> {
+        let mut index = self.index.write().unwrap();
+        if index.get(&id).is_some() {
+            // already written by someone else, don't change
+            return None;
+        }
+
+        if index.len() >= self.max_blocks && !index.is_empty() {
+            // the cache is full, reuse the least used block
+            let old_block = index.pop_front().unwrap().1;
+            index.insert(id, old_block);
+        } else {
+            // we can add another block
+            index.insert(id, Block::new());
+        }
+        let block = index.get_mut(&id).unwrap();
+        block.write_max_block(buffer).ok()
     }
 }
 
 
 impl Block {
     fn new() -> Self {
-        Block {
-            data: [0; BLOCK_SIZE],
-            len: 0,
-            ref_count: None,
-        }
+        Block(Vec::with_capacity(BLOCK_SIZE))
     }
 
     fn as_slice(&self) -> &[u8] {
-        &self.data[0..self.len]
+        self.0.as_slice()
     }
-}
 
-
-impl Drop for BlockRefCount {
-    fn drop(&mut self) {
-        let cache = unsafe { &**self.cache };
-        cache.free_block(self.id);
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.0.as_mut_slice()
     }
-}
 
-
-unsafe fn resolve_node(ptr: &Shared<BlockNode>) -> &BlockNode {
-    &***ptr
-}
-
-unsafe fn resolve_node_mut(ptr: &mut Shared<BlockNode>) -> &mut BlockNode {
-    &mut ***ptr
+    fn write_max_block(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        use std::io::Write;
+        let buffer = &buffer[0..cmp::min(buffer.len(), BLOCK_SIZE)];
+        self.0.write_all(buffer).map(|_| buffer.len())
+    }
 }

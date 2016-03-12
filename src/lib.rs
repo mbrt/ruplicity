@@ -39,6 +39,7 @@
 
 extern crate byteorder;
 extern crate flate2;
+extern crate linked_hash_map;
 extern crate regex;
 extern crate tabwriter;
 extern crate tar;
