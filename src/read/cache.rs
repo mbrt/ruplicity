@@ -1,6 +1,9 @@
 use std::cmp;
+use std::hash::BuildHasherDefault;
 use std::io::{self, Read, Write};
 use std::sync::RwLock;
+
+use fnv::FnvHasher;
 use linked_hash_map::LinkedHashMap;
 
 use signatures::EntryId;
@@ -12,21 +15,24 @@ pub type BlockId = (EntryId, usize);
 pub struct BlockCache {
     // map from index to block
     // all blocks must be indexed, even unused
-    index: RwLock<LinkedHashMap<BlockId, Block>>,
+    index: RwLock<LinkedHashMap<BlockId, Block, FnvHashBuilder>>,
     max_blocks: usize,
 }
+
 
 #[derive(Debug)]
 struct Block(Vec<u8>);
 
+type FnvHashBuilder = BuildHasherDefault<FnvHasher>;
 
 const BLOCK_SIZE: usize = 64 * 1024;
 
 
 impl BlockCache {
     pub fn new(max_blocks: usize) -> Self {
+        let fnv = BuildHasherDefault::<FnvHasher>::default();
         BlockCache {
-            index: RwLock::new(LinkedHashMap::new()),
+            index: RwLock::new(LinkedHashMap::with_hash_state(fnv)),
             max_blocks: max_blocks,
         }
     }

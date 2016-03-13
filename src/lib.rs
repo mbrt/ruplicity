@@ -31,6 +31,7 @@
         missing_docs,
         trivial_casts, trivial_numeric_casts,
         unstable_features,
+        unsafe_code,
         unused_import_braces, unused_qualifications)]
 
 #![cfg_attr(feature = "nightly", allow(unstable_features))]
@@ -39,6 +40,7 @@
 
 extern crate byteorder;
 extern crate flate2;
+extern crate fnv;
 extern crate linked_hash_map;
 extern crate regex;
 extern crate tabwriter;

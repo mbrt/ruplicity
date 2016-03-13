@@ -17,6 +17,7 @@ unstable = ["lints", "nightly"] # for building with travis-cargo
 
 [dependencies]
 flate2 = "0.2"
+fnv = "1.0.2"
 tar = "0.4.4"
 regex = "0.1"
 try_opt = "0.1"
