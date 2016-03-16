@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["ParseError","Enumeration of parsing errors."]],"struct":[["Manifest","Manifest file info."],["Volume","Volume info."]]});

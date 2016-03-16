@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["FileNameIterator","Iterator over a set of file names."],["LocalBackend","Backend for some directory in the local file system."]]});
