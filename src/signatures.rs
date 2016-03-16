@@ -627,13 +627,6 @@ fn compute_size_hint_snapshot<R: Read>(file: &mut tar::Entry<R>) -> Option<(usiz
     Some((bytes, bytes))
 }
 
-// used for tests only
-#[cfg(test)]
-#[doc(hidden)]
-pub fn _mode_display(mode: Option<u32>) -> String {
-    format!("{}", ModeDisplay(mode))
-}
-
 
 #[cfg(test)]
 mod test {
@@ -864,17 +857,22 @@ mod test {
 
     #[test]
     fn mode_display() {
+        fn mode_display(mode: Option<u32>) -> String {
+            use super::ModeDisplay;
+            format!("{}", ModeDisplay(mode))
+        }
+
         // see http://permissions-calculator.org/symbolic/
         // for help on permissions
-        assert_eq!(_mode_display(None), "?");
-        assert_eq!(_mode_display(Some(0o777)), "rwxrwxrwx");
-        assert_eq!(_mode_display(Some(0o000)), "---------");
-        assert_eq!(_mode_display(Some(0o444)), "r--r--r--");
-        assert_eq!(_mode_display(Some(0o700)), "rwx------");
-        assert_eq!(_mode_display(Some(0o542)), "r-xr---w-");
-        assert_eq!(_mode_display(Some(0o4100)), "--s------");
-        assert_eq!(_mode_display(Some(0o4000)), "--S------");
-        assert_eq!(_mode_display(Some(0o7000)), "--S--S--T");
-        assert_eq!(_mode_display(Some(0o7111)), "--s--s--t");
+        assert_eq!(mode_display(None), "?");
+        assert_eq!(mode_display(Some(0o777)), "rwxrwxrwx");
+        assert_eq!(mode_display(Some(0o000)), "---------");
+        assert_eq!(mode_display(Some(0o444)), "r--r--r--");
+        assert_eq!(mode_display(Some(0o700)), "rwx------");
+        assert_eq!(mode_display(Some(0o542)), "r-xr---w-");
+        assert_eq!(mode_display(Some(0o4100)), "--s------");
+        assert_eq!(mode_display(Some(0o4000)), "--S------");
+        assert_eq!(mode_display(Some(0o7000)), "--S--S--T");
+        assert_eq!(mode_display(Some(0o7111)), "--s--s--t");
     }
 }

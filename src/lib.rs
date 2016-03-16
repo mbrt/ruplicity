@@ -49,7 +49,6 @@ extern crate try_opt;
 
 mod macros;
 mod rawpath;
-mod read;
 
 pub mod backend;
 pub mod collections;
