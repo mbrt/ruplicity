@@ -15,7 +15,7 @@
 
 use time;
 use time::{Timespec, Tm};
-use std::fmt::{Display, Result, Formatter};
+use std::fmt::{Display, Formatter, Result};
 
 
 /// Trait that allows to display a time into a local or UTC timezone.

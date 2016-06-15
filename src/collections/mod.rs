@@ -166,19 +166,19 @@ impl BackupSet {
     /// Returns whether the given file belongs to the same backup set, by looking at timestamps.
     pub fn is_same_set(&self, pr: &fnm::Info) -> bool {
         match self.tp {
-            Type::Full{ time: my_time } => {
+            Type::Full { time: my_time } => {
                 match pr.tp {
-                    fnm::Type::Full{ time, .. } |
-                    fnm::Type::FullManifest{ time, .. } |
-                    fnm::Type::FullSig{ time, .. } => my_time == time,
+                    fnm::Type::Full { time, .. } |
+                    fnm::Type::FullManifest { time, .. } |
+                    fnm::Type::FullSig { time, .. } => my_time == time,
                     _ => false,
                 }
             }
-            Type::Inc{ start_time: my_start, end_time: my_end } => {
+            Type::Inc { start_time: my_start, end_time: my_end } => {
                 match pr.tp {
-                    fnm::Type::Inc{ start_time, end_time, .. } |
-                    fnm::Type::IncManifest{ start_time, end_time, .. } |
-                    fnm::Type::NewSig{ start_time, end_time, .. } => {
+                    fnm::Type::Inc { start_time, end_time, .. } |
+                    fnm::Type::IncManifest { start_time, end_time, .. } |
+                    fnm::Type::NewSig { start_time, end_time, .. } => {
                         my_start == start_time && my_end == end_time
                     }
                     _ => false,
@@ -191,12 +191,12 @@ impl BackupSet {
     fn new(fname: &FileNameInfo) -> Self {
         // set type
         let tp = match fname.info.tp {
-            fnm::Type::Full{ time, .. } |
-            fnm::Type::FullManifest{ time, .. } |
-            fnm::Type::FullSig{ time, .. } => Type::Full { time: time },
-            fnm::Type::Inc{ start_time, end_time, .. } |
-            fnm::Type::IncManifest{ start_time, end_time, .. } |
-            fnm::Type::NewSig{ start_time, end_time, .. } => {
+            fnm::Type::Full { time, .. } |
+            fnm::Type::FullManifest { time, .. } |
+            fnm::Type::FullSig { time, .. } => Type::Full { time: time },
+            fnm::Type::Inc { start_time, end_time, .. } |
+            fnm::Type::IncManifest { start_time, end_time, .. } |
+            fnm::Type::NewSig { start_time, end_time, .. } => {
                 Type::Inc {
                     start_time: start_time,
                     end_time: end_time,
@@ -206,10 +206,10 @@ impl BackupSet {
         // set partial
         let partial = {
             match fname.info.tp {
-                fnm::Type::FullManifest{ partial, .. } |
-                fnm::Type::IncManifest{ partial, .. } |
-                fnm::Type::FullSig{ partial, .. } |
-                fnm::Type::NewSig{ partial, .. } => partial,
+                fnm::Type::FullManifest { partial, .. } |
+                fnm::Type::IncManifest { partial, .. } |
+                fnm::Type::FullSig { partial, .. } |
+                fnm::Type::NewSig { partial, .. } => partial,
                 _ => false,
             }
         };
@@ -240,8 +240,8 @@ impl BackupSet {
         } else {
             // update info
             match pr.tp {
-                fnm::Type::Full{ volume_number, .. } |
-                fnm::Type::Inc{ volume_number, .. } => {
+                fnm::Type::Full { volume_number, .. } |
+                fnm::Type::Inc { volume_number, .. } => {
                     // resize volumes if necessary
                     if volume_number >= self.volumes_paths.len() {
                         self.volumes_paths.reserve(volume_number + 1);
@@ -251,8 +251,8 @@ impl BackupSet {
                     }
                     self.volumes_paths[volume_number] = Some(fname.to_owned());
                 }
-                fnm::Type::FullManifest{ .. } |
-                fnm::Type::IncManifest{ .. } => {
+                fnm::Type::FullManifest { .. } |
+                fnm::Type::IncManifest { .. } => {
                     self.manifest_path = fname.to_owned();
                 }
                 _ => (),
@@ -272,8 +272,8 @@ impl BackupSet {
 impl Display for BackupSet {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         let tp = match self.tp {
-            Type::Full{ .. } => "Full",
-            Type::Inc{ .. } => "Incremental",
+            Type::Full { .. } => "Full",
+            Type::Inc { .. } => "Incremental",
         };
         write!(f,
                "{:<20} {:<13} {:>12}",
@@ -291,7 +291,7 @@ impl BackupChain {
     /// Create a new BackupChain starting from a full backup set.
     pub fn new(fullset: BackupSet) -> Self {
         let time = {
-            if let Type::Full{ time } = fullset.tp {
+            if let Type::Full { time } = fullset.tp {
                 time
             } else {
                 panic!("Unexpected incremental backup set given");
@@ -309,7 +309,7 @@ impl BackupChain {
     /// Adds the given incremental backup element to the backup chain if possible,
     /// returns it back otherwise.
     pub fn add_inc(&mut self, incset: BackupSet) -> Option<BackupSet> {
-        if let Type::Inc{ start_time, end_time } = incset.tp {
+        if let Type::Inc { start_time, end_time } = incset.tp {
             if self.end_time == start_time {
                 self.end_time = end_time;
                 self.incsets.push(incset);
@@ -362,9 +362,9 @@ impl Display for BackupChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         let num_vol = self.fullset.volumes_paths.len() +
                       self.incsets
-                          .iter()
-                          .map(|i| i.volumes_paths.len())
-                          .fold(0, |a, i| a + i);
+            .iter()
+            .map(|i| i.volumes_paths.len())
+            .fold(0, |a, i| a + i);
         try!(write!(f,
                     "Chain start time: {}\n\
                     Chain end time: {}\n\
@@ -393,8 +393,8 @@ impl SignatureFile {
     pub fn from_file_and_info(fname: &str, pr: &fnm::Info) -> Self {
         let time = {
             match pr.tp {
-                fnm::Type::FullSig{ time, .. } => time,
-                fnm::Type::NewSig{ end_time, .. } => end_time,
+                fnm::Type::FullSig { time, .. } => time,
+                fnm::Type::NewSig { end_time, .. } => end_time,
                 _ => panic!("unexpected file given for signature"),
             }
         };
@@ -546,25 +546,25 @@ fn compute_filename_infos<'a, I, E>(filenames: I) -> Vec<FileNameInfo<'a>>
 {
     let parser = FileNameParser::new();
     filenames.into_iter()
-             .filter_map(|path| path.as_ref().to_str())
-             .filter_map(|name| {
-                 match parser.parse(name) {
-                     Some(info) => Some(FileNameInfo::new(name, info)),
-                     None => None,
-                 }
-             })
-             .collect()
+        .filter_map(|path| path.as_ref().to_str())
+        .filter_map(|name| {
+            match parser.parse(name) {
+                Some(info) => Some(FileNameInfo::new(name, info)),
+                None => None,
+            }
+        })
+        .collect()
 }
 
 fn compute_backup_chains(fname_infos: &[FileNameInfo]) -> Vec<BackupChain> {
     let mut backup_chains: Vec<BackupChain> = Vec::new();
     for set in compute_backup_sets(fname_infos) {
         match set.tp {
-            Type::Full{ .. } => {
+            Type::Full { .. } => {
                 let new_chain = BackupChain::new(set);
                 backup_chains.push(new_chain);
             }
-            Type::Inc{ .. } => {
+            Type::Inc { .. } => {
                 let mut rejected_set = Some(set);
                 for chain in &mut backup_chains {
                     rejected_set = chain.add_inc(rejected_set.unwrap());
@@ -605,15 +605,15 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
 fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
     // collect full signatures, sort them by start time and make the chains from them
     let mut sig_chains = fname_infos.iter()
-                                    .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
-                                    .map(SignatureChain::from_filename_info)
-                                    .collect::<Vec<_>>();
+        .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
+        .map(SignatureChain::from_filename_info)
+        .collect::<Vec<_>>();
     sig_chains.sort_by(|a, b| a.start_time().cmp(&b.start_time()));
     // collect inc signatures and sort them by start time
     let inc_sigs = {
         let mut is = fname_infos.iter()
-                                .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
-                                .collect::<Vec<_>>();
+            .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
+            .collect::<Vec<_>>();
         is.sort_by(|a, b| a.start_time().cmp(&b.start_time()));
         is
     };
@@ -646,15 +646,15 @@ impl Display for Collections {
 impl Type {
     pub fn start_time(&self) -> Timespec {
         match *self {
-            Type::Full{ time } => time,
-            Type::Inc{ start_time, .. } => start_time,
+            Type::Full { time } => time,
+            Type::Inc { start_time, .. } => start_time,
         }
     }
 
     pub fn end_time(&self) -> Timespec {
         match *self {
-            Type::Full{ time } => time,
-            Type::Inc{ end_time, .. } => end_time,
+            Type::Full { time } => time,
+            Type::Inc { end_time, .. } => end_time,
         }
     }
 }

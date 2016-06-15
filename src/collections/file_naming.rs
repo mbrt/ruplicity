@@ -74,12 +74,12 @@ impl<'a> FileNameInfo<'a> {
 impl Type {
     pub fn time_range(&self) -> (Timespec, Timespec) {
         match *self {
-            Type::Full{ time, .. } |
-            Type::FullSig{ time, .. } |
-            Type::FullManifest{ time, .. } => (time, time),
-            Type::Inc{ start_time, end_time, .. } |
-            Type::IncManifest{ start_time, end_time, .. } |
-            Type::NewSig{ start_time, end_time, .. } => (start_time, end_time),
+            Type::Full { time, .. } |
+            Type::FullSig { time, .. } |
+            Type::FullManifest { time, .. } => (time, time),
+            Type::Inc { start_time, end_time, .. } |
+            Type::IncManifest { start_time, end_time, .. } |
+            Type::NewSig { start_time, end_time, .. } => (start_time, end_time),
         }
     }
 }
@@ -102,8 +102,8 @@ impl FileNameParser {
 
         let lower_fname = filename.to_ascii_lowercase();
         let opt_type = self.check_full(&lower_fname)
-                           .or(self.check_inc(&lower_fname))
-                           .or(self.check_sig(&lower_fname));
+            .or(self.check_inc(&lower_fname))
+            .or(self.check_sig(&lower_fname));
         opt_type.map(|t| {
             Info {
                 tp: t,

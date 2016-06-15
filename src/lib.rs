@@ -458,17 +458,17 @@ mod test {
 
     fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<SnapshotTest> {
         backup.snapshots()
-              .unwrap()
-              .into_iter()
-              .map(|s| {
-                  assert!(s.is_full() != s.is_incremental());
-                  SnapshotTest {
-                      time: s.time(),
-                      is_full: s.is_full(),
-                      num_volumes: s.num_volumes(),
-                  }
-              })
-              .collect()
+            .unwrap()
+            .into_iter()
+            .map(|s| {
+                assert!(s.is_full() != s.is_incremental());
+                SnapshotTest {
+                    time: s.time(),
+                    is_full: s.is_full(),
+                    num_volumes: s.num_volumes(),
+                }
+            })
+            .collect()
     }
 
     fn single_vol_signature_chain() -> Chain {
@@ -480,28 +480,28 @@ mod test {
 
     fn from_sigchain(chain: &Chain) -> Vec<Vec<EntryTest>> {
         chain.snapshots()
-             .map(|s| {
-                 s.entries()
-                  .into_iter()
-                  .map(|f| EntryTest::from_entry(&f))
-                  .collect::<Vec<_>>()
-             })
-             .collect::<Vec<_>>()
+            .map(|s| {
+                s.entries()
+                    .into_iter()
+                    .map(|f| EntryTest::from_entry(&f))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
 
     fn from_backup<B: Backend>(backup: &Backup<B>) -> Vec<Vec<EntryTest>> {
         backup.snapshots()
-              .unwrap()
-              .into_iter()
-              .map(|s| {
-                  s.entries()
-                   .unwrap()
-                   .as_signature()
-                   .into_iter()
-                   .map(|f| EntryTest::from_entry(&f))
-                   .collect::<Vec<_>>()
-              })
-              .collect::<Vec<_>>()
+            .unwrap()
+            .into_iter()
+            .map(|s| {
+                s.entries()
+                    .unwrap()
+                    .as_signature()
+                    .into_iter()
+                    .map(|f| EntryTest::from_entry(&f))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
 
 
@@ -565,20 +565,20 @@ mod test {
         let backend = LocalBackend::new("tests/backups/multi_chain");
         let backup = Backup::new(backend).unwrap();
         let actual = backup.snapshots()
-                           .unwrap()
-                           .into_iter()
-                           .map(|snapshot| snapshot.manifest().unwrap());
+            .unwrap()
+            .into_iter()
+            .map(|snapshot| snapshot.manifest().unwrap());
         let names = vec!["duplicity-full.20160108T223144Z.manifest",
                          "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
                          "duplicity-full.20160108T223209Z.manifest",
                          "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest"];
         let expected = names.iter()
-                            .map(|name| {
-                                let mut path = Path::new("tests/backups/multi_chain").to_owned();
-                                path.push(name);
-                                let mut file = BufReader::new(File::open(path).unwrap());
-                                Manifest::parse(&mut file).unwrap()
-                            });
+            .map(|name| {
+                let mut path = Path::new("tests/backups/multi_chain").to_owned();
+                path.push(name);
+                let mut file = BufReader::new(File::open(path).unwrap());
+                Manifest::parse(&mut file).unwrap()
+            });
         for (e, a) in expected.zip(actual) {
             assert_eq!(e, *a);
         }

@@ -219,7 +219,7 @@ impl Chain {
                             self.ug_map.add_group(gid, name.to_owned());
                         }
                         let link = tarfile.link_name_bytes()
-                                          .map(|b| RawPath::from_bytes(b.into_owned()));
+                            .map(|b| RawPath::from_bytes(b.into_owned()));
                         Some(PathInfo {
                             mtime: time,
                             uid: header.uid().ok(),
@@ -413,10 +413,10 @@ impl<'a> Iterator for SnapshotEntriesIter<'a> {
         let index = self.index;     // prevents borrow checker complains
         for (path_id, path_snapshots) in &mut self.iter {
             if let Some((index, s)) = path_snapshots.snapshots
-                                                    .iter()
-                                                    .rev()
-                                                    .enumerate()
-                                                    .find(|s| s.1.index <= index) {
+                .iter()
+                .rev()
+                .enumerate()
+                .find(|s| s.1.index <= index) {
                 // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
@@ -854,9 +854,9 @@ mod test {
         // println!("debug entries\n---------\n{:#?}\n----------", entries);
         let actual_entries = entries.snapshots().map(|s| {
             s.entries()
-             .into_iter()
-             .map(|f| EntryTest::from_entry(&f))
-             .collect::<Vec<_>>()
+                .into_iter()
+                .map(|f| EntryTest::from_entry(&f))
+                .collect::<Vec<_>>()
         });
         assert_eq!(entries.snapshots().count(), 3);
         for (actual, expected) in actual_entries.zip(expected_entries) {
@@ -870,9 +870,9 @@ mod test {
         let entries = single_vol_entries();
         let actual_sizes = entries.snapshots().map(|s| {
             s.entries()
-             .into_iter()
-             .map(|f| f.size_hint().unwrap())
-             .collect::<Vec<_>>()
+                .into_iter()
+                .map(|f| f.size_hint().unwrap())
+                .collect::<Vec<_>>()
         });
         let expected_sizes = single_vol_sizes();
 
@@ -910,20 +910,20 @@ mod test {
         let entries = single_vol_entries();
         let ids = entries.snapshots().map(|s| {
             s.entries()
-             .into_iter()
-             .map(|f| f.id())
-             .collect::<Vec<_>>()
+                .into_iter()
+                .map(|f| f.id())
+                .collect::<Vec<_>>()
         });
         assert_eq!(entries.snapshots().count(), 3);
         for (snap_ids, snapshot) in ids.zip(entries.snapshots()) {
             let actual = snap_ids.iter()
-                                 .cloned()
-                                 .map(|id| EntryTest::from_entry(&snapshot.entries().entry(id)))
-                                 .collect::<Vec<_>>();
+                .cloned()
+                .map(|id| EntryTest::from_entry(&snapshot.entries().entry(id)))
+                .collect::<Vec<_>>();
             let expected = snapshot.entries()
-                                   .into_iter()
-                                   .map(|f| EntryTest::from_entry(&f))
-                                   .collect::<Vec<_>>();
+                .into_iter()
+                .map(|f| EntryTest::from_entry(&f))
+                .collect::<Vec<_>>();
             assert_eq!(actual, expected);
         }
     }

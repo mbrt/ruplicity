@@ -89,9 +89,9 @@ mod test {
         let files = backend.file_names().unwrap().collect::<Vec<_>>();
         let actual = {
             let mut r = files.iter()
-                             .map(|p| p.to_str().unwrap())
-                             .filter(|p| p.starts_with("duplicity-"))
-                             .collect::<Vec<_>>();
+                .map(|p| p.to_str().unwrap())
+                .filter(|p| p.starts_with("duplicity-"))
+                .collect::<Vec<_>>();
             r.sort();
             r
         };

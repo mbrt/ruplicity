@@ -16,7 +16,7 @@ pub trait Backend {
     type FileName: AsRef<Path>;
 
     /// An iterator over filenames.
-    type FileNameIter: IntoIterator<Item=Self::FileName>;
+    type FileNameIter: IntoIterator<Item = Self::FileName>;
 
     /// A file managed by the backend. It must implement the `Read` trait.
     type FileStream: Read;
