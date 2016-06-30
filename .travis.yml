@@ -17,6 +17,10 @@ addons:
 os:
   - linux
 
+env:
+  global:
+    - RUSTFLAGS='-C link-dead-code'
+
 cache:
   directories:
     - $HOME/.cargo
