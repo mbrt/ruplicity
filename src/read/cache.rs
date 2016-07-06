@@ -37,6 +37,11 @@ impl BlockCache {
         }
     }
 
+    pub fn cached(&self, id: BlockId) -> bool {
+        let index = self.index.read().unwrap();
+        index.get(&id).is_some()
+    }
+
     pub fn read(&self, id: BlockId, buffer: &mut [u8]) -> Option<usize> {
         {
             // first refresh the block if present, by using write lock

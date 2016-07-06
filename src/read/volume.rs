@@ -1,33 +1,62 @@
 use std::borrow::Cow;
-use std::io::Read;
+use std::io::{self, Read};
 use std::str::{self, FromStr};
 use std::usize;
 
 use tar;
 
-pub type VolumeReader<R> = tar::Archive<R>;
-pub type VolumeReaderIter<'a, R> = tar::Entries<'a, R>;
+use read::cache::BlockCache;
 
-pub struct VolumeEntry<'a, R: Read + 'a>(tar::Entry<'a, R>);
 
-pub struct EntryInfo<'a> {
+pub struct VolumeReader<R: Read> {
+    arch: tar::Archive<R>,
+    // the id of the first path in the archive
+    first_id: usize,
+}
+
+
+struct EntryInfo<'a> {
     path: Cow<'a, [u8]>,
     vol_num: Option<usize>,
     etype: EntryType,
 }
 
-pub enum EntryType {
+enum EntryType {
     Deleted,
     Diff,
     Snapshot,
 }
 
+impl<R: Read> VolumeReader<R> {
+    pub fn new(archive: tar::Archive<R>, first_id: usize) -> Self {
+        VolumeReader {
+            arch: archive,
+            first_id: first_id,
+        }
+    }
 
-impl<'a, R: Read + 'a> VolumeEntry<'a, R> {
-    pub fn info(&self) -> Option<EntryInfo> {
-        EntryInfo::new(self.0.path_bytes())
+    pub fn cache_all(&mut self, dcache: &BlockCache, ecache: &BlockCache) -> io::Result<()> {
+        // io errors are treated as hard errors
+        for entry in try!(self.arch.entries()) {
+            let info = match EntryInfo::new(try!(entry).path_bytes()) {
+                Some(info) => info,
+                None => {
+                    continue; // skip bad block
+                }
+            };
+            let cache = match info.etype {
+                EntryType::Deleted => {
+                    continue;
+                }
+                EntryType::Diff => dcache,
+                EntryType::Snapshot => ecache,
+            };
+            // TODO insert in the cache
+        }
+        Ok(())
     }
 }
+
 
 impl<'a> EntryInfo<'a> {
     pub fn new(full_path: Cow<'a, [u8]>) -> Option<Self> {
@@ -62,8 +91,8 @@ impl<'a> EntryInfo<'a> {
             _ => full_path.len(),
         };
         let path = match full_path {
-            Cow::Borrowed(full_path) => Cow::Borrowed(&full_path[pos..end_pos]),
-            Cow::Owned(full_path) => Cow::Owned(full_path[pos..end_pos].to_owned()),
+            Cow::Borrowed(fp) => Cow::Borrowed(&fp[pos..end_pos]),
+            Cow::Owned(fp) => Cow::Owned(fp[pos..end_pos].to_owned()),
         };
 
         Some(EntryInfo {
