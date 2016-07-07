@@ -26,7 +26,7 @@ pub type EntryId = (usize, u8);
 /// Stores information about paths in a backup chain.
 ///
 /// The information is reused among different snapshots if possible.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Chain {
     num_snapshots: u8,
     entries: Vec<PathSnapshots>,

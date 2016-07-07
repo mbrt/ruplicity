@@ -20,7 +20,7 @@ use self::file_naming::{FileNameInfo, FileNameParser};
 /// Determines the status of a backup by looking at the files present in the backup folder. No
 /// backup archive is opened in this process. Thanks to that, performances are great; however no
 /// validation is performed on backup files.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Collections {
     backup_chains: Vec<BackupChain>,
     sig_chains: Vec<SignatureChain>,
@@ -235,7 +235,7 @@ impl BackupSet {
         let pr = &file_info.info;
         let fname = file_info.file_name;
 
-        if !self.is_same_set(&pr) {
+        if !self.is_same_set(pr) {
             false
         } else {
             // update info
@@ -588,13 +588,13 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
     for fileinfo in fname_infos {
         let mut inserted = false;
         for set in &mut sets {
-            if set.add_filename(&fileinfo) {
+            if set.add_filename(fileinfo) {
                 inserted = true;
                 break;
             }
         }
         if !inserted {
-            sets.push(BackupSet::new(&fileinfo));
+            sets.push(BackupSet::new(fileinfo));
         }
     }
     // sort by time

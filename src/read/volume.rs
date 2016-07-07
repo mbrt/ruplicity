@@ -96,7 +96,7 @@ impl<'a> EntryInfo<'a> {
                 let bnum = &full_path[pos + 1..];
                 str::from_utf8(bnum)
                     .ok()
-                    .and_then(|strnum| usize::from_str(&strnum).ok())
+                    .and_then(|strnum| usize::from_str(strnum).ok())
             }
             _ => None,
         };

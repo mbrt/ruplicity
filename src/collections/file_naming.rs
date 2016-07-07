@@ -61,7 +61,7 @@ pub struct FileNameParser {
 impl<'a> FileNameInfo<'a> {
     pub fn new(name: &'a str, info: Info) -> Self {
         FileNameInfo {
-            file_name: &name,
+            file_name: name,
             info: info,
         }
     }
