@@ -6,6 +6,7 @@ use std::sync::RwLock;
 use fnv::FnvHasher;
 use linked_hash_map::LinkedHashMap;
 
+use read::BLOCK_SIZE;
 use signatures::EntryId;
 
 
@@ -24,8 +25,6 @@ pub struct BlockCache {
 struct Block(Vec<u8>);
 
 type FnvHashBuilder = BuildHasherDefault<FnvHasher>;
-
-const BLOCK_SIZE: usize = 64 * 1024;
 
 
 impl BlockCache {

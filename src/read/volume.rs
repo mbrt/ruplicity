@@ -6,18 +6,22 @@ use std::usize;
 use tar;
 
 use read::cache::BlockCache;
+use signatures::EntryId;
 
 
-pub struct VolumeReader<R: Read> {
+pub struct VolumeReader<R: Read, S: ResolveEntryId> {
     arch: tar::Archive<R>,
-    // the id of the first path in the archive
-    first_id: usize,
+    resolver: S,
+}
+
+pub trait ResolveEntryId {
+    fn resolve(&mut self, path: &[u8]) -> Option<EntryId>;
 }
 
 
 struct EntryInfo<'a> {
     path: Cow<'a, [u8]>,
-    vol_num: Option<usize>,
+    block_num: Option<usize>,
     etype: EntryType,
 }
 
@@ -27,18 +31,20 @@ enum EntryType {
     Snapshot,
 }
 
-impl<R: Read> VolumeReader<R> {
-    pub fn new(archive: tar::Archive<R>, first_id: usize) -> Self {
+
+impl<R: Read, S: ResolveEntryId> VolumeReader<R, S> {
+    pub fn new(archive: tar::Archive<R>, resolver: S) -> Self {
         VolumeReader {
             arch: archive,
-            first_id: first_id,
+            resolver: resolver,
         }
     }
 
-    pub fn cache_all(&mut self, dcache: &BlockCache, ecache: &BlockCache) -> io::Result<()> {
+    pub fn cache_all(&mut self, dcache: &BlockCache, scache: &BlockCache) -> io::Result<()> {
         // io errors are treated as hard errors
         for entry in try!(self.arch.entries()) {
-            let info = match EntryInfo::new(try!(entry).path_bytes()) {
+            let entry = try!(entry);
+            let info = match EntryInfo::new(entry.path_bytes()) {
                 Some(info) => info,
                 None => {
                     continue; // skip bad block
@@ -46,12 +52,21 @@ impl<R: Read> VolumeReader<R> {
             };
             let cache = match info.etype {
                 EntryType::Deleted => {
-                    continue;
+                    continue; // skip deleted entries
                 }
                 EntryType::Diff => dcache,
-                EntryType::Snapshot => ecache,
+                EntryType::Snapshot => scache,
             };
-            // TODO insert in the cache
+            let block_id = match self.resolver.resolve(&info.path) {
+                Some(id) => (id, info.block_num.unwrap_or(0)),
+                None => {
+                    continue; // skip unknown entries
+                }
+            };
+            // insert in the cache only if not already present
+            if !cache.cached(block_id) {
+                // TODO
+            }
         }
         Ok(())
     }
@@ -97,7 +112,7 @@ impl<'a> EntryInfo<'a> {
 
         Some(EntryInfo {
             path: path,
-            vol_num: vol_num,
+            block_num: vol_num,
             etype: etype,
         })
     }
