@@ -41,6 +41,10 @@ impl BlockCache {
         index.get(&id).is_some()
     }
 
+    pub fn size(&self) -> usize {
+        self.index.read().unwrap().len()
+    }
+
     pub fn read(&self, id: BlockId, buffer: &mut [u8]) -> Option<usize> {
         {
             // first refresh the block if present, by using write lock
