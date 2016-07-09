@@ -88,8 +88,13 @@ pub enum EntryType {
     SymLink,
     /// An unix pipe.
     Fifo,
-    /// All the other entry types, that are currently not managed.
-    Unknown(u8),
+    /// Hints that destructuring should not be exhaustive.
+    ///
+    /// This enum may grow additional variants, so this makes sure clients
+    /// don't count on exhaustive matching. (Otherwise, adding a new variant
+    /// could break existing code.)
+    #[doc(hidden)]
+    __Nonexhaustive(u8),
 }
 
 
@@ -127,7 +132,7 @@ struct PathInfo {
     link: Option<RawPath>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct UserGroupMap {
     uid_map: HashMap<u32, String>,
     gid_map: HashMap<u32, String>,
@@ -515,8 +520,6 @@ impl<'a> Display for Entry<'a> {
                self.groupname().unwrap_or("?"),
                self.size_hint().map_or("?".to_owned(), |hint| format!("{}", hint.1)),
                self.mtime().into_local_display(),
-               // handle special case for the root:
-               // the path is empty, return "." instead
                self.path)
     }
 }
@@ -533,7 +536,19 @@ impl EntryType {
             b'1' => EntryType::HardLink,
             b'2' => EntryType::SymLink,
             b'6' => EntryType::Fifo,
-            _ => EntryType::Unknown(byte),
+            _ => EntryType::__Nonexhaustive(byte),
+        }
+    }
+
+    /// Returns the raw underlinig byte that this entry represents.
+    pub fn as_byte(&self) -> u8 {
+        match *self {
+            EntryType::File => b'0',
+            EntryType::Dir => b'5',
+            EntryType::HardLink => b'1',
+            EntryType::SymLink => b'2',
+            EntryType::Fifo => b'6',
+            EntryType::__Nonexhaustive(b) => b,
         }
     }
 }
@@ -548,7 +563,7 @@ impl Display for EntryType {
                    EntryType::HardLink => '-',
                    EntryType::SymLink => 'l',
                    EntryType::Fifo => 'p',
-                   EntryType::Unknown(_) => '?',
+                   EntryType::__Nonexhaustive(_) => '?',
                })
     }
 }
