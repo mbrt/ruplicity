@@ -48,8 +48,9 @@ impl<R: Read, S: ResolveEntryPath> VolumeReader<R, S> {
             let mut entry = match entry {
                 Ok(entry) => entry,
                 _ => {
-                    // unfortunately volume files are not compliant and they don't have the last
-                    // block of all zeros, so just return if an entry is invalid
+                    // unfortunately volume tar files are not compliant, they miss the last null
+                    // block, so we just return if an entry is invalid, because it's probably the
+                    // last one
                     return Ok(());
                 }
             };
@@ -90,7 +91,7 @@ impl<'a> EntryInfo<'a> {
     pub fn new(full_path: Cow<'a, [u8]>) -> Option<Self> {
         // parse the type
         let pos = try_opt!(full_path.iter().cloned().position(|b| b == b'/')) + 1;
-        let (etype, multivol) = match &full_path[0..pos - 1] {
+        let (etype, multivol) = match &full_path[..pos - 1] {
             b"diff" => (EntryType::Diff, false),
             b"deleted" => (EntryType::Deleted, false),
             b"snapshot" => (EntryType::Snapshot, false),

@@ -1,6 +1,7 @@
 use std::cmp;
+use std::fmt::{self, Debug, Formatter};
 use std::hash::BuildHasherDefault;
-use std::io::{self, Read, Write};
+use std::io::Read;
 use std::sync::RwLock;
 
 use fnv::FnvHasher;
@@ -20,9 +21,7 @@ pub struct BlockCache {
     max_blocks: usize,
 }
 
-
-#[derive(Debug)]
-struct Block(Vec<u8>);
+struct Block([u8; BLOCK_SIZE], u16);
 
 type FnvHashBuilder = BuildHasherDefault<FnvHasher>;
 
@@ -77,7 +76,7 @@ impl BlockCache {
             index.insert(id, Block::new());
         }
         let block = index.get_mut(&id).unwrap();
-        block.write_max_block(buffer).ok()
+        Some(block.write_max_block(buffer))
     }
 
     pub fn clear(&self) {
@@ -88,21 +87,28 @@ impl BlockCache {
 
 impl Block {
     fn new() -> Self {
-        Block(Vec::new())
+        Block([0u8; BLOCK_SIZE], 0)
     }
 
     fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
+        &self.0[..self.1 as usize]
     }
 
     fn as_mut_slice(&mut self) -> &mut [u8] {
-        self.0.as_mut_slice()
+        &mut self.0[..self.1 as usize]
     }
 
-    fn write_max_block(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        let buffer = &buffer[0..cmp::min(buffer.len(), BLOCK_SIZE)];
-        self.0.clear();
-        self.0.write(buffer)
+    fn write_max_block(&mut self, buffer: &[u8]) -> usize {
+        let len = cmp::min(buffer.len(), BLOCK_SIZE);
+        self.0[..len].copy_from_slice(&buffer[..len]);
+        self.1 = len as u16;
+        len
+    }
+}
+
+impl Debug for Block {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        self.0[..].fmt(f)
     }
 }
 
@@ -121,6 +127,10 @@ mod test {
         assert_eq!(cache.write(id, b"pippo"), Some(5));
         assert_eq!(cache.read(id, &mut buf), Some(5));
         assert_eq!(&buf, b"pippo");
+
+        // test reading bigger buffer
+        buf.resize(10, b'0');
+        assert_eq!(cache.read(id, &mut buf), Some(5));
     }
 
     #[test]
