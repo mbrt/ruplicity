@@ -7,11 +7,9 @@ use std::sync::RwLock;
 use fnv::FnvHasher;
 use linked_hash_map::LinkedHashMap;
 
-use read::BLOCK_SIZE;
-use signatures::EntryId;
+use read::block::{BLOCK_SIZE, BlockId};
 
 
-pub type BlockId = (EntryId, usize);
 
 #[derive(Debug)]
 pub struct BlockCache {
