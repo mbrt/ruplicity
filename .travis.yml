@@ -21,9 +21,7 @@ env:
   global:
     - RUSTFLAGS='-C link-dead-code'
 
-cache:
-  directories:
-    - $HOME/.cargo
+cache: cargo
 
 matrix:
   allow_failures:
