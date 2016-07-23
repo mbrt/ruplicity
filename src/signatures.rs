@@ -97,13 +97,17 @@ pub enum EntryType {
     __Nonexhaustive(u8),
 }
 
-
+/// wip
 #[derive(Copy, Clone, Debug)]
-enum DiffType {
+pub enum DiffType {
+    /// wip
     Signature,
+    /// wip
     Snapshot,
+    /// wip
     Deleted,
 }
+
 
 #[derive(Debug)]
 struct PathSnapshots {
@@ -130,6 +134,7 @@ struct PathInfo {
     entry_type: u8,
     size_hint: Option<(usize, usize)>,
     link: Option<RawPath>,
+    difftype: DiffType,
 }
 
 #[derive(Debug, Default)]
@@ -176,6 +181,19 @@ impl Chain {
         Snapshots {
             chain: self,
             snapshot_id: 0,
+        }
+    }
+
+    /// Returns the entry for the given id.
+    ///
+    /// This function is guaranteed to run in constant time.
+    pub fn entry(&self, id: EntryId) -> Entry {
+        let path_snap = &self.entries[id.0];
+        Entry {
+            path: &path_snap.path,
+            info: path_snap.snapshots[id.1 as usize].info.as_ref().unwrap(),
+            ug_map: &self.ug_map,
+            id: id,
         }
     }
 
@@ -233,6 +251,7 @@ impl Chain {
                             size_hint: size_hint,
                             entry_type: tarfile.header().entry_type().as_byte(),
                             link: link,
+                            difftype: difftype,
                         })
                     }
                     _ => None,
@@ -353,21 +372,6 @@ impl<'a> Display for Snapshot<'a> {
     }
 }
 
-
-impl<'a> SnapshotEntries<'a> {
-    /// Returns the entry for the given id.
-    ///
-    /// This function is guaranteed to run in constant time.
-    pub fn entry(&self, id: EntryId) -> Entry<'a> {
-        let path_snap = &self.entries[id.0];
-        Entry {
-            path: &path_snap.path,
-            info: path_snap.snapshots[id.1 as usize].info.as_ref().unwrap(),
-            ug_map: &self.chain.ug_map,
-            id: id,
-        }
-    }
-}
 
 impl<'a> Display for SnapshotEntries<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
@@ -507,6 +511,11 @@ impl<'a> Entry<'a> {
     /// Returns the path identificator.
     pub fn id(&self) -> EntryId {
         self.id
+    }
+
+    /// Returns the underlying storage format.
+    pub fn diff_type(&self) -> DiffType {
+        self.info.difftype
     }
 }
 
@@ -933,7 +942,7 @@ mod test {
         for (snap_ids, snapshot) in ids.zip(entries.snapshots()) {
             let actual = snap_ids.iter()
                 .cloned()
-                .map(|id| EntryTest::from_entry(&snapshot.entries().entry(id)))
+                .map(|id| EntryTest::from_entry(&entries.entry(id)))
                 .collect::<Vec<_>>();
             let expected = snapshot.entries()
                 .into_iter()

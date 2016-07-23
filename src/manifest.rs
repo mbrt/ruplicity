@@ -24,7 +24,7 @@ pub type ManifestIter<'a> = slice::Iter<'a, Manifest>;
 
 
 /// wip
-pub struct ChainManifests {
+pub struct ManifestChain {
     manifests: Vec<Manifest>,
 }
 
@@ -81,7 +81,7 @@ struct ManifestParser<R> {
 struct WordIter<'a>(&'a [u8]);
 
 
-impl ChainManifests {
+impl ManifestChain {
     /// wip
     pub fn from_backup_chain<B: Backend>(backend: &B, chain: &BackupChain) -> Result<Self> {
         let work = |set: &BackupSet| {
@@ -96,7 +96,7 @@ impl ChainManifests {
             result.push(try!(work(set)));
         }
 
-        Ok(ChainManifests { manifests: result })
+        Ok(ManifestChain { manifests: result })
     }
 
     /// wip
@@ -105,7 +105,7 @@ impl ChainManifests {
     }
 }
 
-impl<'a> IntoIterator for &'a ChainManifests {
+impl<'a> IntoIterator for &'a ManifestChain {
     type Item = &'a Manifest;
     type IntoIter = ManifestIter<'a>;
 
@@ -198,6 +198,11 @@ impl Manifest {
             })
             .map(|idx| idx + 1)
             .ok()
+    }
+
+    /// wip
+    pub fn volume_of_block(&self, path: &[u8], block: usize) -> Option<usize> {
+        unimplemented!()
     }
 }
 
@@ -655,7 +660,7 @@ mod test {
         let coll = Collections::from_filenames(filenames);
         assert_eq!(coll.num_snapshots(), 4);
         for chain in coll.backup_chains() {
-            let manifests = ChainManifests::from_backup_chain(&backend, &chain).unwrap();
+            let manifests = ManifestChain::from_backup_chain(&backend, &chain).unwrap();
             assert!(manifests.iter().count() > 0);
         }
     }
