@@ -3,14 +3,30 @@
 use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, BufReader};
 use std::num::ParseIntError;
 use std::path::Path;
+use std::result;
+use std::slice;
 use std::str::{self, FromStr, Utf8Error};
 use std::usize;
 
+use backend::Backend;
+use collections::{BackupChain, BackupSet};
 use rawpath::RawPath;
 
+
+/// wip
+pub type Result<T> = result::Result<T, ParseError>;
+
+/// wip
+pub type ManifestIter<'a> = slice::Iter<'a, Manifest>;
+
+
+/// wip
+pub struct ChainManifests {
+    manifests: Vec<Manifest>,
+}
 
 /// Manifest file info.
 #[derive(Debug, Eq, PartialEq)]
@@ -65,9 +81,43 @@ struct ManifestParser<R> {
 struct WordIter<'a>(&'a [u8]);
 
 
+impl ChainManifests {
+    /// wip
+    pub fn from_backup_chain<B: Backend>(backend: &B, chain: &BackupChain) -> Result<Self> {
+        let work = |set: &BackupSet| {
+            let path = Path::new(set.manifest_path());
+            let mut file = BufReader::new(try!(backend.open_file(path)));
+            Manifest::parse(&mut file)
+        };
+
+        let mut result = Vec::new();
+        result.push(try!(work(chain.full_set())));
+        for set in chain.inc_sets() {
+            result.push(try!(work(set)));
+        }
+
+        Ok(ChainManifests { manifests: result })
+    }
+
+    /// wip
+    pub fn iter(&self) -> ManifestIter {
+        self.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a ChainManifests {
+    type Item = &'a Manifest;
+    type IntoIter = ManifestIter<'a>;
+
+    fn into_iter(self) -> ManifestIter<'a> {
+        self.manifests.iter()
+    }
+}
+
+
 impl Manifest {
     /// Parses a stream to get a manifest.
-    pub fn parse<R: BufRead>(m: &mut R) -> Result<Self, ParseError> {
+    pub fn parse<R: BufRead>(m: &mut R) -> Result<Self> {
         let parser = ManifestParser::new(m);
         parser.parse()
     }
@@ -276,7 +326,7 @@ impl<R: BufRead> ManifestParser<R> {
         }
     }
 
-    pub fn parse(mut self) -> Result<Manifest, ParseError> {
+    pub fn parse(mut self) -> Result<Manifest> {
         check_eof!(self.read_line());
         let hostname = try!(self.read_param_str("Hostname"));
         check_eof!(self.read_line());
@@ -298,7 +348,7 @@ impl<R: BufRead> ManifestParser<R> {
         })
     }
 
-    fn read_volume(&mut self) -> Result<Option<(Volume, usize)>, ParseError> {
+    fn read_volume(&mut self) -> Result<Option<(Volume, usize)>> {
         if !try!(self.read_line()) {
             // EOF
             return Ok(None);
@@ -340,7 +390,7 @@ impl<R: BufRead> ManifestParser<R> {
         Ok(!self.buf.is_empty())
     }
 
-    fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {
+    fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>> {
         let mut words = WordIter(&self.buf);
         let kw = match words.next() {
             Some(word) => try!(str::from_utf8(word)),
@@ -358,12 +408,12 @@ impl<R: BufRead> ManifestParser<R> {
         Ok(unescape(param))
     }
 
-    fn read_param_str(&mut self, key: &str) -> Result<String, ParseError> {
+    fn read_param_str(&mut self, key: &str) -> Result<String> {
         let bytes = try!(self.read_param_bytes(key));
         String::from_utf8(bytes).map_err(|e| From::from(e.utf8_error()))
     }
 
-    fn read_path_block(&mut self, key: &str) -> Result<PathBlock, ParseError> {
+    fn read_path_block(&mut self, key: &str) -> Result<PathBlock> {
         let mut words = WordIter(&self.buf);
         let kw = match words.next() {
             Some(word) => try!(str::from_utf8(word)),
@@ -392,7 +442,7 @@ impl<R: BufRead> ManifestParser<R> {
         })
     }
 
-    fn read_hash_param(&mut self) -> Result<(String, Vec<u8>), ParseError> {
+    fn read_hash_param(&mut self) -> Result<(String, Vec<u8>)> {
         let mut words = WordIter(&self.buf);
         let kw = match words.next() {
             Some(word) => try!(str::from_utf8(word)),
@@ -509,14 +559,18 @@ mod test {
     use std::io::BufReader;
     use std::path::Path;
 
+    use backend::Backend;
+    use backend::local::LocalBackend;
+    use collections::Collections;
 
-    fn full1_manifest() -> Result<Manifest, ParseError> {
+
+    fn full1_manifest() -> Result<Manifest> {
         let file = File::open("tests/manifest/full1.manifest").unwrap();
         let mut bfile = BufReader::new(file);
         Manifest::parse(&mut bfile)
     }
 
-    fn inc1_manifest() -> Result<Manifest, ParseError> {
+    fn inc1_manifest() -> Result<Manifest> {
         let file = File::open("tests/manifest/inc1.manifest").unwrap();
         let mut bfile = BufReader::new(file);
         Manifest::parse(&mut bfile)
@@ -592,5 +646,17 @@ mod test {
         let hash = vec![0xe4, 0xa2, 0xe8, 0xe2, 0xab, 0xfb, 0xa2, 0xcb, 0x24, 0x77, 0x2e, 0x5f,
                         0xf9, 0xda, 0x4b, 0x85, 0xb3, 0xc1, 0x9a, 0x0c];
         assert_eq!(vol.hash().to_vec(), hash);
+    }
+
+    #[test]
+    fn manifests() {
+        let backend = LocalBackend::new("tests/backups/multi_chain");
+        let filenames = backend.file_names().unwrap();
+        let coll = Collections::from_filenames(filenames);
+        assert_eq!(coll.num_snapshots(), 4);
+        for chain in coll.backup_chains() {
+            let manifests = ChainManifests::from_backup_chain(&backend, &chain).unwrap();
+            assert!(manifests.iter().count() > 0);
+        }
     }
 }
