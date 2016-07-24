@@ -60,6 +60,7 @@ pub mod signatures;
 pub mod timefmt;
 
 use std::cell::{Ref, RefCell};
+use std::error;
 use std::fmt::{self, Display, Formatter};
 use std::io;
 use std::ops::Deref;
@@ -381,8 +382,16 @@ impl<B: Backend> ResourceCache for Backup<B> {
 }
 
 
-fn not_found(msg: &str) -> io::Error {
-    io::Error::new(io::ErrorKind::NotFound, msg)
+fn io_err<E>(kind: io::ErrorKind, e: E) -> io::Error
+    where E: Into<Box<error::Error + Send + Sync>>
+{
+    io::Error::new(kind, e)
+}
+
+fn not_found<E>(msg: E) -> io::Error
+    where E: Into<Box<error::Error + Send + Sync>>
+{
+    io_err(io::ErrorKind::NotFound, msg)
 }
 
 

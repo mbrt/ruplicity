@@ -347,6 +347,13 @@ impl BackupChain {
         self.incsets.iter()
     }
 
+    /// Returns the `n` backup set.
+    ///
+    /// Counts from zero, starting from the full set and then trough the incremental sets.
+    pub fn nth_set(&self, n: usize) -> Option<&BackupSet> {
+        if n == 0 { Some(&self.fullset) } else { self.incsets.iter().nth(n - 1) }
+    }
+
     /// Returns the time of the first backup set in the chain.
     pub fn start_time(&self) -> Timespec {
         self.start_time
