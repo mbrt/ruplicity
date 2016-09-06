@@ -6,29 +6,31 @@ mod cache;
 #[allow(dead_code)]
 mod volume;
 
-use std::io::{self, Read};
-use std::cmp;
-use std::path::Path;
-
-use self::cache::BlockCache;
-use self::block::{BLOCK_SIZE, BlockId};
-
-use ::not_found;
 use backend::Backend;
 use collections::BackupChain;
 use manifest::ManifestChain;
+
+use ::not_found;
+use self::block::{BLOCK_SIZE, BlockId};
+
+use self::cache::BlockCache;
 use signatures::{Chain, DiffType, Entry as SnapEntry, EntryId};
+use std::cmp;
+use std::io::{self, BufRead, Read};
+use std::path::Path;
 
 
 pub struct Entry<'a, B: 'a> {
     provider: &'a BlockProvider<B>,
+    entry_type: DiffType,
     buf: Box<[u8]>,
     len: usize,
     pos: usize,
     id: BlockId,
+    stream: Option<Box<BlockStream>>,
 }
 
-struct BlockProvider<B> {
+pub struct BlockProvider<B> {
     manifests: ManifestChain,
     back: BackupChain,
     sig: Chain,
@@ -39,28 +41,74 @@ struct BlockProvider<B> {
 }
 
 
+trait BlockStream: Read {
+    fn seek_to_block(&mut self, n: usize) -> io::Result<()>;
+}
+
+enum CacheType {
+    Snapshot,
+    Signature,
+}
+
+
+impl<'a, B: Backend> Entry<'a, B> {
+    fn fill_block(&mut self) -> io::Result<()> {
+        let optlen = try!(self.provider
+            .read_cached_block(self.id, &mut self.buf, CacheType::Snapshot));
+        if let Some(len) = optlen {
+            // the block is in cache, return it
+            self.len = len;
+            return Ok(());
+        }
+        // otherwise we need to use our block stream
+        if self.stream.is_none() {
+            // not present, create it now
+            self.stream = Some(try!(self.provider.block_stream(self.id.0)));
+        }
+        let mut stream = self.stream.as_mut().unwrap();
+        try!(stream.seek_to_block(self.id.1));
+        self.len = try!(stream.read(&mut self.buf));
+        self.pos = 0;
+        Ok(())
+    }
+}
+
 impl<'a, B: Backend> Read for Entry<'a, B> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.len > 0 {
             // we have buffered stuff... just copy as much as possible
-            let len = cmp::min(self.len - self.pos, buf.len());
+            let len = cmp::min(self.len, buf.len());
             buf[..len].copy_from_slice(&self.buf[self.pos..self.pos + len]);
             self.pos += len;
             self.len -= len;
             Ok(len)
         } else {
-            // try to pick the next block
+            // try to fill the block by using the provider
+            try!(self.fill_block());
             self.id.1 += 1;
-            self.len = try!(self.provider.read_block(self.id, &mut self.buf));
             if self.len > 0 {
                 // recurse, now we are sure there's something buffered
-                self.pos = 0;
                 self.read(buf)
             } else {
                 // end of the stream
                 Ok(0)
             }
         }
+    }
+}
+
+impl<'a, B: Backend> BufRead for Entry<'a, B> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if self.len == 0 {
+            try!(self.fill_block());
+        }
+        Ok(&self.buf[self.pos..self.pos + self.len])
+    }
+
+    fn consume(&mut self, amt: usize) {
+        let amt = cmp::min(amt, self.len);
+        self.pos += amt;
+        self.len -= amt;
     }
 }
 
@@ -93,11 +141,25 @@ impl<B: Backend> BlockProvider<B> {
     pub fn read(&self, entry: EntryId) -> Option<Entry<B>> {
         Some(Entry {
             provider: &self,
+            entry_type: self.sig.entry(entry).diff_type(),
             buf: Box::new([0; BLOCK_SIZE]),
             len: 0,
             pos: 0,
             id: (entry, 0),
+            stream: None,
         })
+    }
+
+    fn read_cached_block(&self,
+                         id: BlockId,
+                         buf: &mut [u8],
+                         ctype: CacheType)
+                         -> io::Result<Option<usize>> {
+        unimplemented!()
+    }
+
+    fn block_stream(&self, entry: EntryId) -> io::Result<Box<BlockStream>> {
+        unimplemented!()
     }
 
     fn read_block(&self, id: BlockId, buf: &mut [u8]) -> io::Result<usize> {

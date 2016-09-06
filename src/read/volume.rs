@@ -1,14 +1,15 @@
+
+
+use ::not_found;
+use read::block::{BLOCK_SIZE, BlockId};
+use read::cache::BlockCache;
+use signatures::EntryId;
 use std::borrow::Cow;
 use std::io::{self, Read};
 use std::str::{self, FromStr};
 use std::usize;
 
 use tar;
-
-use ::not_found;
-use read::block::{BLOCK_SIZE, BlockId};
-use read::cache::BlockCache;
-use signatures::EntryId;
 
 
 pub struct VolumeReader<R: Read, S: ResolveEntryPath> {
@@ -171,7 +172,11 @@ impl<'a> EntryInfo<'a> {
         };
         // parse the block number
         let epos = {
-            if multivol { full_path.iter().cloned().rposition(|b| b == b'/') } else { None }
+            if multivol {
+                full_path.iter().cloned().rposition(|b| b == b'/')
+            } else {
+                None
+            }
         };
         let vol_num = match epos {
             Some(pos) if pos + 1 < full_path.len() => {
@@ -203,12 +208,12 @@ impl<'a> EntryInfo<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use signatures::EntryId;
+    use flate2::read::GzDecoder;
     use read::cache::BlockCache;
+    use signatures::EntryId;
 
     use std::fs::File;
-    use flate2::read::GzDecoder;
+    use super::*;
     use tar::Archive;
 
     const TEST_VOL: &'static str = "tests/backups/single_vol/\
