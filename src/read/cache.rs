@@ -1,5 +1,3 @@
-
-
 use fnv::FnvHasher;
 use linked_hash_map::LinkedHashMap;
 
@@ -20,7 +18,7 @@ pub struct BlockCache {
     max_blocks: usize,
 }
 
-struct Block([u8; BLOCK_SIZE], u16);
+struct Block(Box<[u8]>, u16);
 
 type FnvHashBuilder = BuildHasherDefault<FnvHasher>;
 
@@ -86,7 +84,7 @@ impl BlockCache {
 
 impl Block {
     fn new() -> Self {
-        Block([0u8; BLOCK_SIZE], 0)
+        Block(Box::new([0u8; BLOCK_SIZE]), 0)
     }
 
     fn as_slice(&self) -> &[u8] {
