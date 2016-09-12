@@ -1,13 +1,13 @@
-use fnv::FnvHasher;
-use linked_hash_map::LinkedHashMap;
-
-use read::block::{BLOCK_SIZE, BlockId};
 use std::cmp;
 use std::fmt::{self, Debug, Formatter};
 use std::hash::BuildHasherDefault;
 use std::io::Read;
 use std::sync::RwLock;
 
+use fnv::FnvHasher;
+use linked_hash_map::LinkedHashMap;
+
+use read::block::{BLOCK_SIZE, BlockId};
 
 
 #[derive(Debug)]

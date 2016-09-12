@@ -85,9 +85,7 @@ pub type SignatureFileIter<'a> = slice::Iter<'a, SignatureFile>;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 enum Type {
-    Full {
-        time: Timespec,
-    },
+    Full { time: Timespec },
     Inc {
         start_time: Timespec,
         end_time: Timespec,
@@ -351,7 +349,11 @@ impl BackupChain {
     ///
     /// Counts from zero, starting from the full set and then trough the incremental sets.
     pub fn nth_set(&self, n: usize) -> Option<&BackupSet> {
-        if n == 0 { Some(&self.fullset) } else { self.incsets.iter().nth(n - 1) }
+        if n == 0 {
+            Some(&self.fullset)
+        } else {
+            self.incsets.iter().nth(n - 1)
+        }
     }
 
     /// Returns the time of the first backup set in the chain.

@@ -4,20 +4,22 @@ mod block;
 #[allow(dead_code)]
 mod cache;
 #[allow(dead_code)]
+mod stream;
+#[allow(dead_code)]
 mod volume;
 
-use backend::Backend;
-use collections::BackupChain;
-use manifest::ManifestChain;
-
-use ::not_found;
-use self::block::{BLOCK_SIZE, BlockId};
-
-use self::cache::BlockCache;
-use signatures::{Chain, DiffType, Entry as SnapEntry, EntryId};
 use std::cmp;
 use std::io::{self, BufRead, Read};
 use std::path::Path;
+
+use ::not_found;
+use backend::Backend;
+use collections::BackupChain;
+use manifest::ManifestChain;
+use signatures::{Chain, DiffType, Entry as SnapEntry, EntryId};
+use read::block::{BLOCK_SIZE, BlockId};
+use read::cache::BlockCache;
+use read::stream::BlockStream;
 
 
 pub struct Entry<'a, B: 'a> {
@@ -27,7 +29,7 @@ pub struct Entry<'a, B: 'a> {
     len: usize,
     pos: usize,
     id: BlockId,
-    stream: Option<Box<BlockStream>>,
+    stream: Option<Box<BlockStream + 'a>>,
 }
 
 pub struct BlockProvider<B> {
@@ -41,10 +43,7 @@ pub struct BlockProvider<B> {
 }
 
 
-trait BlockStream: Read {
-    fn seek_to_block(&mut self, n: usize) -> io::Result<()>;
-}
-
+#[derive(Debug, Eq, PartialEq)]
 enum CacheType {
     Snapshot,
     Signature,
@@ -53,8 +52,8 @@ enum CacheType {
 
 impl<'a, B: Backend> Entry<'a, B> {
     fn fill_block(&mut self) -> io::Result<()> {
-        let optlen = try!(self.provider
-            .read_cached_block(self.id, &mut self.buf, CacheType::Snapshot));
+        let optlen = self.provider
+            .read_cached_block(self.id, &mut self.buf, CacheType::Snapshot);
         if let Some(len) = optlen {
             // the block is in cache, return it
             self.len = len;
@@ -78,7 +77,7 @@ impl<'a, B: Backend> Read for Entry<'a, B> {
         if self.len > 0 {
             // we have buffered stuff... just copy as much as possible
             let len = cmp::min(self.len, buf.len());
-            buf[..len].copy_from_slice(&self.buf[self.pos..self.pos + len]);
+            buf.copy_from_slice(&self.buf[self.pos..self.pos + len]);
             self.pos += len;
             self.len -= len;
             Ok(len)
@@ -150,28 +149,27 @@ impl<B: Backend> BlockProvider<B> {
         })
     }
 
-    fn read_cached_block(&self,
-                         id: BlockId,
-                         buf: &mut [u8],
-                         ctype: CacheType)
-                         -> io::Result<Option<usize>> {
-        unimplemented!()
-    }
-
-    fn block_stream(&self, entry: EntryId) -> io::Result<Box<BlockStream>> {
-        unimplemented!()
-    }
-
-    fn read_block(&self, id: BlockId, buf: &mut [u8]) -> io::Result<usize> {
-        let snapnum = (id.0).1 as usize;
-        if let Some(len) = self.dcache.read(id, buf) {
-            // already cached block, let's return it
-            return Ok(len);
+    fn read_cached_block(&self, id: BlockId, buf: &mut [u8], ctype: CacheType) -> Option<usize> {
+        if ctype == CacheType::Snapshot {
+            self.scache.read(id, buf)
+        } else {
+            self.dcache.read(id, buf)
         }
+    }
 
-        // look for the volume containing that block
+    fn block_stream<'a>(&'a self, entry: EntryId) -> io::Result<Box<BlockStream + 'a>> {
+        let sig_entry = self.sig.entry(entry);
+        match sig_entry.diff_type() {
+            DiffType::Snapshot => unimplemented!(),
+            DiffType::Signature => unimplemented!(),
+            _ => Ok(Box::new(stream::NullStream)),
+        }
+    }
+
+    fn volume_of_block<'a>(&'a self, id: BlockId) -> io::Result<Option<Box<Read + 'a>>> {
+        let snapnum = (id.0).1 as usize;
         let entry = self.sig.entry(id.0);
-        let manifest = match self.manifests.iter().nth(snapnum) {
+        let manifest = match self.manifests.get(snapnum) {
             Some(m) => m,
             None => {
                 return Err(not_found(format!("required manifest #{} is missing", snapnum)));
@@ -181,7 +179,7 @@ impl<B: Backend> BlockProvider<B> {
             Some(v) => v,
             None => {
                 // no more blocks
-                return Ok(0);
+                return Ok(None);
             }
         };
         let backup_set = match self.back.nth_set(snapnum) {
@@ -197,15 +195,6 @@ impl<B: Backend> BlockProvider<B> {
             }
         };
 
-        // cache the volume blocks
-        let vol_file = try!(self.backend.open_file(vol_path));
-
-        // determine the entry type
-        match entry.diff_type() {
-            DiffType::Snapshot => (),
-            DiffType::Signature => (),
-            _ => unreachable!(),
-        };
-        unimplemented!()
+        Ok(Some(Box::new(try!(self.backend.open_file(vol_path)))))
     }
 }

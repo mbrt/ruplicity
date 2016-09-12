@@ -103,6 +103,11 @@ impl ManifestChain {
     pub fn iter(&self) -> ManifestIter {
         self.into_iter()
     }
+
+    /// wip
+    pub fn get(&self, index: usize) -> Option<&Manifest> {
+        self.manifests.get(index)
+    }
 }
 
 impl<'a> IntoIterator for &'a ManifestChain {
@@ -142,7 +147,11 @@ impl Manifest {
     /// Note that volumes are counting starting from one, so the last volume number is equal to the
     /// number of volumes. If no volume corresponds to the given number, `None` is returned.
     pub fn volume(&self, num: usize) -> Option<&Volume> {
-        if num == 0 { None } else { self.volumes.get(num - 1) }
+        if num == 0 {
+            None
+        } else {
+            self.volumes.get(num - 1)
+        }
     }
 
     /// Returns the index of the first volume containing the given path, if present.
@@ -192,7 +201,11 @@ impl Manifest {
                         }
                     }
                     Ordering::Equal => {
-                        if v.end_path.block.is_some() { Ordering::Less } else { Ordering::Equal }
+                        if v.end_path.block.is_some() {
+                            Ordering::Less
+                        } else {
+                            Ordering::Equal
+                        }
                     }
                 }
             })

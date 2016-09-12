@@ -23,10 +23,7 @@ pub enum Type {
         time: Timespec,
         volume_number: usize,
     },
-    FullManifest {
-        time: Timespec,
-        partial: bool,
-    },
+    FullManifest { time: Timespec, partial: bool },
     Inc {
         start_time: Timespec,
         end_time: Timespec,
@@ -37,10 +34,7 @@ pub enum Type {
         end_time: Timespec,
         partial: bool,
     },
-    FullSig {
-        time: Timespec,
-        partial: bool,
-    },
+    FullSig { time: Timespec, partial: bool },
     NewSig {
         start_time: Timespec,
         end_time: Timespec,

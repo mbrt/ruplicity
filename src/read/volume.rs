@@ -1,15 +1,14 @@
-
-
-use ::not_found;
-use read::block::{BLOCK_SIZE, BlockId};
-use read::cache::BlockCache;
-use signatures::EntryId;
 use std::borrow::Cow;
 use std::io::{self, Read};
 use std::str::{self, FromStr};
 use std::usize;
 
 use tar;
+
+use ::not_found;
+use signatures::EntryId;
+use read::block::{BLOCK_SIZE, BlockId};
+use read::cache::BlockCache;
 
 
 pub struct VolumeReader<R: Read, S: ResolveEntryPath> {
