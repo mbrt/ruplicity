@@ -37,7 +37,6 @@ pub struct BlockProvider<B> {
     back: BackupChain,
     sig: Chain,
     backend: B,
-    num_readahead: usize,
     dcache: BlockCache,
     scache: BlockCache,
 }
@@ -117,15 +116,13 @@ impl<B> BlockProvider<B> {
                bchain: BackupChain,
                sigchain: Chain,
                backend: B,
-               cache_size: usize,
-               num_readahead: usize)
+               cache_size: usize)
                -> Self {
         BlockProvider {
             manifests: manifests,
             back: bchain,
             sig: sigchain,
             backend: backend,
-            num_readahead: num_readahead,
             dcache: BlockCache::new((cache_size as f64 * 0.4) as usize),
             scache: BlockCache::new((cache_size as f64 * 0.6) as usize),
         }
