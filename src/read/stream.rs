@@ -16,7 +16,8 @@ pub trait BlockStream: Read {
 }
 
 pub trait Resources {
-    fn cache(&self) -> &BlockCache;
+    fn snapshot_cache(&self) -> &BlockCache;
+    fn signature_cache(&self) -> &BlockCache;
     fn volume<'a>(&'a self, n: usize) -> io::Result<Option<Archive<Box<Read + 'a>>>>;
     fn volume_of_block(&self, n: usize) -> Option<usize>;
 }
@@ -51,7 +52,11 @@ impl Read for NullStream {
 
 
 impl<'a> SnapshotStream<'a> {
-    pub fn new<P: AsRef<Path>>(resources: &'a Resources, path: P, entry_id: EntryId, max_block: usize) -> Self {
+    pub fn new<P: AsRef<Path>>(resources: &'a Resources,
+                               path: P,
+                               entry_id: EntryId,
+                               max_block: usize)
+                               -> Self {
         SnapshotStream {
             res: resources,
             path: path.as_ref().to_owned(),
@@ -94,7 +99,7 @@ impl<'a> Read for SnapshotStream<'a> {
                                              self.curr_block)));
             }
         };
-        let cache = self.res.cache();
+        let cache = self.res.snapshot_cache();
 
         // read the current block and some additional ones
         let mut n_found = 0;
@@ -114,10 +119,30 @@ impl<'a> Read for SnapshotStream<'a> {
                     }
                 }
             };
-            if n_found > NUM_READAHEAD_SNAP {
-                break;
-            } else if n_found == 0 {
-                // still need to find the first entry
+            {
+                let entry_path = match entry.path() {
+                    Ok(e) => e,
+                    Err(_) => {
+                        // invalid path
+                        continue;
+                    }
+                };
+                if n_found > NUM_READAHEAD_SNAP {
+                    break;
+                } else if n_found == 0 {
+                    // still need to find the first entry
+                    if &entry_path < &path {
+                        // the current path is still behind
+                        continue;
+                    } else if &entry_path > &path {
+                        // we haven't found the path
+                        break;
+                    }
+                }
+                // check if the path is still the one expected, otherwise break
+                if &entry_path != &path {
+                    break;
+                }
             }
 
             // we need to read this entry

@@ -388,6 +388,12 @@ fn io_err<E>(kind: io::ErrorKind, e: E) -> io::Error
     io::Error::new(kind, e)
 }
 
+fn other<E>(msg: E) -> io::Error
+    where E: Into<Box<error::Error + Send + Sync>>
+{
+    io_err(io::ErrorKind::Other, msg)
+}
+
 fn not_found<E>(msg: E) -> io::Error
     where E: Into<Box<error::Error + Send + Sync>>
 {

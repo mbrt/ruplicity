@@ -11,8 +11,11 @@ mod volume;
 use std::cmp;
 use std::io::{self, BufRead, Read};
 use std::path::Path;
+use flate2::read::GzDecoder;
+use tar::Archive;
 
 use ::not_found;
+use ::other;
 use backend::Backend;
 use collections::BackupChain;
 use manifest::ManifestChain;
@@ -41,6 +44,12 @@ pub struct BlockProvider<B> {
     scache: BlockCache,
 }
 
+
+// Provides resources only for a specific entry
+struct EntryResourceProxy<'a, B: 'a> {
+    provider: &'a BlockProvider<B>,
+    entry: EntryId,
+}
 
 #[derive(Debug, Eq, PartialEq)]
 enum CacheType {
@@ -163,22 +172,19 @@ impl<B: Backend> BlockProvider<B> {
         }
     }
 
-    fn volume_of_block<'a>(&'a self, id: BlockId) -> io::Result<Option<Box<Read + 'a>>> {
+    fn volume_of_block(&self, id: BlockId) -> Option<usize> {
         let snapnum = (id.0).1 as usize;
         let entry = self.sig.entry(id.0);
         let manifest = match self.manifests.get(snapnum) {
             Some(m) => m,
             None => {
-                return Err(not_found(format!("required manifest #{} is missing", snapnum)));
+                return None;
             }
         };
-        let volnum = match manifest.volume_of_block(entry.path_bytes(), id.1) {
-            Some(v) => v,
-            None => {
-                // no more blocks
-                return Ok(None);
-            }
-        };
+        manifest.volume_of_block(entry.path_bytes(), id.1)
+    }
+
+    fn volume<'a>(&'a self, snapnum: usize, volnum: usize) -> io::Result<Option<Archive<Box<Read + 'a>>>> {
         let backup_set = match self.back.nth_set(snapnum) {
             Some(s) => s,
             None => {
@@ -191,7 +197,35 @@ impl<B: Backend> BlockProvider<B> {
                 return Err(not_found(format!("no path for volume #{}", volnum)));
             }
         };
+        if backup_set.is_encrypted() {
+            return Err(other("encrypted backups are not supported"));
+        }
 
-        Ok(Some(Box::new(try!(self.backend.open_file(vol_path)))))
+        let rawfile = try!(self.backend.open_file(vol_path));
+        let result: Box<Read + 'a> = if backup_set.is_compressed() {
+            Box::new(try!(GzDecoder::new(rawfile)))
+        } else {
+            Box::new(rawfile)
+        };
+
+        Ok(Some(Archive::new(result)))
+    }
+}
+
+impl<'a, B: Backend + 'a> stream::Resources for EntryResourceProxy<'a, B> {
+    fn snapshot_cache(&self) -> &BlockCache {
+        &self.provider.scache
+    }
+
+    fn signature_cache(&self) -> &BlockCache {
+        &self.provider.dcache
+    }
+
+    fn volume<'b>(&'b self, n: usize) -> io::Result<Option<Archive<Box<Read + 'b>>>> {
+        self.provider.volume(self.entry.1 as usize, n)
+    }
+
+    fn volume_of_block(&self, n: usize) -> Option<usize> {
+        self.provider.volume_of_block(((self.entry), n))
     }
 }
