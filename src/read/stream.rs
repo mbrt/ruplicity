@@ -1,5 +1,6 @@
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use std::str::{self, FromStr};
 use tar::Archive;
 
 use ::not_found;
@@ -25,12 +26,28 @@ pub trait Resources {
 pub struct NullStream;
 
 pub struct SnapshotStream<'a> {
-    res: &'a Resources,
+    res: Box<Resources + 'a>,
     path: PathBuf,
     entry_id: EntryId,
     max_block: usize,
     curr_block: usize,
     buf: Box<[u8]>,
+}
+
+
+#[derive(Debug, Eq, PartialEq)]
+struct BlockPath<'a> {
+    entry_path: &'a [u8],
+    block_type: BlockType,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum BlockType {
+    MultivolSignature(usize), // include the block number
+    MultivolSnapshot(usize), // include the block number
+    Signature,
+    Snapshot,
+    Deleted,
 }
 
 
@@ -52,7 +69,7 @@ impl Read for NullStream {
 
 
 impl<'a> SnapshotStream<'a> {
-    pub fn new<P: AsRef<Path>>(resources: &'a Resources,
+    pub fn new<P: AsRef<Path>>(resources: Box<Resources + 'a>,
                                path: P,
                                entry_id: EntryId,
                                max_block: usize)
@@ -177,5 +194,108 @@ impl<'a> Read for SnapshotStream<'a> {
                                   self.curr_block,
                                   vol_num)))
         }
+    }
+}
+
+fn parse_block_path(path: &[u8]) -> Option<BlockPath> {
+    // split the path in (first directory, the remaining path)
+    // the first is the type, the remaining is the real path
+    let pos = try_opt!(path.iter().cloned().position(|b| b == b'/'));
+    let (pfirst, raw_real) = path.split_at(pos);
+    let (p, t) = match pfirst {
+        b"deleted" => (raw_real, BlockType::Deleted),
+        b"signature" => (raw_real, BlockType::Signature),
+        b"snapshot" => (raw_real, BlockType::Snapshot),
+        b"multivol_signature" => {
+            let (p, n) = try_opt!(strip_block_num(raw_real));
+            (p, BlockType::MultivolSignature(n))
+        }
+        b"multivol_snapshot" => {
+            let (p, n) = try_opt!(strip_block_num(raw_real));
+            (p, BlockType::MultivolSnapshot(n))
+        }
+        _ => {
+            return None;
+        }
+    };
+    Some(BlockPath {
+        entry_path: strip_trailing_slash(p),
+        block_type: t,
+    })
+}
+
+fn strip_trailing_slash(path: &[u8]) -> &[u8] {
+    // safely assumes that the path starts with a slash
+    assert!(path[0] == b'/');
+    match path.last().cloned() {
+        Some(b'/') if path.len() > 1 => &path[1..path.len() - 1],
+        _ => &path[1..],
+    }
+}
+
+// Removes from a path the last element, if it's an unsigned number, and return them.
+fn strip_block_num(path: &[u8]) -> Option<(&[u8], usize)> {
+    let pos = try_opt!(path.iter().cloned().rposition(|b| b == b'/'));
+    let (p, num_b) = path.split_at(pos + 1);
+    let num_str = try_opt!(str::from_utf8(num_b).ok());
+    let num = try_opt!(usize::from_str(&num_str).ok());
+    Some((p, num))
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn path_parse_block() {
+        use super::{BlockPath, BlockType, parse_block_path};
+
+        fn block_path(e: &[u8], t: BlockType) -> BlockPath {
+            BlockPath {
+                entry_path: e,
+                block_type: t,
+            }
+        }
+
+        assert_eq!(parse_block_path(b"deleted/foo"),
+                   Some(block_path(b"foo", BlockType::Deleted)));
+        assert_eq!(parse_block_path(b"signature/foo"),
+                   Some(block_path(b"foo", BlockType::Signature)));
+        assert_eq!(parse_block_path(b"snapshot/foo/"),
+                   Some(block_path(b"foo", BlockType::Snapshot)));
+        assert_eq!(parse_block_path(b"multivol_signature/foo/5"),
+                   Some(block_path(b"foo", BlockType::MultivolSignature(5))));
+        assert_eq!(parse_block_path(b"multivol_snapshot/foo/bar/5"),
+                   Some(block_path(b"foo/bar", BlockType::MultivolSnapshot(5))));
+        assert_eq!(parse_block_path(b"multivol_snapshot/foo/bar/b"), None);
+        assert_eq!(parse_block_path(b"bla"), None);
+        assert_eq!(parse_block_path(b"deleted/foo/5"),
+                   Some(block_path(b"foo/5", BlockType::Deleted)));
+    }
+
+    #[test]
+    fn path_parse_block_num() {
+        use super::strip_block_num;
+
+        assert_eq!(strip_block_num(b"my/long/path/3"),
+                   Some((&b"my/long/path/"[..], 3)));
+        assert_eq!(strip_block_num(b"/3"), Some((&b"/"[..], 3)));
+        assert_eq!(strip_block_num(b"my/long/path/"), None);
+        assert_eq!(strip_block_num(b"3"), None);
+        assert_eq!(strip_block_num(b"/"), None);
+        assert_eq!(strip_block_num(b""), None);
+    }
+
+    #[test]
+    fn path_parse_trailing_slash() {
+        use super::strip_trailing_slash;
+
+        assert_eq!(strip_trailing_slash(b"/my/long/path/"),
+                   &b"my/long/path"[..]);
+        assert_eq!(strip_trailing_slash(b"/my/long/path"), &b"my/long/path"[..]);
+        assert_eq!(strip_trailing_slash(b"///"), &b"/"[..]);
+        assert_eq!(strip_trailing_slash(b"//"), &b""[..]);
+        assert_eq!(strip_trailing_slash(b"/"), &b""[..]);
     }
 }
