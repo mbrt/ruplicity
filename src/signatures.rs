@@ -16,7 +16,7 @@ use time::Timespec;
 
 use backend::Backend;
 use collections::{SignatureChain, SignatureFile};
-use rawpath::RawPath;
+use rawpath::{RawPath, RawPathBuf};
 use timefmt::TimeDisplay;
 
 
@@ -67,7 +67,7 @@ pub struct SnapshotEntriesIter<'a> {
 /// This could be a file, a directory, a link, etc.
 #[derive(Debug)]
 pub struct Entry<'a> {
-    path: &'a RawPath,
+    path: RawPath<'a>,
     info: &'a PathInfo,
     ug_map: &'a UserGroupMap,
     id: EntryId,
@@ -112,7 +112,7 @@ pub enum DiffType {
 #[derive(Debug)]
 struct PathSnapshots {
     // the directory or file path
-    path: RawPath,
+    path: RawPathBuf,
     // all the snapshots for this path
     snapshots: Vec<PathSnapshot>,
 }
@@ -133,7 +133,7 @@ struct PathInfo {
     mode: Option<u32>,
     entry_type: u8,
     size_hint: Option<(usize, usize)>,
-    link: Option<RawPath>,
+    link: Option<RawPathBuf>,
     difftype: DiffType,
 }
 
@@ -190,7 +190,7 @@ impl Chain {
     pub fn entry(&self, id: EntryId) -> Entry {
         let path_snap = &self.entries[id.0];
         Entry {
-            path: &path_snap.path,
+            path: path_snap.path.as_raw_path(),
             info: path_snap.snapshots[id.1 as usize].info.as_ref().unwrap(),
             ug_map: &self.ug_map,
             id: id,
@@ -242,7 +242,7 @@ impl Chain {
                             self.ug_map.add_group(gid, name.to_owned());
                         }
                         let link = tarfile.link_name_bytes()
-                            .map(|b| RawPath::from_bytes(b.into_owned()));
+                            .map(|b| RawPathBuf::from_bytes(b.into_owned()));
                         Some(PathInfo {
                             mtime: time,
                             uid: header.uid().ok(),
@@ -294,7 +294,7 @@ impl Chain {
                 } else {
                     // the path is not present in the old snapshots: add to new list
                     new_entries.push(PathSnapshots {
-                        path: RawPath::from_bytes(path.to_owned()),
+                        path: RawPathBuf::from_bytes(path.to_owned()),
                         snapshots: vec![new_snapshot],
                     });
                 }
@@ -431,7 +431,7 @@ impl<'a> Iterator for SnapshotEntriesIter<'a> {
                 if let Some(ref info) = s.info {
                     let index = path_snapshots.snapshots.len() - index - 1;
                     return Some(Entry {
-                        path: &path_snapshots.path,
+                        path: path_snapshots.path.as_raw_path(),
                         info: info,
                         ug_map: &self.chain.ug_map,
                         id: (path_id, index as u8),

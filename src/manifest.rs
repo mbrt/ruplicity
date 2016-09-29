@@ -13,7 +13,7 @@ use std::usize;
 
 use backend::Backend;
 use collections::{BackupChain, BackupSet};
-use rawpath::RawPath;
+use rawpath::RawPathBuf;
 
 
 /// wip
@@ -32,7 +32,7 @@ pub struct ManifestChain {
 #[derive(Debug, Eq, PartialEq)]
 pub struct Manifest {
     hostname: String,
-    local_dir: RawPath,
+    local_dir: RawPathBuf,
     volumes: Vec<Volume>,
 }
 
@@ -69,7 +69,7 @@ pub enum ParseError {
 
 #[derive(Debug, Eq, PartialEq)]
 struct PathBlock {
-    path: RawPath,
+    path: RawPathBuf,
     block: Option<usize>,
 }
 
@@ -348,7 +348,7 @@ impl<R: BufRead> ManifestParser<R> {
         check_eof!(self.read_line());
         let hostname = try!(self.read_param_str("Hostname"));
         check_eof!(self.read_line());
-        let local_dir = RawPath::from_bytes(try!(self.read_param_bytes("Localdir")));
+        let local_dir = RawPathBuf::from_bytes(try!(self.read_param_bytes("Localdir")));
 
         let mut volumes = Vec::new();
         while let Some((vol, i)) = try!(self.read_volume()) {
@@ -441,7 +441,7 @@ impl<R: BufRead> ManifestParser<R> {
             return Err(ParseError::MissingKeyword(key.to_owned()));
         }
         let path = match words.next() {
-            Some(word) => RawPath::from_bytes(unescape(word)),
+            Some(word) => RawPathBuf::from_bytes(unescape(word)),
             None => {
                 return Err(ParseError::MissingPath);
             }

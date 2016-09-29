@@ -407,7 +407,7 @@ mod test {
     use backend::local::LocalBackend;
     use collections::{BackupSet, Collections};
     use manifest::Manifest;
-    use rawpath::RawPath;
+    use rawpath::RawPathBuf;
     use signatures::{Chain, Entry};
     use timefmt::parse_time_str;
 
@@ -426,7 +426,7 @@ mod test {
 
     #[derive(Debug, Clone, Eq, PartialEq)]
     struct EntryTest {
-        path: RawPath,
+        path: RawPathBuf,
         mtime: Timespec,
         uname: String,
         gname: String,
@@ -435,7 +435,7 @@ mod test {
     impl EntryTest {
         pub fn from_entry(file: &Entry) -> Self {
             EntryTest {
-                path: RawPath::from_bytes(file.path_bytes().to_owned()),
+                path: RawPathBuf::from_bytes(file.path_bytes().to_owned()),
                 mtime: file.mtime(),
                 uname: file.username().unwrap().to_owned(),
                 gname: file.groupname().unwrap().to_owned(),
@@ -444,7 +444,7 @@ mod test {
 
         pub fn from_info(path: &[u8], mtime: &str, uname: &str, gname: &str) -> Self {
             EntryTest {
-                path: RawPath::from_bytes(path.to_owned()),
+                path: RawPathBuf::from_bytes(path.to_owned()),
                 mtime: parse_time_str(mtime).unwrap(),
                 uname: uname.to_owned(),
                 gname: gname.to_owned(),
