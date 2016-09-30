@@ -107,14 +107,14 @@ mod os {
             }
         }
 
-        pub fn as_path(&self) -> Option<&Path> {
+        pub fn as_path(&self) -> Option<&'a Path> {
             match *self {
                 RawPath::Path(p) => Some(p),
                 RawPath::Bytes(_) => None,
             }
         }
 
-        pub fn as_bytes(&self) -> &[u8] {
+        pub fn as_bytes(&self) -> &'a [u8] {
             match *self {
                 RawPath::Path(p) => p.as_os_str().to_str().unwrap().as_bytes(),
                 RawPath::Bytes(b) => b,
