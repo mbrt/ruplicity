@@ -19,10 +19,11 @@ use ::other;
 use backend::Backend;
 use collections::BackupChain;
 use manifest::{Manifest, ManifestChain};
-use signatures::{Chain as SigChain, DiffType, EntryId};
+use rawpath::RawPath;
 use read::block::{BLOCK_SIZE, BlockId};
 use read::cache::BlockCache;
 use read::stream::BlockStream;
+use signatures::{Chain as SigChain, DiffType, EntryId};
 
 
 pub struct Entry<'a, B: 'a> {
@@ -167,18 +168,18 @@ impl<B: Backend> BlockProvider<B> {
 
     fn block_stream<'a>(&'a self, entry: EntryId) -> io::Result<Box<BlockStream + 'a>> {
         let sig_entry = self.sig.entry(entry);
-        let path = match sig_entry.path() {
-            Some(p) => p,
-            None => {
-                return Err(other(format!("path not representable for entry {:?}", entry)));
-            }
-        };
+        let path = sig_entry.path_bytes();
         let res = Box::new(EntryResourceProxy {
             provider: &self,
             entry: entry,
         });
         match sig_entry.diff_type() {
-            DiffType::Snapshot => Ok(Box::new(stream::SnapshotStream::new(res, path, entry, 0))),
+            DiffType::Snapshot => {
+                Ok(Box::new(stream::SnapshotStream::new(res,
+                                                        RawPath::new(path).as_raw_path_buf(),
+                                                        entry,
+                                                        0)))
+            }
             DiffType::Signature => unimplemented!(),
             _ => Ok(Box::new(stream::NullStream)),
         }

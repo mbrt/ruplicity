@@ -1,9 +1,9 @@
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
 use std::str::{self, FromStr};
 use tar::Archive;
 
 use ::not_found;
+use rawpath::{RawPath, RawPathBuf};
 use read::cache::BlockCache;
 use read::block::BLOCK_SIZE;
 use signatures::EntryId;
@@ -27,7 +27,7 @@ pub struct NullStream;
 
 pub struct SnapshotStream<'a> {
     res: Box<Resources + 'a>,
-    path: PathBuf,
+    path: RawPathBuf,
     entry_id: EntryId,
     max_block: usize,
     curr_block: usize,
@@ -37,7 +37,7 @@ pub struct SnapshotStream<'a> {
 
 #[derive(Debug, Eq, PartialEq)]
 struct BlockPath<'a> {
-    entry_path: &'a [u8],
+    entry_path: RawPath<'a>,
     block_type: BlockType,
 }
 
@@ -69,14 +69,14 @@ impl Read for NullStream {
 
 
 impl<'a> SnapshotStream<'a> {
-    pub fn new<P: AsRef<Path>>(resources: Box<Resources + 'a>,
-                               path: P,
-                               entry_id: EntryId,
-                               max_block: usize)
-                               -> Self {
+    pub fn new(resources: Box<Resources + 'a>,
+               path: RawPathBuf,
+               entry_id: EntryId,
+               max_block: usize)
+               -> Self {
         SnapshotStream {
             res: resources,
-            path: path.as_ref().to_owned(),
+            path: path,
             entry_id: entry_id,
             max_block: max_block,
             curr_block: 0,
@@ -120,8 +120,7 @@ impl<'a> Read for SnapshotStream<'a> {
 
         // read the current block and some additional ones
         let mut n_found = 0;
-        let mut path = self.path.clone();
-        path.push(self.curr_block.to_string());
+        let path = self.path.as_raw_path();
         for entry in try!(archive.entries()) {
             let mut entry = match entry {
                 Ok(e) => e,
@@ -137,9 +136,11 @@ impl<'a> Read for SnapshotStream<'a> {
                 }
             };
             {
-                let entry_path = match entry.path() {
-                    Ok(e) => e,
-                    Err(_) => {
+                let path_bytes = entry.path_bytes();
+                let raw_path = RawPath::new(path_bytes.as_ref());
+                let block_path = match parse_block_path(raw_path.as_bytes()) {
+                    Some(bp) => bp,
+                    None => {
                         // invalid path
                         continue;
                     }
@@ -148,16 +149,16 @@ impl<'a> Read for SnapshotStream<'a> {
                     break;
                 } else if n_found == 0 {
                     // still need to find the first entry
-                    if &entry_path < &path {
+                    if block_path.entry_path < path {
                         // the current path is still behind
                         continue;
-                    } else if &entry_path > &path {
+                    } else if block_path.entry_path > path {
                         // we haven't found the path
                         break;
                     }
                 }
                 // check if the path is still the one expected, otherwise break
-                if &entry_path != &path {
+                if block_path.entry_path != path {
                     break;
                 }
             }
@@ -183,8 +184,6 @@ impl<'a> Read for SnapshotStream<'a> {
 
             self.curr_block += 1;
             n_found += 1;
-            path.pop();
-            path.push(self.curr_block.to_string());
         }
 
         if n_found > 0 {
@@ -219,7 +218,7 @@ fn parse_block_path(path: &[u8]) -> Option<BlockPath> {
         }
     };
     Some(BlockPath {
-        entry_path: strip_trailing_slash(p),
+        entry_path: RawPath::new(strip_trailing_slash(p)),
         block_type: t,
     })
 }
@@ -246,6 +245,7 @@ fn strip_block_num(path: &[u8]) -> Option<(&[u8], usize)> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use rawpath::RawPath;
 
     #[test]
     fn path_parse_block() {
@@ -253,7 +253,7 @@ mod test {
 
         fn block_path(e: &[u8], t: BlockType) -> BlockPath {
             BlockPath {
-                entry_path: e,
+                entry_path: RawPath::new(e),
                 block_type: t,
             }
         }

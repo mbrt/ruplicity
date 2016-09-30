@@ -27,6 +27,10 @@ mod os {
         pub fn as_bytes(&self) -> &'a [u8] {
             self.0.as_os_str().as_bytes()
         }
+
+        pub fn as_raw_path_buf(&self) -> RawPathBuf {
+            RawPathBuf::from_bytes(self.0.as_os_str().as_bytes().to_owned())
+        }
     }
 
     impl<'a> Display for RawPath<'a> {
@@ -41,6 +45,7 @@ mod os {
             }
         }
     }
+
 
     impl RawPathBuf {
         #[allow(dead_code)]
@@ -67,17 +72,11 @@ mod os {
 
     impl Display for RawPathBuf {
         fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-            if self.as_bytes().is_empty() {
-                write!(f, ".")
-            } else {
-                match self.0.to_str() {
-                    Some(s) => write!(f, "{}", s),
-                    None => write!(f, "?"),
-                }
-            }
+            self.as_raw_path().fmt(f)
         }
     }
 }
+
 
 #[cfg(windows)]
 mod os {
@@ -194,10 +193,7 @@ mod os {
 
     impl Display for RawPathBuf {
         fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-            match *self {
-                RawPathBuf::Path(ref p) => write!(f, "{}", p.as_os_str().to_str().unwrap()),
-                RawPathBuf::Bytes(_) => write!(f, "?"),
-            }
+            self.as_raw_path().fmt(f)
         }
     }
 }
