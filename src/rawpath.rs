@@ -119,6 +119,13 @@ mod os {
                 RawPath::Bytes(b) => b,
             }
         }
+
+        pub fn as_raw_path_buf(&self) -> RawPathBuf {
+            match *self {
+                RawPath::Path(p) => RawPathBuf::Path(p.to_owned()),
+                RawPath::Bytes(b) => RawPathBuf::Bytes(b.to_owned()),
+            }
+        }
     }
 
     impl<'a> PartialOrd<RawPath<'a>> for RawPath<'a> {
