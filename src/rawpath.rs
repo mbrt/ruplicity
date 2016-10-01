@@ -8,7 +8,7 @@ mod os {
     use std::os::unix::prelude::*;
     use std::path::{Path, PathBuf};
 
-    #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
     pub struct RawPath<'a>(&'a Path);
 
     #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -85,7 +85,7 @@ mod os {
     use std::path::{Path, PathBuf};
     use std::str;
 
-    #[derive(Clone, Debug, Eq, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum RawPath<'a> {
         Path(&'a Path),
         Bytes(&'a [u8]),

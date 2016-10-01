@@ -245,7 +245,68 @@ fn strip_block_num(path: &[u8]) -> Option<(&[u8], usize)> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rawpath::RawPath;
+    use rawpath::{RawPath, RawPathBuf};
+    use read::block::BLOCK_SIZE;
+    use read::cache::BlockCache;
+
+    use std::fs::{self, File};
+    use std::io::{self, Read};
+    use std::path::{Path, PathBuf};
+    use tar::Archive;
+
+    struct TestResources<'a> {
+        snap_cache: &'a BlockCache,
+        sig_cache: &'a BlockCache,
+        vol_path: PathBuf,
+        vol_num: usize,
+    }
+
+    impl<'a> Resources for TestResources<'a> {
+        fn snapshot_cache(&self) -> &BlockCache {
+            &self.snap_cache
+        }
+
+        fn signature_cache(&self) -> &BlockCache {
+            &self.sig_cache
+        }
+
+        fn volume<'b>(&'b self, n: usize) -> io::Result<Option<Archive<Box<Read + 'b>>>> {
+            if n != self.vol_num {
+                Ok(None)
+            } else {
+                let file = try!(File::open(&self.vol_path));
+                Ok(Some(Archive::new(Box::new(file))))
+            }
+        }
+
+        fn volume_of_block(&self, n: usize) -> Option<usize> {
+            Some(self.vol_num)
+        }
+    }
+
+
+    #[test]
+    #[ignore]
+    fn snapshot() {
+        let vol_path = "tests/backups/single_vol/duplicity-full.20150617T182545Z.vol1.difftar.gz";
+        let snap_cache = BlockCache::new(30);
+        let sig_cache = BlockCache::new(30);
+        let res = TestResources {
+            snap_cache: &snap_cache,
+            sig_cache: &sig_cache,
+            vol_path: Path::new(vol_path).to_owned(),
+            vol_num: 1,
+        };
+        let mut stream = SnapshotStream::new(Box::new(res),
+                                             RawPath::new(b"executable").as_raw_path_buf(),
+                                             (0, 0),
+                                             0);
+        let mut buf = Box::new([0; BLOCK_SIZE]);
+        assert_eq!(stream.read(&mut buf[..]).unwrap(), 30);
+        assert_eq!(snap_cache.size(), 10);
+        assert_eq!(snap_cache.size(), 0);
+        assert!(stream.seek_to_block(1).is_err());
+    }
 
     #[test]
     fn path_parse_block() {
