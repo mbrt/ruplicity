@@ -8,8 +8,8 @@ use read::cache::BlockCache;
 use read::block::BLOCK_SIZE;
 use signatures::EntryId;
 
-const NUM_READAHEAD_SNAP: usize = 10;
-const NUM_READAHEAD_DIFF: usize = 6;
+const NUM_READAHEAD_SNAP: usize = 9;
+const NUM_READAHEAD_DIFF: usize = 5;
 
 
 pub trait BlockStream: Read {
@@ -80,7 +80,7 @@ impl<'a> SnapshotStream<'a> {
             entry_id: entry_id,
             max_block: max_block,
             curr_block: 0,
-            buf: Box::new([0; BLOCK_SIZE]),
+            buf: vec![0; BLOCK_SIZE].into_boxed_slice(),
         }
     }
 }
@@ -120,6 +120,7 @@ impl<'a> Read for SnapshotStream<'a> {
 
         // read the current block and some additional ones
         let mut n_found = 0;
+        let mut res_len = 0;
         let path = self.path.as_raw_path();
         for entry in try!(archive.entries()) {
             let mut entry = match entry {
@@ -157,10 +158,6 @@ impl<'a> Read for SnapshotStream<'a> {
                         break;
                     }
                 }
-                // check if the path is still the one expected, otherwise break
-                if block_path.entry_path != path {
-                    break;
-                }
             }
 
             // we need to read this entry
@@ -168,8 +165,9 @@ impl<'a> Read for SnapshotStream<'a> {
             if n_found == 0 {
                 // this entry is the one we are interested in
                 let len = try!(entry.read(&mut self.buf));
-                buf.copy_from_slice(&self.buf[..len]);
+                buf[..len].copy_from_slice(&self.buf[..len]);
                 cache.write(block_id, &self.buf[..len]);
+                res_len = len;
             } else if !cache.cached(block_id) {
                 // this is an entry to possibly cache
                 let len = match entry.read(&mut self.buf) {
@@ -187,7 +185,7 @@ impl<'a> Read for SnapshotStream<'a> {
         }
 
         if n_found > 0 {
-            Ok(BLOCK_SIZE)
+            Ok(res_len)
         } else {
             Err(not_found(format!("block #{} not found in volume #{}",
                                   self.curr_block,
@@ -252,6 +250,7 @@ mod test {
     use std::fs::{self, File};
     use std::io::{self, Read};
     use std::path::{Path, PathBuf};
+    use flate2::read::GzDecoder;
     use tar::Archive;
 
     struct TestResources<'a> {
@@ -275,7 +274,8 @@ mod test {
                 Ok(None)
             } else {
                 let file = try!(File::open(&self.vol_path));
-                Ok(Some(Archive::new(Box::new(file))))
+                let dec = try!(GzDecoder::new(file));
+                Ok(Some(Archive::new(Box::new(dec))))
             }
         }
 
@@ -284,9 +284,28 @@ mod test {
         }
     }
 
+    fn block_contents(vol_path: &Path, entry_path: &[u8]) -> Option<Vec<u8>> {
+        let file = File::open(vol_path).unwrap();
+        let dec = GzDecoder::new(file).unwrap();
+        let mut arch = Archive::new(dec);
+        let mut block_cont = Vec::new();
+        for e in arch.entries().unwrap() {
+            let mut entry = match e {
+                Ok(e) => e,
+                _ => {
+                    break;
+                }
+            };
+            if entry.path_bytes().as_ref() == entry_path {
+                entry.read_to_end(&mut block_cont).unwrap();
+                return Some(block_cont);
+            }
+        }
+        None
+    }
+
 
     #[test]
-    #[ignore]
     fn snapshot() {
         let vol_path = "tests/backups/single_vol/duplicity-full.20150617T182545Z.vol1.difftar.gz";
         let snap_cache = BlockCache::new(30);
@@ -301,11 +320,21 @@ mod test {
                                              RawPath::new(b"executable").as_raw_path_buf(),
                                              (0, 0),
                                              0);
-        let mut buf = Box::new([0; BLOCK_SIZE]);
-        assert_eq!(stream.read(&mut buf[..]).unwrap(), 30);
-        assert_eq!(snap_cache.size(), 10);
-        assert_eq!(snap_cache.size(), 0);
+        let mut buf = vec![0; BLOCK_SIZE].into_boxed_slice();
+        let blen = stream.read(&mut buf[..]).unwrap();
+        let block_cont = block_contents(Path::new(vol_path), b"snapshot/executable").unwrap();
+
+        // check block result
+        assert_eq!(blen, 30);
         assert!(stream.seek_to_block(1).is_err());
+        assert_eq!(&block_cont[..], &buf[..blen]);
+
+        // check cache
+        assert_eq!(snap_cache.size(), 10);
+        assert_eq!(sig_cache.size(), 0);
+        let blen2 = snap_cache.read(((0, 0), 0), &mut buf).unwrap();
+        assert_eq!(blen, blen2);
+        assert_eq!(&block_cont[..], &buf[..blen]);
     }
 
     #[test]

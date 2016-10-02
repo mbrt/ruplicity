@@ -154,7 +154,7 @@ impl<B: Backend> BlockProvider<B> {
     pub fn read(&self, entry: EntryId) -> Option<Entry<B>> {
         Some(Entry {
             provider: &self,
-            buf: Box::new([0; BLOCK_SIZE]),
+            buf: vec![0; BLOCK_SIZE].into_boxed_slice(),
             len: 0,
             pos: 0,
             id: (entry, 0),
