@@ -41,7 +41,7 @@ struct BlockPath<'a> {
     block_type: BlockType,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum BlockType {
     MultivolSignature(usize), // include the block number
     MultivolSnapshot(usize), // include the block number
@@ -157,6 +157,11 @@ impl<'a> Read for SnapshotStream<'a> {
                         // we haven't found the path
                         break;
                     }
+
+                    // check the block num
+                    if block_path.block_type.block_num().unwrap_or(0) != self.curr_block {
+                        continue;
+                    }
                 }
             }
 
@@ -164,13 +169,13 @@ impl<'a> Read for SnapshotStream<'a> {
             let block_id = (self.entry_id, self.curr_block);
             if n_found == 0 {
                 // this entry is the one we are interested in
-                let len = try!(entry.read(&mut self.buf));
+                let len = try!(read_all(&mut entry, &mut self.buf));
                 buf[..len].copy_from_slice(&self.buf[..len]);
                 cache.write(block_id, &self.buf[..len]);
                 res_len = len;
             } else if !cache.cached(block_id) {
-                // this is an entry to possibly cache
-                let len = match entry.read(&mut self.buf) {
+                // this is an entry we could possibly cache
+                let len = match read_all(&mut entry, &mut self.buf) {
                     Ok(l) => l,
                     Err(_) => {
                         // invalid entry; don't care, since we already have what we need
@@ -194,6 +199,29 @@ impl<'a> Read for SnapshotStream<'a> {
     }
 }
 
+
+impl BlockType {
+    fn block_num(&self) -> Option<usize> {
+        match *self {
+            BlockType::MultivolSignature(n) | BlockType::MultivolSnapshot(n) => Some(n),
+            _ => None,
+        }
+    }
+}
+
+fn read_all<R: Read>(r: &mut R, buf: &mut [u8]) -> io::Result<usize> {
+    let mut tot_len = 0;
+    loop {
+        let len = try!(r.read(&mut buf[tot_len..]));
+        if len == 0 {
+            break;
+        }
+        tot_len += len;
+    }
+    Ok(tot_len)
+}
+
+
 fn parse_block_path(path: &[u8]) -> Option<BlockPath> {
     // split the path in (first directory, the remaining path)
     // the first is the type, the remaining is the real path
@@ -205,11 +233,11 @@ fn parse_block_path(path: &[u8]) -> Option<BlockPath> {
         b"snapshot" => (raw_real, BlockType::Snapshot),
         b"multivol_signature" => {
             let (p, n) = try_opt!(strip_block_num(raw_real));
-            (p, BlockType::MultivolSignature(n))
+            (p, BlockType::MultivolSignature(n - 1))
         }
         b"multivol_snapshot" => {
             let (p, n) = try_opt!(strip_block_num(raw_real));
-            (p, BlockType::MultivolSnapshot(n))
+            (p, BlockType::MultivolSnapshot(n - 1))
         }
         _ => {
             return None;
@@ -338,6 +366,40 @@ mod test {
     }
 
     #[test]
+    #[ignore]
+    fn multivol_snapshot() {
+        let vol_path = "tests/backups/single_vol/duplicity-full.20150617T182545Z.vol1.difftar.gz";
+        let snap_cache = BlockCache::new(30);
+        let sig_cache = BlockCache::new(30);
+        let res = TestResources {
+            snap_cache: &snap_cache,
+            sig_cache: &sig_cache,
+            vol_path: Path::new(vol_path).to_owned(),
+            vol_num: 1,
+        };
+        let mut stream = SnapshotStream::new(Box::new(res),
+                                             RawPath::new(b"largefile").as_raw_path_buf(),
+                                             (0, 0),
+                                             53); // the last block is 54
+        let mut buf = vec![0; BLOCK_SIZE].into_boxed_slice();
+        assert!(stream.seek_to_block(4).is_ok());
+        let blen = stream.read(&mut buf[..]).unwrap();
+        let block_cont = block_contents(Path::new(vol_path), b"multivol_snapshot/largefile/5").unwrap();
+
+        // check block result
+        assert_eq!(blen, BLOCK_SIZE);
+        assert_eq!(&block_cont[..], &buf[..]);
+
+        // check cache
+        assert_eq!(snap_cache.size(), 10);
+        assert_eq!(sig_cache.size(), 0);
+        assert!(snap_cache.cached(((0, 0), 4)));
+        let blen2 = snap_cache.read(((0, 0), 4), &mut buf).unwrap();
+        assert_eq!(blen, blen2);
+        assert_eq!(&block_cont[..], &buf[..blen]);
+    }
+
+    #[test]
     fn path_parse_block() {
         use super::{BlockPath, BlockType, parse_block_path};
 
@@ -355,9 +417,9 @@ mod test {
         assert_eq!(parse_block_path(b"snapshot/foo/"),
                    Some(block_path(b"foo", BlockType::Snapshot)));
         assert_eq!(parse_block_path(b"multivol_signature/foo/5"),
-                   Some(block_path(b"foo", BlockType::MultivolSignature(5))));
+                   Some(block_path(b"foo", BlockType::MultivolSignature(4))));
         assert_eq!(parse_block_path(b"multivol_snapshot/foo/bar/5"),
-                   Some(block_path(b"foo/bar", BlockType::MultivolSnapshot(5))));
+                   Some(block_path(b"foo/bar", BlockType::MultivolSnapshot(4))));
         assert_eq!(parse_block_path(b"multivol_snapshot/foo/bar/b"), None);
         assert_eq!(parse_block_path(b"bla"), None);
         assert_eq!(parse_block_path(b"deleted/foo/5"),

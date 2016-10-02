@@ -84,7 +84,7 @@ impl BlockCache {
 
 impl Block {
     fn new() -> Self {
-        Block(Box::new([0u8; BLOCK_SIZE]), 0)
+        Block(vec![0u8; BLOCK_SIZE].into_boxed_slice(), 0)
     }
 
     fn as_slice(&self) -> &[u8] {
