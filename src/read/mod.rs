@@ -44,21 +44,6 @@ pub struct BlockProvider<B> {
     scache: BlockCache,
 }
 
-/// wip
-#[derive(Copy, Clone, Debug)]
-pub enum StorageType {
-    /// wip
-    Deleted,
-    /// wip
-    MultivolSignature,
-    /// wip
-    MultivolSnapshot,
-    /// wip
-    Signature,
-    /// wip
-    Snapshot,
-}
-
 
 // Provides resources only for a specific entry
 struct EntryResourceProxy<'a, B: 'a> {
@@ -144,10 +129,6 @@ impl<B> BlockProvider<B> {
             scache: BlockCache::new((cache_size as f64 * 0.7) as usize),
         }
     }
-
-    pub fn signature_chain(&self) -> &SigChain {
-        &self.sig
-    }
 }
 
 impl<B: Backend> BlockProvider<B> {
@@ -187,7 +168,6 @@ impl<B: Backend> BlockProvider<B> {
 
     fn manifest_of_entry(&self, entryid: EntryId) -> Option<&Manifest> {
         let snapnum = entryid.1 as usize;
-        let entry = self.sig.entry(entryid);
         self.manifests.get(snapnum)
     }
 

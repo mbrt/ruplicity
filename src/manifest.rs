@@ -157,7 +157,6 @@ impl Manifest {
     /// Returns the index of the first volume containing the given path, if present.
     ///
     /// The given path is represented with a byte array, because:
-    ///
     /// * duplicity supports non-UTF8 paths;
     /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn first_volume_of_path(&self, path: &[u8]) -> Option<usize> {
@@ -186,7 +185,6 @@ impl Manifest {
     /// Returns the index of the last volume containing the given path, if present.
     ///
     /// The given path is represented with a byte array, because:
-    ///
     /// * duplicity supports non-UTF8 paths;
     /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn last_volume_of_path(&self, path: &[u8]) -> Option<usize> {
@@ -213,9 +211,55 @@ impl Manifest {
             .ok()
     }
 
-    /// wip
+    /// Returns the index of the volume containing the given path block, if present.
+    ///
+    /// The given path is represented with a byte array, because:
+    /// * duplicity supports non-UTF8 paths;
+    /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn volume_of_block(&self, path: &[u8], block: usize) -> Option<usize> {
-        unimplemented!()
+        self.volumes
+            .binary_search_by(|v| {
+                match path.cmp(v.start_path_bytes()) {
+                    Ordering::Less => Ordering::Greater,
+                    Ordering::Greater => {
+                        match path.cmp(v.end_path_bytes()) {
+                            Ordering::Less => Ordering::Equal,
+                            Ordering::Greater => Ordering::Less,
+                            Ordering::Equal => {
+                                match v.end_path.block {
+                                    Some(n) if n < block => Ordering::Greater,
+                                    _ => Ordering::Equal,
+                                }
+                            }
+                        }
+                    }
+                    Ordering::Equal => {
+                        match v.start_path.block {
+                            None => Ordering::Equal,
+                            Some(first) => {
+                                match block.cmp(&first) {
+                                    Ordering::Equal => Ordering::Equal,
+                                    Ordering::Less => Ordering::Greater,
+                                    Ordering::Greater => {
+                                        match path.cmp(v.end_path_bytes()) {
+                                            Ordering::Less => Ordering::Equal,
+                                            Ordering::Equal => {
+                                                match v.end_path.block {
+                                                    Some(last) if last < block => Ordering::Greater,
+                                                    _ => Ordering::Equal,
+                                                }
+                                            }
+                                            Ordering::Greater => unreachable!(),
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .map(|idx| idx + 1)
+            .ok()
     }
 }
 

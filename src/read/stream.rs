@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::io::{self, Read};
 use std::str::{self, FromStr};
 use tar::Archive;
@@ -150,17 +151,21 @@ impl<'a> Read for SnapshotStream<'a> {
                     break;
                 } else if n_found == 0 {
                     // still need to find the first entry
-                    if block_path.entry_path < path {
-                        // the current path is still behind
-                        continue;
-                    } else if block_path.entry_path > path {
-                        // we haven't found the path
-                        break;
-                    }
-
-                    // check the block num
-                    if block_path.block_type.block_num().unwrap_or(0) != self.curr_block {
-                        continue;
+                    match block_path.entry_path.cmp(&path) {
+                        Ordering::Less => {
+                            // the current path is still behind
+                            continue;
+                        }
+                        Ordering::Greater => {
+                            // we haven't found the path
+                            break;
+                        }
+                        Ordering::Equal => {
+                            // check the block num
+                            if block_path.block_type.block_num().unwrap_or(0) != self.curr_block {
+                                continue;
+                            }
+                        }
                     }
                 }
             }
@@ -203,7 +208,8 @@ impl<'a> Read for SnapshotStream<'a> {
 impl BlockType {
     fn block_num(&self) -> Option<usize> {
         match *self {
-            BlockType::MultivolSignature(n) | BlockType::MultivolSnapshot(n) => Some(n),
+            BlockType::MultivolSignature(n) |
+            BlockType::MultivolSnapshot(n) => Some(n),
             _ => None,
         }
     }
@@ -383,7 +389,8 @@ mod test {
         let mut buf = vec![0; BLOCK_SIZE].into_boxed_slice();
         assert!(stream.seek_to_block(4).is_ok());
         let blen = stream.read(&mut buf[..]).unwrap();
-        let block_cont = block_contents(Path::new(vol_path), b"multivol_snapshot/largefile/5").unwrap();
+        let block_cont = block_contents(Path::new(vol_path), b"multivol_snapshot/largefile/5")
+            .unwrap();
 
         // check block result
         assert_eq!(blen, BLOCK_SIZE);
