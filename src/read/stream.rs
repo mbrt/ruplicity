@@ -366,7 +366,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn multivol_snapshot() {
         let vol_path = "tests/backups/single_vol/duplicity-full.20150617T182545Z.vol1.difftar.gz";
         let snap_cache = BlockCache::new(30);

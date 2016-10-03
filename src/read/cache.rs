@@ -18,7 +18,9 @@ pub struct BlockCache {
     max_blocks: usize,
 }
 
-struct Block(Box<[u8]>, u16);
+// block size can be 2^16
+// this means we need more than 16 bits to represent the length of the buffer, in case it is full
+struct Block(Box<[u8]>, u32);
 
 type FnvHashBuilder = BuildHasherDefault<FnvHasher>;
 
@@ -98,7 +100,7 @@ impl Block {
     fn write_max_block(&mut self, buffer: &[u8]) -> usize {
         let len = cmp::min(buffer.len(), BLOCK_SIZE);
         self.0[..len].copy_from_slice(&buffer[..len]);
-        self.1 = len as u16;
+        self.1 = len as u32;
         len
     }
 }
