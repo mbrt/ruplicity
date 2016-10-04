@@ -67,7 +67,7 @@ pub enum ParseError {
 }
 
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct PathBlock {
     path: RawPathBuf,
     block: Option<usize>,
@@ -617,6 +617,8 @@ fn nibble(b: u8) -> u8 {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use std::cmp::Ordering;
     use std::fs::File;
     use std::io::BufReader;
     use std::path::Path;
@@ -624,6 +626,7 @@ mod test {
     use backend::Backend;
     use backend::local::LocalBackend;
     use collections::Collections;
+    use rawpath::RawPathBuf;
 
 
     fn full1_manifest() -> Result<Manifest> {
@@ -720,5 +723,24 @@ mod test {
             let manifests = ManifestChain::from_backup_chain(&backend, &chain).unwrap();
             assert!(manifests.iter().count() > 0);
         }
+    }
+
+    #[test]
+    fn path_block_ord() {
+        use super::PathBlock;
+
+        fn make_pb(p: &[u8], b: Option<usize>) -> PathBlock {
+            PathBlock {
+                path: RawPathBuf::from_bytes(p.to_owned()),
+                block: b,
+            }
+        }
+
+        assert_eq!(make_pb(b"foo", Some(1)).cmp(&make_pb(b"bar", None)), Ordering::Greater);
+        assert_eq!(make_pb(b"foo", Some(1)).cmp(&make_pb(b"foo", None)), Ordering::Greater);
+        assert_eq!(make_pb(b"foo", None).cmp(&make_pb(b"foo", None)), Ordering::Equal);
+        assert_eq!(make_pb(b"foo", Some(1)).cmp(&make_pb(b"foo", Some(1))), Ordering::Equal);
+        assert_eq!(make_pb(b"foo", Some(1)).cmp(&make_pb(b"foo", Some(2))), Ordering::Less);
+        assert_eq!(make_pb(b"bar", Some(1)).cmp(&make_pb(b"foo", None)), Ordering::Less);
     }
 }
