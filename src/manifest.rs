@@ -172,7 +172,7 @@ impl Manifest {
                     }
                     Ordering::Equal => {
                         match v.start_path.block {
-                            Some(n) if n > 0 => Ordering::Greater,
+                            Some(n) if n > 1 => Ordering::Greater,
                             _ => Ordering::Equal,
                         }
                     }
@@ -188,7 +188,7 @@ impl Manifest {
     /// * duplicity supports non-UTF8 paths;
     /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn last_volume_of_path(&self, path: &[u8]) -> Option<usize> {
-        self.volumes
+        let opt_vol = self.volumes
             .binary_search_by(|v| {
                 match path.cmp(v.end_path_bytes()) {
                     Ordering::Greater => Ordering::Less,
@@ -200,15 +200,38 @@ impl Manifest {
                     }
                     Ordering::Equal => {
                         if v.end_path.block.is_some() {
+                            // we are not sure about this
+                            // if the volume ends with the last block of the desired path it's
+                            // actually wrong, but we'll fix it later
                             Ordering::Less
                         } else {
                             Ordering::Equal
                         }
                     }
                 }
-            })
-            .map(|idx| idx + 1)
-            .ok()
+            });
+        match opt_vol {
+            Ok(idx) => Some(idx + 1),
+            Err(idx) => {
+                // idx is the index where the path should be
+                // in the case the volume ends with the last block of the desired path, it could be
+                // we don't see it
+                // so, just check if the previous block is in this case
+                if idx > 0 {
+                    self.volumes.get(idx - 1).and_then(|v| {
+                        if v.end_path_bytes() == path {
+                            // (idx - 1) matches, but we have to return the next index
+                            // like in the Ok case above
+                            Some(idx - 1 + 1)
+                        } else {
+                            None
+                        }
+                    })
+                } else {
+                    None
+                }
+            }
+        }
     }
 
     /// Returns the index of the volume containing the given path block, if present.
@@ -217,41 +240,25 @@ impl Manifest {
     /// * duplicity supports non-UTF8 paths;
     /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn volume_of_block(&self, path: &[u8], block: usize) -> Option<usize> {
+        let target = (path, Some(block));
         self.volumes
             .binary_search_by(|v| {
-                match path.cmp(v.start_path_bytes()) {
-                    Ordering::Less => Ordering::Greater,
-                    Ordering::Greater => {
-                        match path.cmp(v.end_path_bytes()) {
-                            Ordering::Less => Ordering::Equal,
-                            Ordering::Greater => Ordering::Less,
-                            Ordering::Equal => {
-                                match v.end_path.block {
-                                    Some(n) if n < block => Ordering::Greater,
-                                    _ => Ordering::Equal,
-                                }
-                            }
-                        }
-                    }
-                    Ordering::Equal => {
-                        match v.start_path.block {
-                            None => Ordering::Equal,
-                            Some(first) => {
-                                match block.cmp(&first) {
-                                    Ordering::Equal => Ordering::Equal,
-                                    Ordering::Less => Ordering::Greater,
-                                    Ordering::Greater => {
-                                        match path.cmp(v.end_path_bytes()) {
-                                            Ordering::Less => Ordering::Equal,
-                                            Ordering::Equal => {
-                                                match v.end_path.block {
-                                                    Some(last) if last < block => Ordering::Greater,
-                                                    _ => Ordering::Equal,
-                                                }
-                                            }
-                                            Ordering::Greater => unreachable!(),
-                                        }
-                                    }
+                match (v.start_path_bytes(), v.start_path.block).cmp(&target) {
+                    Ordering::Greater => Ordering::Greater,
+                    Ordering::Equal => Ordering::Equal,
+                    Ordering::Less => {
+                        match target.cmp(&(v.end_path_bytes(), v.end_path.block)) {
+                            Ordering::Equal | Ordering::Less => Ordering::Equal,
+                            Ordering::Greater => {
+                                // compare will return 'Greater' in this case:
+                                // * volume ends in ('foo', None)
+                                // * target is ('foo', 1)
+                                // but in this case they are equal
+                                if block == 1 && v.end_path.block.is_none() &&
+                                   v.end_path_bytes() == path {
+                                    Ordering::Equal
+                                } else {
+                                    Ordering::Greater
                                 }
                             }
                         }
