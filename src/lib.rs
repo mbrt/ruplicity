@@ -46,8 +46,6 @@ extern crate regex;
 extern crate tabwriter;
 extern crate tar;
 extern crate time;
-#[macro_use]
-extern crate try_opt;
 
 mod macros;
 mod rawpath;
