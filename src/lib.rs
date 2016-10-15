@@ -82,27 +82,27 @@ pub struct Backup<B> {
 }
 
 /// Represents all the snapshots in a backup.
-pub struct Snapshots<'a> {
-    backup: &'a ResourceCache,
+pub struct Snapshots<'a, B: 'a> {
+    backup: &'a ResourceCache<Backend = B>,
 }
 
 /// An iterator over the snapshots in a backup.
-pub struct SnapshotsIter<'a> {
+pub struct SnapshotsIter<'a, B: 'a> {
     set_iter: CollectionsIter<'a>,
     chain_id: usize,
     sig_id: usize,
     man_id: usize,
-    backup: &'a ResourceCache,
+    backup: &'a ResourceCache<Backend = B>,
 }
 
 /// A snapshot in a backup.
-pub struct Snapshot<'a> {
+pub struct Snapshot<'a, B: 'a> {
     set: &'a BackupSet,
     // the number of the parent backup chain, starting from zero
     chain_id: usize,
     sig_id: usize,
     man_id: usize,
-    backup: &'a ResourceCache,
+    backup: &'a ResourceCache<Backend = B>,
 }
 
 /// Contains the files present in a certain backup snapshot.
@@ -126,12 +126,15 @@ struct CollectionsIter<'a> {
 /// generic parameters. This trait is used as an interface between `Backup` and its inner
 /// components.
 trait ResourceCache {
+    type Backend: Backend;
+
     fn _collections(&self) -> &Collections;
     fn _signature_chain(&self, chain_id: usize) -> io::Result<Ref<Option<Chain>>>;
     fn _manifest(&self,
                  chain_id: usize,
                  manifest_path: &str)
                  -> Result<Ref<Option<Manifest>>, manifest::ParseError>;
+    fn _backend(&self) -> &Self::Backend;
 }
 
 
@@ -167,7 +170,7 @@ impl<B: Backend> Backup<B> {
     }
 
     /// Constructs an iterator over the snapshots currently present in this backup.
-    pub fn snapshots(&self) -> io::Result<Snapshots> {
+    pub fn snapshots(&self) -> io::Result<Snapshots<B>> {
         // in future, when we will add lazy collections,
         // this could fail, so we add a Result in advance
         Ok(Snapshots { backup: self })
@@ -180,16 +183,16 @@ impl<B: Backend> Backup<B> {
 }
 
 
-impl<'a> Snapshots<'a> {
+impl<'a, B: Backend + 'a> Snapshots<'a, B> {
     /// Returns the low level representation of the snapshots.
     pub fn as_collections(&self) -> &'a Collections {
         self.backup._collections()
     }
 }
 
-impl<'a> IntoIterator for Snapshots<'a> {
-    type Item = Snapshot<'a>;
-    type IntoIter = SnapshotsIter<'a>;
+impl<'a, B: Backend + 'a> IntoIterator for Snapshots<'a, B> {
+    type Item = Snapshot<'a, B>;
+    type IntoIter = SnapshotsIter<'a, B>;
 
     fn into_iter(self) -> Self::IntoIter {
         let set_iter = CollectionsIter {
@@ -209,8 +212,8 @@ impl<'a> IntoIterator for Snapshots<'a> {
 }
 
 
-impl<'a> Iterator for SnapshotsIter<'a> {
-    type Item = Snapshot<'a>;
+impl<'a, B: Backend + 'a> Iterator for SnapshotsIter<'a, B> {
+    type Item = Snapshot<'a, B>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // first test if we have a valid iterator to an incset
@@ -231,27 +234,24 @@ impl<'a> Iterator for SnapshotsIter<'a> {
         // the current incset is exausted or not present,
         // we need to advance the chain and return the next full set if present,
         // otherwise the job is finished
-        match self.set_iter.chain_iter.next() {
-            Some(chain) => {
-                self.chain_id += 1;
-                self.sig_id = 0;
-                self.man_id += 1;
-                self.set_iter.incset_iter = Some(chain.inc_sets());
-                Some(Snapshot {
-                    set: chain.full_set(),
-                    chain_id: self.chain_id - 1,
-                    sig_id: self.sig_id,
-                    man_id: self.man_id - 1,
-                    backup: self.backup,
-                })
+        self.set_iter.chain_iter.next().map(|chain| {
+            self.chain_id += 1;
+            self.sig_id = 0;
+            self.man_id += 1;
+            self.set_iter.incset_iter = Some(chain.inc_sets());
+            Snapshot {
+                set: chain.full_set(),
+                chain_id: self.chain_id - 1,
+                sig_id: self.sig_id,
+                man_id: self.man_id - 1,
+                backup: self.backup,
             }
-            None => None,
-        }
+        })
     }
 }
 
 
-impl<'a> Snapshot<'a> {
+impl<'a, B: Backend + 'a> Snapshot<'a, B> {
     /// Returns the time in which the snapshot has been taken.
     pub fn time(&self) -> Timespec {
         self.set.end_time()
@@ -334,6 +334,8 @@ impl<'a> Deref for ManifestRef<'a> {
 
 
 impl<B: Backend> ResourceCache for Backup<B> {
+    type Backend = B;
+
     fn _collections(&self) -> &Collections {
         &self.collections
     }
@@ -376,6 +378,10 @@ impl<B: Backend> ResourceCache for Backup<B> {
         // need to close previous scope to borrow again
         // return the cached value
         Ok(self.manifests[id].borrow())
+    }
+
+    fn _backend(&self) -> &B {
+        &self.backend
     }
 }
 

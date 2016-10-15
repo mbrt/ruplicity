@@ -277,11 +277,11 @@ fn strip_block_num(path: &[u8]) -> Option<(&[u8], usize)> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rawpath::{RawPath, RawPathBuf};
+    use rawpath::RawPath;
     use read::block::BLOCK_SIZE;
     use read::cache::BlockCache;
 
-    use std::fs::{self, File};
+    use std::fs::File;
     use std::io::{self, Read};
     use std::path::{Path, PathBuf};
     use flate2::read::GzDecoder;
@@ -313,7 +313,7 @@ mod test {
             }
         }
 
-        fn volume_of_block(&self, n: usize) -> Option<usize> {
+        fn volume_of_block(&self, _: usize) -> Option<usize> {
             Some(self.vol_num)
         }
     }
