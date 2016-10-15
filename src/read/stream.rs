@@ -21,7 +21,7 @@ pub trait Resources {
     fn snapshot_cache(&self) -> &BlockCache;
     fn signature_cache(&self) -> &BlockCache;
     fn volume<'a>(&'a self, n: usize) -> io::Result<Option<Archive<Box<Read + 'a>>>>;
-    fn volume_of_block(&self, n: usize) -> Option<usize>;
+    fn volume_of_block(&self, n: usize) -> io::Result<Option<usize>>;
 }
 
 pub struct NullStream;
@@ -103,9 +103,9 @@ impl<'a> Read for SnapshotStream<'a> {
         if self.curr_block > self.max_block {
             return Ok(0); // eof
         }
-        let vol_num = match self.res.volume_of_block(self.curr_block) {
+        let vol_num = match try!(self.res.volume_of_block(self.curr_block)) {
             Some(n) => n,
-            None => {
+            _ => {
                 return Err(not_found(format!("volume not found for block #{}", self.curr_block)));
             }
         };

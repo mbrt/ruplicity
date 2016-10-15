@@ -295,7 +295,7 @@ impl<'a, B: Backend + 'a> Snapshot<'a, B> {
                 sig_id: self.sig_id,
             })
         } else {
-            Err(not_found("The signature chain is incomplete"))
+            Err(not_found("the signature chain is incomplete"))
         }
     }
 
