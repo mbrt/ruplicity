@@ -313,8 +313,8 @@ mod test {
             }
         }
 
-        fn volume_of_block(&self, _: usize) -> Option<usize> {
-            Some(self.vol_num)
+        fn volume_of_block(&self, _: usize) -> io::Result<Option<usize>> {
+            Ok(Some(self.vol_num))
         }
     }
 

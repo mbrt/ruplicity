@@ -15,10 +15,9 @@ use tar::Archive;
 
 use ::not_found;
 use ::other;
-use ::ResourceCache;
 use backend::Backend;
 use collections::BackupChain;
-use manifest::{Manifest, ManifestChain};
+use manifest::Manifest;
 use rawpath::RawPath;
 use read::block::{BLOCK_SIZE, BlockId};
 use read::cache::BlockCache;
@@ -26,8 +25,21 @@ use read::stream::BlockStream;
 use signatures::{Chain as SigChain, DiffType, EntryId};
 
 
-pub struct Entry<'a, B: 'a> {
-    res: ResourceProxy<'a, B>,
+pub trait Resources {
+    type Backend: Backend;
+    type BackendRef: AsRef<Self::Backend>;
+    type BackupChainRef: AsRef<BackupChain>;
+    type SignatureRef: AsRef<SigChain>;
+    type ManifestRef: AsRef<Manifest>;
+
+    fn backend(&self) -> Self::BackendRef;
+    fn backup_chain(&self) -> io::Result<Option<Self::BackupChainRef>>;
+    fn signature_chain(&self) -> io::Result<Option<Self::SignatureRef>>;
+    fn manifest(&self, id: usize) -> io::Result<Option<Self::ManifestRef>>;
+}
+
+pub struct Entry<'a, R: 'a> {
+    provider: &'a BlockProvider<R>,
     buf: Box<[u8]>,
     len: usize,
     pos: usize,
@@ -35,30 +47,23 @@ pub struct Entry<'a, B: 'a> {
     stream: Option<Box<BlockStream + 'a>>,
 }
 
-pub struct BlockProvider {
-    chain_id: usize,
+pub struct BlockProvider<R> {
+    res: R,
     dcache: BlockCache,
     scache: BlockCache,
 }
 
 
-// sticks together block provider and top-level resources
-struct ResourceProxy<'a, B: 'a> {
-    provider: &'a BlockProvider,
-    res: &'a ResourceCache<Backend = B>,
-}
-
 // Provides resources only for a specific entry
-struct EntryResourceProxy<'a, B: 'a> {
-    provider: &'a BlockProvider,
-    res: &'a ResourceCache<Backend = B>,
+struct EntryResourceProxy<'a, R: 'a> {
+    provider: &'a BlockProvider<R>,
     entry: EntryId,
 }
 
 
-impl<'a, B: Backend> Entry<'a, B> {
+impl<'a, R: Resources> Entry<'a, R> {
     fn fill_block(&mut self) -> io::Result<()> {
-        let optlen = self.res.provider.read_cached_block(self.id, &mut self.buf);
+        let optlen = self.provider.read_cached_block(self.id, &mut self.buf);
         if let Some(len) = optlen {
             // the block is in cache, return it
             self.len = len;
@@ -67,7 +72,7 @@ impl<'a, B: Backend> Entry<'a, B> {
         // otherwise we need to use our block stream
         if self.stream.is_none() {
             // not present, create it now
-            self.stream = Some(try!(self.res.block_stream(self.id.0)));
+            self.stream = Some(try!(self.provider.block_stream(self.id.0)));
         }
         let mut stream = self.stream.as_mut().unwrap();
         try!(stream.seek_to_block(self.id.1));
@@ -77,7 +82,7 @@ impl<'a, B: Backend> Entry<'a, B> {
     }
 }
 
-impl<'a, B: Backend> Read for Entry<'a, B> {
+impl<'a, R: Resources> Read for Entry<'a, R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.len > 0 {
             // we have buffered stuff... just copy as much as possible
@@ -101,7 +106,7 @@ impl<'a, B: Backend> Read for Entry<'a, B> {
     }
 }
 
-impl<'a, B: Backend> BufRead for Entry<'a, B> {
+impl<'a, R: Resources> BufRead for Entry<'a, R> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         if self.len == 0 {
             try!(self.fill_block());
@@ -117,39 +122,20 @@ impl<'a, B: Backend> BufRead for Entry<'a, B> {
 }
 
 
-impl BlockProvider {
-    pub fn new(chain_id: usize, cache_size: usize) -> Self {
+impl<R: Resources> BlockProvider<R> {
+    pub fn new(res: R, cache_size: usize) -> Self {
         BlockProvider {
-            chain_id: chain_id,
+            res: res,
             dcache: BlockCache::new((cache_size as f64 * 0.3) as usize),
             scache: BlockCache::new((cache_size as f64 * 0.7) as usize),
         }
     }
 }
 
-impl BlockProvider {
-    pub fn read<'a, B>(&'a self,
-                       manifests: &'a ManifestChain,
-                       bchain: &'a BackupChain,
-                       sigchain: &'a SigChain,
-                       backend: &'a B)
-                       -> Option<Entry<'a, B>>
-        where B: Backend + 'a
-    {
-        unimplemented!()
-    }
-
-    fn read_with_rescache<'a, B>(&'a self,
-                                 res: &'a ResourceCache<Backend = B>,
-                                 entry: EntryId)
-                                 -> Option<Entry<'a, B>>
-        where B: Backend + 'a
-    {
+impl<R: Resources> BlockProvider<R> {
+    pub fn read(&self, entry: EntryId) -> Option<Entry<R>> {
         Some(Entry {
-            res: ResourceProxy {
-                provider: &self,
-                res: res,
-            },
+            provider: &self,
             buf: vec![0; BLOCK_SIZE].into_boxed_slice(),
             len: 0,
             pos: 0,
@@ -161,23 +147,18 @@ impl BlockProvider {
     fn read_cached_block(&self, id: BlockId, buf: &mut [u8]) -> Option<usize> {
         self.scache.read(id, buf)
     }
-}
 
-
-impl<'a, B: Backend + 'a> ResourceProxy<'a, B> {
-    fn block_stream(&self, entry: EntryId) -> io::Result<Box<BlockStream + 'a>> {
-        let chain_id = self.provider.chain_id;
-        let sig_chain = try!(self.res._signature_chain(chain_id));
+    fn block_stream<'a>(&'a self, entry: EntryId) -> io::Result<Box<BlockStream + 'a>> {
+        let sig_chain = try!(self.res.signature_chain());
         let sig_entry = match sig_chain.as_ref() {
-            Some(sig) => sig.entry(entry),
+            Some(sig) => sig.as_ref().entry(entry),
             None => {
-                return Err(not_found(format!("missing signature chain #{}", chain_id)));
+                return Err(not_found("missing signature chain"));
             }
         };
         let path = sig_entry.path_bytes();
         let res = Box::new(EntryResourceProxy {
-            provider: self.provider,
-            res: self.res,
+            provider: &self,
             entry: entry,
         });
         match sig_entry.diff_type() {
@@ -194,7 +175,7 @@ impl<'a, B: Backend + 'a> ResourceProxy<'a, B> {
 }
 
 
-impl<'a, B: Backend + 'a> stream::Resources for EntryResourceProxy<'a, B> {
+impl<'a, R: Resources + 'a> stream::Resources for EntryResourceProxy<'a, R> {
     fn snapshot_cache(&self) -> &BlockCache {
         &self.provider.scache
     }
@@ -204,15 +185,14 @@ impl<'a, B: Backend + 'a> stream::Resources for EntryResourceProxy<'a, B> {
     }
 
     fn volume<'b>(&'b self, volnum: usize) -> io::Result<Option<Archive<Box<Read + 'b>>>> {
-        let chain_id = self.provider.chain_id;
-        let back = match self.res._collections().backup_chains().nth(chain_id) {
+        let back = match try!(self.provider.res.backup_chain()) {
             Some(b) => b,
             None => {
-                return Err(not_found(format!("backup chain #{} not found", chain_id)));
+                return Err(not_found("backup chain not found"));
             }
         };
         let snapnum = self.entry.1 as usize;
-        let backup_set = match back.nth_set(snapnum) {
+        let backup_set = match back.as_ref().nth_set(snapnum) {
             Some(s) => s,
             None => {
                 return Err(not_found(format!("backup set #{} not found", snapnum)));
@@ -228,7 +208,7 @@ impl<'a, B: Backend + 'a> stream::Resources for EntryResourceProxy<'a, B> {
             return Err(other("encrypted backups are not supported"));
         }
 
-        let rawfile = try!(self.res._backend().open_file(vol_path));
+        let rawfile = try!(self.provider.res.backend().as_ref().open_file(vol_path));
         let result: Box<Read + 'a> = if backup_set.is_compressed() {
             Box::new(try!(GzDecoder::new(rawfile)))
         } else {
@@ -240,32 +220,19 @@ impl<'a, B: Backend + 'a> stream::Resources for EntryResourceProxy<'a, B> {
 
     fn volume_of_block(&self, n: usize) -> io::Result<Option<usize>> {
         let snapnum = self.entry.1 as usize;
-        let chain_id = self.provider.chain_id;
-        let sig_chain = try!(self.res._signature_chain(chain_id));
+        let sig_chain = try!(self.provider.res.signature_chain());
         let entry = match sig_chain.as_ref() {
-            Some(sig) => sig.entry(self.entry),
+            Some(sig) => sig.as_ref().entry(self.entry),
             None => {
-                return Err(not_found(format!("missing signature chain #{}", chain_id)));
+                return Err(not_found("missing signature chain"));
             }
         };
-        let back = match self.res._collections().backup_chains().nth(chain_id) {
-            Some(b) => b,
-            None => {
-                return Err(not_found(format!("backup chain #{} not found", chain_id)));
-            }
-        };
-        let backup_set = match back.nth_set(snapnum) {
-            Some(s) => s,
-            None => {
-                return Err(not_found(format!("backup set #{} not found", snapnum)));
-            }
-        };
-        let manifest = match self.res._manifest(snapnum, backup_set.manifest_path()) {
+        let manifest = match self.provider.res.manifest(snapnum) {
             Ok(m) => m,
             Err(e) => {
                 return Err(other(e));
             }
         };
-        Ok(manifest.as_ref().and_then(|m| m.volume_of_block(entry.path_bytes(), n)))
+        Ok(manifest.as_ref().and_then(|m| m.as_ref().volume_of_block(entry.path_bytes(), n)))
     }
 }
