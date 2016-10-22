@@ -161,6 +161,12 @@ impl<R: Resources> BlockProvider<R> {
             provider: &self,
             entry: entry,
         });
+        if let Some((_, max)) = sig_entry.size_hint() {
+            if max == 0 {
+                // optimize the empty file
+                return Ok(Box::new(stream::NullStream));
+            }
+        }
         match sig_entry.diff_type() {
             DiffType::Snapshot => {
                 Ok(Box::new(stream::SnapshotStream::new(res,
