@@ -10,6 +10,7 @@ mod volume;
 use std::cmp;
 use std::io::{self, BufRead, Read};
 use std::path::Path;
+use std::sync::Arc;
 use flate2::read::GzDecoder;
 use tar::Archive;
 
@@ -17,7 +18,7 @@ use ::not_found;
 use ::other;
 use backend::Backend;
 use collections::BackupChain;
-use manifest::Manifest;
+use manifest::ManifestChain;
 use rawpath::RawPath;
 use read::block::{BLOCK_SIZE, BlockId};
 use read::cache::BlockCache;
@@ -25,21 +26,8 @@ use read::stream::BlockStream;
 use signatures::{Chain as SigChain, DiffType, EntryId};
 
 
-pub trait Resources {
-    type Backend: Backend;
-    type BackendRef: AsRef<Self::Backend>;
-    type BackupChainRef: AsRef<BackupChain>;
-    type SignatureRef: AsRef<SigChain>;
-    type ManifestRef: AsRef<Manifest>;
-
-    fn backend(&self) -> Self::BackendRef;
-    fn backup_chain(&self) -> io::Result<Option<Self::BackupChainRef>>;
-    fn signature_chain(&self) -> io::Result<Option<Self::SignatureRef>>;
-    fn manifest(&self, id: usize) -> io::Result<Option<Self::ManifestRef>>;
-}
-
-pub struct Entry<'a, R: 'a> {
-    provider: &'a BlockProvider<R>,
+pub struct Entry<'a, B: 'a> {
+    provider: &'a BlockProvider<B>,
     buf: Box<[u8]>,
     len: usize,
     pos: usize,
@@ -47,21 +35,24 @@ pub struct Entry<'a, R: 'a> {
     stream: Option<Box<BlockStream + 'a>>,
 }
 
-pub struct BlockProvider<R> {
-    res: R,
+pub struct BlockProvider<B> {
+    manifests: Arc<ManifestChain>,
+    backup_chain: Arc<BackupChain>,
+    sig_chain: Arc<SigChain>,
+    backend: Arc<B>,
     dcache: BlockCache,
     scache: BlockCache,
 }
 
 
 // Provides resources only for a specific entry
-struct EntryResourceProxy<'a, R: 'a> {
-    provider: &'a BlockProvider<R>,
+struct EntryResourceProxy<'a, B: 'a> {
+    provider: &'a BlockProvider<B>,
     entry: EntryId,
 }
 
 
-impl<'a, R: Resources> Entry<'a, R> {
+impl<'a, B: Backend> Entry<'a, B> {
     fn fill_block(&mut self) -> io::Result<()> {
         let optlen = self.provider.read_cached_block(self.id, &mut self.buf);
         if let Some(len) = optlen {
@@ -82,7 +73,7 @@ impl<'a, R: Resources> Entry<'a, R> {
     }
 }
 
-impl<'a, R: Resources> Read for Entry<'a, R> {
+impl<'a, B: Backend> Read for Entry<'a, B> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.len > 0 {
             // we have buffered stuff... just copy as much as possible
@@ -106,7 +97,7 @@ impl<'a, R: Resources> Read for Entry<'a, R> {
     }
 }
 
-impl<'a, R: Resources> BufRead for Entry<'a, R> {
+impl<'a, B: Backend> BufRead for Entry<'a, B> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         if self.len == 0 {
             try!(self.fill_block());
@@ -122,18 +113,39 @@ impl<'a, R: Resources> BufRead for Entry<'a, R> {
 }
 
 
-impl<R: Resources> BlockProvider<R> {
-    pub fn new(res: R, cache_size: usize) -> Self {
+impl<B: Backend> BlockProvider<B> {
+    pub fn new(manifests: Arc<ManifestChain>,
+               backup_chain: Arc<BackupChain>,
+               sig_chain: Arc<SigChain>,
+               backend: Arc<B>,
+               cache_size: usize)
+               -> Self {
         BlockProvider {
-            res: res,
+            manifests: manifests,
+            backup_chain: backup_chain,
+            sig_chain: sig_chain,
+            backend: backend,
             dcache: BlockCache::new((cache_size as f64 * 0.3) as usize),
             scache: BlockCache::new((cache_size as f64 * 0.7) as usize),
         }
     }
+
+    pub fn new_with_owning(manifests: ManifestChain,
+                           backup_chain: BackupChain,
+                           sig_chain: SigChain,
+                           backend: B,
+                           cache_size: usize)
+                           -> Self {
+        Self::new(Arc::new(manifests),
+                  Arc::new(backup_chain),
+                  Arc::new(sig_chain),
+                  Arc::new(backend),
+                  cache_size)
+    }
 }
 
-impl<R: Resources> BlockProvider<R> {
-    pub fn read(&self, entry: EntryId) -> Option<Entry<R>> {
+impl<B: Backend> BlockProvider<B> {
+    pub fn read(&self, entry: EntryId) -> Option<Entry<B>> {
         Some(Entry {
             provider: &self,
             buf: vec![0; BLOCK_SIZE].into_boxed_slice(),
@@ -149,13 +161,7 @@ impl<R: Resources> BlockProvider<R> {
     }
 
     fn block_stream<'a>(&'a self, entry: EntryId) -> io::Result<Box<BlockStream + 'a>> {
-        let sig_chain = try!(self.res.signature_chain());
-        let sig_entry = match sig_chain.as_ref() {
-            Some(sig) => sig.as_ref().entry(entry),
-            None => {
-                return Err(not_found("missing signature chain"));
-            }
-        };
+        let sig_entry = self.sig_chain.entry(entry);
         let path = sig_entry.path_bytes();
         let res = Box::new(EntryResourceProxy {
             provider: &self,
@@ -181,7 +187,7 @@ impl<R: Resources> BlockProvider<R> {
 }
 
 
-impl<'a, R: Resources + 'a> stream::Resources for EntryResourceProxy<'a, R> {
+impl<'a, B: Backend + 'a> stream::Resources for EntryResourceProxy<'a, B> {
     fn snapshot_cache(&self) -> &BlockCache {
         &self.provider.scache
     }
@@ -191,14 +197,9 @@ impl<'a, R: Resources + 'a> stream::Resources for EntryResourceProxy<'a, R> {
     }
 
     fn volume<'b>(&'b self, volnum: usize) -> io::Result<Option<Archive<Box<Read + 'b>>>> {
-        let back = match try!(self.provider.res.backup_chain()) {
-            Some(b) => b,
-            None => {
-                return Err(not_found("backup chain not found"));
-            }
-        };
+        let back = &self.provider.backup_chain;
         let snapnum = self.entry.1 as usize;
-        let backup_set = match back.as_ref().nth_set(snapnum) {
+        let backup_set = match back.nth_set(snapnum) {
             Some(s) => s,
             None => {
                 return Err(not_found(format!("backup set #{} not found", snapnum)));
@@ -214,7 +215,7 @@ impl<'a, R: Resources + 'a> stream::Resources for EntryResourceProxy<'a, R> {
             return Err(other("encrypted backups are not supported"));
         }
 
-        let rawfile = try!(self.provider.res.backend().as_ref().open_file(vol_path));
+        let rawfile = try!(self.provider.backend.open_file(vol_path));
         let result: Box<Read + 'a> = if backup_set.is_compressed() {
             Box::new(try!(GzDecoder::new(rawfile)))
         } else {
@@ -226,19 +227,13 @@ impl<'a, R: Resources + 'a> stream::Resources for EntryResourceProxy<'a, R> {
 
     fn volume_of_block(&self, n: usize) -> io::Result<Option<usize>> {
         let snapnum = self.entry.1 as usize;
-        let sig_chain = try!(self.provider.res.signature_chain());
-        let entry = match sig_chain.as_ref() {
-            Some(sig) => sig.as_ref().entry(self.entry),
+        let entry = self.provider.sig_chain.entry(self.entry);
+        let manifest = match self.provider.manifests.get(snapnum) {
+            Some(m) => m,
             None => {
-                return Err(not_found("missing signature chain"));
+                return Err(not_found(format!("no manifest found for snapshot #{}", snapnum)));
             }
         };
-        let manifest = match self.provider.res.manifest(snapnum) {
-            Ok(m) => m,
-            Err(e) => {
-                return Err(other(e));
-            }
-        };
-        Ok(manifest.as_ref().and_then(|m| m.as_ref().volume_of_block(entry.path_bytes(), n)))
+        Ok(manifest.volume_of_block(entry.path_bytes(), n))
     }
 }
