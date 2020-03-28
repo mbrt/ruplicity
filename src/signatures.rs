@@ -386,7 +386,7 @@ impl<'a> Display for SnapshotEntriesDisplay<'a> {
             try_or_fmt_err!(write!(&mut tw, "{}\n", file));
         }
         try_or_fmt_err!(tw.flush());
-        let written = try_or_fmt_err!(String::from_utf8(tw.unwrap()));
+        let written = try_or_fmt_err!(String::from_utf8(tw.into_inner().unwrap()));
         write!(f, "{}", written)
     }
 }
