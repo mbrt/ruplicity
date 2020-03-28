@@ -1,7 +1,7 @@
 use regex::Regex;
 use time::Timespec;
 
-use timefmt::parse_time_str;
+use crate::timefmt::parse_time_str;
 
 pub struct FileNameInfo<'a> {
     pub file_name: &'a str,
@@ -197,7 +197,7 @@ fn is_compressed(s: &str) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use timefmt::parse_time_str;
+    use crate::timefmt::parse_time_str;
 
     #[test]
     fn parser_test() {

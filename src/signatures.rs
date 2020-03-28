@@ -14,10 +14,10 @@ use flate2::read::GzDecoder;
 use tar;
 use time::Timespec;
 
-use backend::Backend;
-use collections::{SignatureChain, SignatureFile};
-use rawpath::RawPath;
-use timefmt::TimeDisplay;
+use crate::backend::Backend;
+use crate::collections::{SignatureChain, SignatureFile};
+use crate::rawpath::RawPath;
+use crate::timefmt::TimeDisplay;
 
 /// Stores information about paths in a backup chain.
 ///
@@ -644,10 +644,10 @@ fn compute_size_hint_snapshot<R: Read>(file: &mut tar::Entry<R>) -> Option<(usiz
 #[cfg(test)]
 mod test {
     use super::*;
-    use backend::local::LocalBackend;
-    use backend::Backend;
-    use collections::Collections;
-    use timefmt::parse_time_str;
+    use crate::backend::local::LocalBackend;
+    use crate::backend::Backend;
+    use crate::collections::Collections;
+    use crate::timefmt::parse_time_str;
 
     use std::path::{Path, PathBuf};
     use time::Timespec;

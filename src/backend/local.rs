@@ -80,7 +80,7 @@ impl Iterator for FileNameIterator {
 #[cfg(test)]
 mod test {
     use super::*;
-    use backend::Backend;
+    use crate::backend::Backend;
 
     #[test]
     fn multi_chain_files() {

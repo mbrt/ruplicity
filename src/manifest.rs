@@ -9,7 +9,7 @@ use std::path::Path;
 use std::str::{self, FromStr, Utf8Error};
 use std::usize;
 
-use rawpath::RawPath;
+use crate::rawpath::RawPath;
 
 /// Manifest file info.
 #[derive(Debug, Eq, PartialEq)]

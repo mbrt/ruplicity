@@ -12,7 +12,7 @@ use time::Timespec;
 
 use self::file_naming as fnm;
 use self::file_naming::{FileNameInfo, FileNameParser};
-use timefmt::TimeDisplay;
+use crate::timefmt::TimeDisplay;
 
 /// General information about a backup.
 ///
@@ -690,7 +690,7 @@ impl Type {
 mod test {
     use super::file_naming::{FileNameInfo, FileNameParser};
     use super::*;
-    use timefmt::parse_time_str;
+    use crate::timefmt::parse_time_str;
 
     fn get_test_filenames() -> Vec<&'static str> {
         vec![
