@@ -23,5 +23,5 @@ regex = "0.1"
 try_opt = "0.1"
 time = "0.1"
 byteorder = "0.4"
-tabwriter = "0.1"
+tabwriter = "1.2"
 clippy = { version = "*", optional = true }
