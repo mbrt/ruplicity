@@ -9,14 +9,13 @@ pub mod local;
 use std::io::{self, Read};
 use std::path::Path;
 
-
 /// A trait used to provide a transport layer for backup files.
 pub trait Backend {
     /// A file name. It must be convertible to a `Path`.
     type FileName: AsRef<Path>;
 
     /// An iterator over filenames.
-    type FileNameIter: IntoIterator<Item=Self::FileName>;
+    type FileNameIter: IntoIterator<Item = Self::FileName>;
 
     /// A file managed by the backend. It must implement the `Read` trait.
     type FileStream: Read;

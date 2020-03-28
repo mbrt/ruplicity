@@ -1,46 +1,5 @@
 #![macro_use]
 
-/// Helper macro to generate builder pattern methods for a struct.
-///
-/// # Example
-/// ```
-/// pub struct EmitterConfig {
-///     pub line_separator: String,
-///     pub indent_string: String
-/// }
-///
-/// impl EmitterConfig {
-///     pub fn new() -> EmitterConfig {
-///         EmitterConfig {
-///             line_separator: "\n".to_owned(),
-///             indent_string: "  ".to_owned()
-///         }
-///     }
-/// }
-///
-/// gen_setters!(EmitterConfig,
-///     line_separator: String,
-///     indent_string: String
-/// );
-///
-/// fn main() {
-///     let config = EmitterConfig::new().line_separator("\r\n".to_owned());
-/// }
-/// ```
-macro_rules! gen_setters(
-    ($target:ty, $($field:ident : $t:ty),+) => ($(
-        impl $target {
-            /// Sets the field to the provided value and returns
-            /// updated config object.
-            pub fn $field(mut self, value: $t) -> $target {
-                self.$field = value;
-                self
-            }
-        }
-    )+)
-);
-
-
 /// Helper macro for unwrapping a result if possible, continuing the loop
 /// if the value is an error.
 macro_rules! unwrap_or_continue(
@@ -63,7 +22,6 @@ macro_rules! unwrap_opt_or_continue(
     )
 );
 
-
 /// Helper macro for unwrapping a Result if possible, returns the given error otherwise.
 macro_rules! try_or(
     ($e:expr, $err:expr) => (
@@ -78,8 +36,6 @@ macro_rules! try_or(
 macro_rules! try_or_fmt_err(
     ($e:expr) => (try_or!($e, Err(fmt::Error)))
 );
-
-
 
 /// Helper macro that tests if the given expression matches a given pattern.
 ///

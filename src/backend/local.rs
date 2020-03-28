@@ -24,11 +24,10 @@
 //! ```
 
 use super::Backend;
-use std::fs::{self, File};
 use std::ffi::OsString;
+use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-
 
 /// Backend for some directory in the local file system.
 #[derive(Debug)]
@@ -39,11 +38,12 @@ pub struct LocalBackend {
 /// Iterator over a set of file names.
 pub struct FileNameIterator(fs::ReadDir);
 
-
 impl LocalBackend {
     /// Creates a new local backend for the given directory.
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        LocalBackend { base_path: path.as_ref().to_path_buf() }
+        LocalBackend {
+            base_path: path.as_ref().to_path_buf(),
+        }
     }
 }
 
@@ -53,7 +53,7 @@ impl Backend for LocalBackend {
     type FileStream = File;
 
     fn file_names(&self) -> io::Result<Self::FileNameIter> {
-        let dir = try!(fs::read_dir(self.base_path.as_path()));
+        let dir = fs::read_dir(self.base_path.as_path())?;
         Ok(FileNameIterator(dir))
     }
 
@@ -77,7 +77,6 @@ impl Iterator for FileNameIterator {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -88,25 +87,28 @@ mod test {
         let backend = LocalBackend::new("tests/backups/multi_chain");
         let files = backend.file_names().unwrap().collect::<Vec<_>>();
         let actual = {
-            let mut r = files.iter()
-                             .map(|p| p.to_str().unwrap())
-                             .filter(|p| p.starts_with("duplicity-"))
-                             .collect::<Vec<_>>();
+            let mut r = files
+                .iter()
+                .map(|p| p.to_str().unwrap())
+                .filter(|p| p.starts_with("duplicity-"))
+                .collect::<Vec<_>>();
             r.sort();
             r
         };
-        let expected = vec!["duplicity-full-signatures.20160108T223144Z.sigtar.gz",
-                            "duplicity-full-signatures.20160108T223209Z.sigtar.gz",
-                            "duplicity-full.20160108T223144Z.manifest",
-                            "duplicity-full.20160108T223144Z.vol1.difftar.gz",
-                            "duplicity-full.20160108T223209Z.manifest",
-                            "duplicity-full.20160108T223209Z.vol1.difftar.gz",
-                            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
-                            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.vol1.difftar.gz",
-                            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
-                            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.vol1.difftar.gz",
-                            "duplicity-new-signatures.20160108T223144Z.to.20160108T223159Z.sigtar.gz",
-                            "duplicity-new-signatures.20160108T223209Z.to.20160108T223217Z.sigtar.gz"];
+        let expected = vec![
+            "duplicity-full-signatures.20160108T223144Z.sigtar.gz",
+            "duplicity-full-signatures.20160108T223209Z.sigtar.gz",
+            "duplicity-full.20160108T223144Z.manifest",
+            "duplicity-full.20160108T223144Z.vol1.difftar.gz",
+            "duplicity-full.20160108T223209Z.manifest",
+            "duplicity-full.20160108T223209Z.vol1.difftar.gz",
+            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.vol1.difftar.gz",
+            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
+            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.vol1.difftar.gz",
+            "duplicity-new-signatures.20160108T223144Z.to.20160108T223159Z.sigtar.gz",
+            "duplicity-new-signatures.20160108T223209Z.to.20160108T223217Z.sigtar.gz",
+        ];
         assert_eq!(actual, expected);
     }
 }

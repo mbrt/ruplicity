@@ -27,13 +27,16 @@
 //! }
 //! ```
 
-#![deny(missing_copy_implementations,
-        missing_docs,
-        trivial_casts, trivial_numeric_casts,
-        unsafe_code,
-        unstable_features,
-        unused_import_braces, unused_qualifications)]
-
+#![deny(
+    missing_copy_implementations,
+    missing_docs,
+    trivial_casts,
+    trivial_numeric_casts,
+    unsafe_code,
+    unstable_features,
+    unused_import_braces,
+    unused_qualifications
+)]
 #![cfg_attr(feature = "nightly", allow(unstable_features))]
 #![cfg_attr(feature = "lints", feature(plugin))]
 #![cfg_attr(feature = "lints", plugin(clippy))]
@@ -69,7 +72,6 @@ use collections::{BackupChain, BackupSet, Collections};
 use manifest::Manifest;
 use signatures::Chain;
 
-
 /// A top level representation of a duplicity backup.
 #[derive(Debug)]
 pub struct Backup<B> {
@@ -81,7 +83,7 @@ pub struct Backup<B> {
 
 /// Represents all the snapshots in a backup.
 pub struct Snapshots<'a> {
-    backup: &'a ResourceCache,
+    backup: &'a dyn ResourceCache,
 }
 
 /// An iterator over the snapshots in a backup.
@@ -90,7 +92,7 @@ pub struct SnapshotsIter<'a> {
     chain_id: usize,
     sig_id: usize,
     man_id: usize,
-    backup: &'a ResourceCache,
+    backup: &'a dyn ResourceCache,
 }
 
 /// A snapshot in a backup.
@@ -100,7 +102,7 @@ pub struct Snapshot<'a> {
     chain_id: usize,
     sig_id: usize,
     man_id: usize,
-    backup: &'a ResourceCache,
+    backup: &'a dyn ResourceCache,
 }
 
 /// Contains the files present in a certain backup snapshot.
@@ -112,7 +114,6 @@ pub struct SnapshotEntries<'a> {
 /// Reference to a Manifest.
 #[derive(Debug)]
 pub struct ManifestRef<'a>(Ref<'a, Option<Manifest>>);
-
 
 struct CollectionsIter<'a> {
     chain_iter: collections::ChainIter<'a, BackupChain>,
@@ -126,12 +127,12 @@ struct CollectionsIter<'a> {
 trait ResourceCache {
     fn _collections(&self) -> &Collections;
     fn _signature_chain(&self, chain_id: usize) -> io::Result<Ref<Option<Chain>>>;
-    fn _manifest(&self,
-                 chain_id: usize,
-                 manifest_path: &str)
-                 -> Result<Ref<Option<Manifest>>, manifest::ParseError>;
+    fn _manifest(
+        &self,
+        chain_id: usize,
+        manifest_path: &str,
+    ) -> Result<Ref<Option<Manifest>>, manifest::ParseError>;
 }
-
 
 impl<B: Backend> Backup<B> {
     /// Opens an existig backup by using the given backend.
@@ -152,10 +153,15 @@ impl<B: Backend> Backup<B> {
     /// println!("Got backup with {} snapshots!", backup.snapshots().unwrap().into_iter().count());
     /// ```
     pub fn new(backend: B) -> io::Result<Self> {
-        let files = try!(backend.file_names());
+        let files = backend.file_names()?;
         let collections = Collections::from_filenames(files);
-        let signatures = collections.signature_chains().map(|_| RefCell::new(None)).collect();
-        let manifests = (0..collections.num_snapshots()).map(|_| RefCell::new(None)).collect();
+        let signatures = collections
+            .signature_chains()
+            .map(|_| RefCell::new(None))
+            .collect();
+        let manifests = (0..collections.num_snapshots())
+            .map(|_| RefCell::new(None))
+            .collect();
         Ok(Backup {
             backend: backend,
             collections: collections,
@@ -176,7 +182,6 @@ impl<B: Backend> Backup<B> {
         self.backend
     }
 }
-
 
 impl<'a> Snapshots<'a> {
     /// Returns the low level representation of the snapshots.
@@ -205,7 +210,6 @@ impl<'a> IntoIterator for Snapshots<'a> {
         }
     }
 }
-
 
 impl<'a> Iterator for SnapshotsIter<'a> {
     type Item = Snapshot<'a>;
@@ -248,7 +252,6 @@ impl<'a> Iterator for SnapshotsIter<'a> {
     }
 }
 
-
 impl<'a> Snapshot<'a> {
     /// Returns the time in which the snapshot has been taken.
     pub fn time(&self) -> Timespec {
@@ -286,7 +289,7 @@ impl<'a> Snapshot<'a> {
     /// backup chain must be loaded, and this could take some time, depending on the file access
     /// provided by the backend and the signatures size.
     pub fn entries(&self) -> io::Result<SnapshotEntries> {
-        let sig = try!(self.backup._signature_chain(self.chain_id));
+        let sig = self.backup._signature_chain(self.chain_id)?;
         if self.sig_id < sig.as_ref().unwrap().snapshots().len() {
             Ok(SnapshotEntries {
                 chain: sig,
@@ -301,17 +304,25 @@ impl<'a> Snapshot<'a> {
     ///
     /// The relative manifest file is read on demand and cached for subsequent uses.
     pub fn manifest(&self) -> Result<ManifestRef<'a>, manifest::ParseError> {
-        Ok(ManifestRef(try!(self.backup._manifest(self.man_id, self.set.manifest_path()))))
+        Ok(ManifestRef(
+            self.backup
+                ._manifest(self.man_id, self.set.manifest_path())?,
+        ))
     }
 }
-
 
 impl<'a> SnapshotEntries<'a> {
     /// Returns the signatures representation for the entries.
     ///
     /// This function can be used to retrieve information about the files in the snapshot.
     pub fn as_signature(&self) -> signatures::SnapshotEntries {
-        self.chain.as_ref().unwrap().snapshots().nth(self.sig_id).unwrap().files()
+        self.chain
+            .as_ref()
+            .unwrap()
+            .snapshots()
+            .nth(self.sig_id)
+            .unwrap()
+            .files()
     }
 }
 
@@ -321,7 +332,6 @@ impl<'a> Display for SnapshotEntries<'a> {
     }
 }
 
-
 impl<'a> Deref for ManifestRef<'a> {
     type Target = Manifest;
 
@@ -329,7 +339,6 @@ impl<'a> Deref for ManifestRef<'a> {
         self.0.as_ref().unwrap()
     }
 }
-
 
 impl<B: Backend> ResourceCache for Backup<B> {
     fn _collections(&self) -> &Collections {
@@ -343,11 +352,13 @@ impl<B: Backend> ResourceCache for Backup<B> {
             if sig.is_none() {
                 // compute signatures now
                 if let Some(sigchain) = self.collections.signature_chains().nth(chain_id) {
-                    let new_sig = try!(Chain::from_sigchain(sigchain, &self.backend));
+                    let new_sig = Chain::from_sigchain(sigchain, &self.backend)?;
                     *sig = Some(new_sig);
                 } else {
-                    return Err(not_found("The given backup snapshot does not have a \
-                                         corresponding signature"));
+                    return Err(not_found(
+                        "The given backup snapshot does not have a \
+                                         corresponding signature",
+                    ));
                 }
             }
         }
@@ -357,17 +368,18 @@ impl<B: Backend> ResourceCache for Backup<B> {
         Ok(self.signatures[chain_id].borrow())
     }
 
-    fn _manifest(&self,
-                 id: usize,
-                 path: &str)
-                 -> Result<Ref<Option<Manifest>>, manifest::ParseError> {
+    fn _manifest(
+        &self,
+        id: usize,
+        path: &str,
+    ) -> Result<Ref<Option<Manifest>>, manifest::ParseError> {
         {
             // check if there is a cached value
             let mut sig = self.manifests[id].borrow_mut();
             if sig.is_none() {
                 // compute manifest now
-                let mut file = io::BufReader::new(try!(self.backend.open_file(Path::new(path))));
-                *sig = Some(try!(Manifest::parse(&mut file)));
+                let mut file = io::BufReader::new(self.backend.open_file(Path::new(path))?);
+                *sig = Some(Manifest::parse(&mut file)?);
             }
         }
 
@@ -377,11 +389,9 @@ impl<B: Backend> ResourceCache for Backup<B> {
     }
 }
 
-
 fn not_found(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::NotFound, msg)
 }
-
 
 #[cfg(test)]
 mod test {
@@ -397,7 +407,6 @@ mod test {
     use std::io::BufReader;
     use std::path::Path;
     use time::Timespec;
-
 
     #[derive(Debug, Eq, PartialEq)]
     struct SnapshotTest {
@@ -454,18 +463,19 @@ mod test {
     }
 
     fn to_test_snapshot<B: Backend>(backup: &Backup<B>) -> Vec<SnapshotTest> {
-        backup.snapshots()
-              .unwrap()
-              .into_iter()
-              .map(|s| {
-                  assert!(s.is_full() != s.is_incremental());
-                  SnapshotTest {
-                      time: s.time(),
-                      is_full: s.is_full(),
-                      num_volumes: s.num_volumes(),
-                  }
-              })
-              .collect()
+        backup
+            .snapshots()
+            .unwrap()
+            .into_iter()
+            .map(|s| {
+                assert!(s.is_full() != s.is_incremental());
+                SnapshotTest {
+                    time: s.time(),
+                    is_full: s.is_full(),
+                    num_volumes: s.num_volumes(),
+                }
+            })
+            .collect()
     }
 
     fn single_vol_signature_chain() -> Chain {
@@ -476,29 +486,30 @@ mod test {
     }
 
     fn from_sigchain(chain: &Chain) -> Vec<Vec<EntryTest>> {
-        chain.snapshots()
-             .map(|s| {
-                 s.files()
-                  .map(|f| EntryTest::from_entry(&f))
-                  .collect::<Vec<_>>()
-             })
-             .collect::<Vec<_>>()
+        chain
+            .snapshots()
+            .map(|s| {
+                s.files()
+                    .map(|f| EntryTest::from_entry(&f))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
 
     fn from_backup<B: Backend>(backup: &Backup<B>) -> Vec<Vec<EntryTest>> {
-        backup.snapshots()
-              .unwrap()
-              .into_iter()
-              .map(|s| {
-                  s.entries()
-                   .unwrap()
-                   .as_signature()
-                   .map(|f| EntryTest::from_entry(&f))
-                   .collect::<Vec<_>>()
-              })
-              .collect::<Vec<_>>()
+        backup
+            .snapshots()
+            .unwrap()
+            .into_iter()
+            .map(|s| {
+                s.entries()
+                    .unwrap()
+                    .as_signature()
+                    .map(|f| EntryTest::from_entry(&f))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     }
-
 
     #[test]
     fn same_collections_single_vol() {
@@ -540,14 +551,24 @@ mod test {
         let backend = LocalBackend::new("tests/backups/multi_chain");
         let backup = Backup::new(backend).unwrap();
         let actual = from_backup(&backup);
-        let expected = vec![vec![make_entry_test(b"", "20160108t223141z"),
-                                 make_entry_test(b"file", "20160108t222924z")],
-                            vec![make_entry_test(b"", "20160108t223153z"),
-                                 make_entry_test(b"file", "20160108t223153z")],
-                            vec![make_entry_test(b"", "20160108t223206z"),
-                                 make_entry_test(b"file", "20160108t223206z")],
-                            vec![make_entry_test(b"", "20160108t223215z"),
-                                 make_entry_test(b"file", "20160108t223215z")]];
+        let expected = vec![
+            vec![
+                make_entry_test(b"", "20160108t223141z"),
+                make_entry_test(b"file", "20160108t222924z"),
+            ],
+            vec![
+                make_entry_test(b"", "20160108t223153z"),
+                make_entry_test(b"file", "20160108t223153z"),
+            ],
+            vec![
+                make_entry_test(b"", "20160108t223206z"),
+                make_entry_test(b"file", "20160108t223206z"),
+            ],
+            vec![
+                make_entry_test(b"", "20160108t223215z"),
+                make_entry_test(b"file", "20160108t223215z"),
+            ],
+        ];
         assert_eq!(actual, expected);
 
         fn make_entry_test(path: &[u8], mtime: &str) -> EntryTest {
@@ -559,21 +580,23 @@ mod test {
     fn multi_chain_manifests() {
         let backend = LocalBackend::new("tests/backups/multi_chain");
         let backup = Backup::new(backend).unwrap();
-        let actual = backup.snapshots()
-                           .unwrap()
-                           .into_iter()
-                           .map(|snapshot| snapshot.manifest().unwrap());
-        let names = vec!["duplicity-full.20160108T223144Z.manifest",
-                         "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
-                         "duplicity-full.20160108T223209Z.manifest",
-                         "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest"];
-        let expected = names.iter()
-                            .map(|name| {
-                                let mut path = Path::new("tests/backups/multi_chain").to_owned();
-                                path.push(name);
-                                let mut file = BufReader::new(File::open(path).unwrap());
-                                Manifest::parse(&mut file).unwrap()
-                            });
+        let actual = backup
+            .snapshots()
+            .unwrap()
+            .into_iter()
+            .map(|snapshot| snapshot.manifest().unwrap());
+        let names = vec![
+            "duplicity-full.20160108T223144Z.manifest",
+            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+            "duplicity-full.20160108T223209Z.manifest",
+            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
+        ];
+        let expected = names.iter().map(|name| {
+            let mut path = Path::new("tests/backups/multi_chain").to_owned();
+            path.push(name);
+            let mut file = BufReader::new(File::open(path).unwrap());
+            Manifest::parse(&mut file).unwrap()
+        });
         for (e, a) in expected.zip(actual) {
             assert_eq!(e, *a);
         }
