@@ -576,7 +576,7 @@ impl Display for ModeDisplay {
 fn parse_snapshot_path(path: &[u8]) -> Option<(DiffType, &[u8])> {
     // split the path in (first directory, the remaining path)
     // the first is the type, the remaining is the real path
-    let pos = try_opt!(path.iter().cloned().position(|b| b == b'/'));
+    let pos = path.iter().cloned().position(|b| b == b'/')?;
     let (pfirst, raw_real) = path.split_at(pos);
     let difftype = match pfirst {
         b"signature" => DiffType::Signature,
@@ -596,7 +596,7 @@ fn parse_snapshot_path(path: &[u8]) -> Option<(DiffType, &[u8])> {
 fn compute_size_hint<R: Read>(file: &mut tar::Entry<R>) -> Option<(usize, usize)> {
     let difftype = {
         let path = &file.path_bytes();
-        let (difftype, _) = try_opt!(parse_snapshot_path(&path));
+        let (difftype, _) = parse_snapshot_path(&path)?;
         difftype
     };
     match difftype {
@@ -614,16 +614,16 @@ fn compute_size_hint_signature<R: Read>(file: &mut tar::Entry<R>) -> Option<(usi
     use byteorder::{BigEndian, ReadBytesExt};
 
     // for signature file format see Docs.md
-    let magic = try_opt!(file.read_u32::<BigEndian>().ok());
+    let magic = file.read_u32::<BigEndian>().ok()?;
     if magic != 0x72730136 {
         None
     } else {
         // read the header
-        let file_block_len_bytes = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
-        let ss_len = try_opt!(file.read_u32::<BigEndian>().ok()) as usize;
+        let file_block_len_bytes = file.read_u32::<BigEndian>().ok()? as usize;
+        let ss_len = file.read_u32::<BigEndian>().ok()? as usize;
         let sign_block_len_bytes = 4 + ss_len;
         // the remaining part of the file are blocks
-        let file_size = try_opt!(file.header().size().ok()) as usize;
+        let file_size = file.header().size().ok()? as usize;
         let num_blocks = (file_size - 8) / sign_block_len_bytes;
 
         let max_file_len = file_block_len_bytes * num_blocks;
@@ -637,7 +637,7 @@ fn compute_size_hint_signature<R: Read>(file: &mut tar::Entry<R>) -> Option<(usi
 }
 
 fn compute_size_hint_snapshot<R: Read>(file: &mut tar::Entry<R>) -> Option<(usize, usize)> {
-    let bytes = try_opt!(file.header().size().ok()) as usize;
+    let bytes = file.header().size().ok()? as usize;
     Some((bytes, bytes))
 }
 
