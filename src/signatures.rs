@@ -111,8 +111,8 @@ struct PathSnapshot {
 #[derive(Debug)]
 struct PathInfo {
     mtime: Timespec,
-    uid: Option<u32>,
-    gid: Option<u32>,
+    uid: Option<u64>,
+    gid: Option<u64>,
     mode: Option<u32>,
     entry_type: u8,
     size_hint: Option<(usize, usize)>,
@@ -121,8 +121,8 @@ struct PathInfo {
 
 #[derive(Debug)]
 struct UserGroupMap {
-    uid_map: HashMap<u32, String>,
-    gid_map: HashMap<u32, String>,
+    uid_map: HashMap<u64, String>,
+    gid_map: HashMap<u64, String>,
 }
 
 #[derive(Debug)]
@@ -406,12 +406,12 @@ impl<'a> Entry<'a> {
     }
 
     /// Returns the value of the owner's user ID field.
-    pub fn userid(&self) -> Option<u32> {
+    pub fn userid(&self) -> Option<u64> {
         self.info.uid
     }
 
     /// Returns the value of the group's user ID field.
-    pub fn groupid(&self) -> Option<u32> {
+    pub fn groupid(&self) -> Option<u64> {
         self.info.gid
     }
 
@@ -518,19 +518,19 @@ impl UserGroupMap {
         }
     }
 
-    pub fn add_user(&mut self, uid: u32, name: String) -> bool {
+    pub fn add_user(&mut self, uid: u64, name: String) -> bool {
         self.uid_map.insert(uid, name).is_none()
     }
 
-    pub fn add_group(&mut self, gid: u32, name: String) -> bool {
+    pub fn add_group(&mut self, gid: u64, name: String) -> bool {
         self.gid_map.insert(gid, name).is_none()
     }
 
-    pub fn get_user_name(&self, uid: u32) -> Option<&str> {
+    pub fn get_user_name(&self, uid: u64) -> Option<&str> {
         self.uid_map.get(&uid).map(AsRef::as_ref)
     }
 
-    pub fn get_group_name(&self, gid: u32) -> Option<&str> {
+    pub fn get_group_name(&self, gid: u64) -> Option<&str> {
         self.gid_map.get(&gid).map(AsRef::as_ref)
     }
 }
