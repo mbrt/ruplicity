@@ -10,10 +10,9 @@ use std::path::Path;
 use std::slice;
 use time::Timespec;
 
-use timefmt::TimeDisplay;
 use self::file_naming as fnm;
 use self::file_naming::{FileNameInfo, FileNameParser};
-
+use crate::timefmt::TimeDisplay;
 
 /// General information about a backup.
 ///
@@ -82,7 +81,6 @@ pub type BackupSetIter<'a> = slice::Iter<'a, BackupSet>;
 /// Iterator over `SignatureFile`s.
 pub type SignatureFileIter<'a> = slice::Iter<'a, SignatureFile>;
 
-
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 enum Type {
     Full {
@@ -93,7 +91,6 @@ enum Type {
         end_time: Timespec,
     },
 }
-
 
 impl BackupSet {
     /// Returns whether the set is complete.
@@ -145,7 +142,9 @@ impl BackupSet {
 
     /// Returns the path of the given volume.
     pub fn volume_path(&self, volume_num: usize) -> Option<&str> {
-        self.volumes_paths.get(volume_num).and_then(|v| v.as_ref().map(AsRef::as_ref))
+        self.volumes_paths
+            .get(volume_num)
+            .and_then(|v| v.as_ref().map(AsRef::as_ref))
     }
 
     /// Returns the number of volumes in the set.
@@ -166,24 +165,33 @@ impl BackupSet {
     /// Returns whether the given file belongs to the same backup set, by looking at timestamps.
     pub fn is_same_set(&self, pr: &fnm::Info) -> bool {
         match self.tp {
-            Type::Full{ time: my_time } => {
-                match pr.tp {
-                    fnm::Type::Full{ time, .. } |
-                    fnm::Type::FullManifest{ time, .. } |
-                    fnm::Type::FullSig{ time, .. } => my_time == time,
-                    _ => false,
+            Type::Full { time: my_time } => match pr.tp {
+                fnm::Type::Full { time, .. }
+                | fnm::Type::FullManifest { time, .. }
+                | fnm::Type::FullSig { time, .. } => my_time == time,
+                _ => false,
+            },
+            Type::Inc {
+                start_time: my_start,
+                end_time: my_end,
+            } => match pr.tp {
+                fnm::Type::Inc {
+                    start_time,
+                    end_time,
+                    ..
                 }
-            }
-            Type::Inc{ start_time: my_start, end_time: my_end } => {
-                match pr.tp {
-                    fnm::Type::Inc{ start_time, end_time, .. } |
-                    fnm::Type::IncManifest{ start_time, end_time, .. } |
-                    fnm::Type::NewSig{ start_time, end_time, .. } => {
-                        my_start == start_time && my_end == end_time
-                    }
-                    _ => false,
+                | fnm::Type::IncManifest {
+                    start_time,
+                    end_time,
+                    ..
                 }
-            }
+                | fnm::Type::NewSig {
+                    start_time,
+                    end_time,
+                    ..
+                } => my_start == start_time && my_end == end_time,
+                _ => false,
+            },
         }
     }
 
@@ -191,25 +199,35 @@ impl BackupSet {
     fn new(fname: &FileNameInfo) -> Self {
         // set type
         let tp = match fname.info.tp {
-            fnm::Type::Full{ time, .. } |
-            fnm::Type::FullManifest{ time, .. } |
-            fnm::Type::FullSig{ time, .. } => Type::Full { time: time },
-            fnm::Type::Inc{ start_time, end_time, .. } |
-            fnm::Type::IncManifest{ start_time, end_time, .. } |
-            fnm::Type::NewSig{ start_time, end_time, .. } => {
-                Type::Inc {
-                    start_time: start_time,
-                    end_time: end_time,
-                }
+            fnm::Type::Full { time, .. }
+            | fnm::Type::FullManifest { time, .. }
+            | fnm::Type::FullSig { time, .. } => Type::Full { time: time },
+            fnm::Type::Inc {
+                start_time,
+                end_time,
+                ..
             }
+            | fnm::Type::IncManifest {
+                start_time,
+                end_time,
+                ..
+            }
+            | fnm::Type::NewSig {
+                start_time,
+                end_time,
+                ..
+            } => Type::Inc {
+                start_time: start_time,
+                end_time: end_time,
+            },
         };
         // set partial
         let partial = {
             match fname.info.tp {
-                fnm::Type::FullManifest{ partial, .. } |
-                fnm::Type::IncManifest{ partial, .. } |
-                fnm::Type::FullSig{ partial, .. } |
-                fnm::Type::NewSig{ partial, .. } => partial,
+                fnm::Type::FullManifest { partial, .. }
+                | fnm::Type::IncManifest { partial, .. }
+                | fnm::Type::FullSig { partial, .. }
+                | fnm::Type::NewSig { partial, .. } => partial,
                 _ => false,
             }
         };
@@ -240,8 +258,7 @@ impl BackupSet {
         } else {
             // update info
             match pr.tp {
-                fnm::Type::Full{ volume_number, .. } |
-                fnm::Type::Inc{ volume_number, .. } => {
+                fnm::Type::Full { volume_number, .. } | fnm::Type::Inc { volume_number, .. } => {
                     // resize volumes if necessary
                     if volume_number >= self.volumes_paths.len() {
                         self.volumes_paths.reserve(volume_number + 1);
@@ -251,8 +268,7 @@ impl BackupSet {
                     }
                     self.volumes_paths[volume_number] = Some(fname.to_owned());
                 }
-                fnm::Type::FullManifest{ .. } |
-                fnm::Type::IncManifest{ .. } => {
+                fnm::Type::FullManifest { .. } | fnm::Type::IncManifest { .. } => {
                     self.manifest_path = fname.to_owned();
                 }
                 _ => (),
@@ -272,26 +288,27 @@ impl BackupSet {
 impl Display for BackupSet {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         let tp = match self.tp {
-            Type::Full{ .. } => "Full",
-            Type::Inc{ .. } => "Incremental",
+            Type::Full { .. } => "Full",
+            Type::Inc { .. } => "Incremental",
         };
-        write!(f,
-               "{:<20} {:<13} {:>12}",
-               tp,
-               // FIXME: Workaround for rust <= 1.4
-               // Alignment is ignored by custom formatters
-               // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
-               format!("{}", self.end_time().into_local_display()),
-               self.num_volumes())
+        write!(
+            f,
+            "{:<20} {:<13} {:>12}",
+            tp,
+            // FIXME: Workaround for rust <= 1.4
+            // Alignment is ignored by custom formatters
+            // see: https://github.com/rust-lang-deprecated/time/issues/98#issuecomment-103010106
+            format!("{}", self.end_time().into_local_display()),
+            self.num_volumes()
+        )
     }
 }
-
 
 impl BackupChain {
     /// Create a new BackupChain starting from a full backup set.
     pub fn new(fullset: BackupSet) -> Self {
         let time = {
-            if let Type::Full{ time } = fullset.tp {
+            if let Type::Full { time } = fullset.tp {
                 time
             } else {
                 panic!("Unexpected incremental backup set given");
@@ -309,7 +326,11 @@ impl BackupChain {
     /// Adds the given incremental backup element to the backup chain if possible,
     /// returns it back otherwise.
     pub fn add_inc(&mut self, incset: BackupSet) -> Option<BackupSet> {
-        if let Type::Inc{ start_time, end_time } = incset.tp {
+        if let Type::Inc {
+            start_time,
+            end_time,
+        } = incset.tp
+        {
             if self.end_time == start_time {
                 self.end_time = end_time;
                 self.incsets.push(incset);
@@ -360,41 +381,43 @@ impl BackupChain {
 
 impl Display for BackupChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        let num_vol = self.fullset.volumes_paths.len() +
-                      self.incsets
-                          .iter()
-                          .map(|i| i.volumes_paths.len())
-                          .fold(0, |a, i| a + i);
-        try!(write!(f,
-                    "Chain start time: {}\n\
+        let num_vol = self.fullset.volumes_paths.len()
+            + self
+                .incsets
+                .iter()
+                .map(|i| i.volumes_paths.len())
+                .fold(0, |a, i| a + i);
+        write!(
+            f,
+            "Chain start time: {}\n\
                     Chain end time: {}\n\
                     Number of contained backup sets: {}\n\
                     Total number of contained volumes: {}\n",
-                    self.start_time.into_local_display(),
-                    self.end_time.into_local_display(),
-                    self.incsets.len() + 1,
-                    num_vol));
-        try!(write!(f,
-                    "{:<20} {:<13} {:>12}",
-                    "Type of backup set:",
-                    "Time:",
-                    "Num volumes:\n"));
-        try!(write!(f, "{}\n", self.fullset));
+            self.start_time.into_local_display(),
+            self.end_time.into_local_display(),
+            self.incsets.len() + 1,
+            num_vol
+        )?;
+        write!(
+            f,
+            "{:<20} {:<13} {:>12}",
+            "Type of backup set:", "Time:", "Num volumes:\n"
+        )?;
+        write!(f, "{}\n", self.fullset)?;
         for inc in &self.incsets {
-            try!(write!(f, "{}\n", inc));
+            write!(f, "{}\n", inc)?;
         }
         Ok(())
     }
 }
-
 
 impl SignatureFile {
     /// Construct a signature file from a file name and infos.
     pub fn from_file_and_info(fname: &str, pr: &fnm::Info) -> Self {
         let time = {
             match pr.tp {
-                fnm::Type::FullSig{ time, .. } => time,
-                fnm::Type::NewSig{ end_time, .. } => end_time,
+                fnm::Type::FullSig { time, .. } => time,
+                fnm::Type::NewSig { end_time, .. } => end_time,
                 _ => panic!("unexpected file given for signature"),
             }
         };
@@ -411,7 +434,6 @@ impl SignatureFile {
         Self::from_file_and_info(info.file_name, &info.info)
     }
 }
-
 
 impl SignatureChain {
     /// Create a new SignatureChain starting from a full signature.
@@ -455,24 +477,27 @@ impl SignatureChain {
 
     /// Returns the time of the last signature in the chain.
     pub fn end_time(&self) -> Timespec {
-        self.incsigs.last().map_or(self.start_time(), |inc| inc.time)
+        self.incsigs
+            .last()
+            .map_or(self.start_time(), |inc| inc.time)
     }
 }
 
 impl Display for SignatureChain {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        try!(write!(f,
-                    "start time: {}, end time: {}\n {}\n",
-                    self.start_time().into_local_display(),
-                    self.end_time().into_local_display(),
-                    &self.fullsig.file_name));
+        write!(
+            f,
+            "start time: {}, end time: {}\n {}\n",
+            self.start_time().into_local_display(),
+            self.end_time().into_local_display(),
+            &self.fullsig.file_name
+        )?;
         for inc in &self.incsigs {
-            try!(write!(f, " {}\n", inc.file_name));
+            write!(f, " {}\n", inc.file_name)?;
         }
         Ok(())
     }
 }
-
 
 impl Collections {
     /// Creates a new empty collection.
@@ -503,8 +528,9 @@ impl Collections {
     /// assert_eq!(collections.signature_chains().count(), 1);
     /// ```
     pub fn from_filenames<I>(filenames: I) -> Self
-        where I: IntoIterator,
-              I::Item: AsRef<Path>
+    where
+        I: IntoIterator,
+        I::Item: AsRef<Path>,
     {
         let fnames_vec: Vec<_> = filenames.into_iter().collect();
         let infos = compute_filename_infos(&fnames_vec);
@@ -541,30 +567,30 @@ impl Collections {
 }
 
 fn compute_filename_infos<'a, I, E>(filenames: I) -> Vec<FileNameInfo<'a>>
-    where I: IntoIterator<Item = &'a E>,
-          E: AsRef<Path> + 'a
+where
+    I: IntoIterator<Item = &'a E>,
+    E: AsRef<Path> + 'a,
 {
     let parser = FileNameParser::new();
-    filenames.into_iter()
-             .filter_map(|path| path.as_ref().to_str())
-             .filter_map(|name| {
-                 match parser.parse(name) {
-                     Some(info) => Some(FileNameInfo::new(name, info)),
-                     None => None,
-                 }
-             })
-             .collect()
+    filenames
+        .into_iter()
+        .filter_map(|path| path.as_ref().to_str())
+        .filter_map(|name| match parser.parse(name) {
+            Some(info) => Some(FileNameInfo::new(name, info)),
+            None => None,
+        })
+        .collect()
 }
 
 fn compute_backup_chains(fname_infos: &[FileNameInfo]) -> Vec<BackupChain> {
     let mut backup_chains: Vec<BackupChain> = Vec::new();
     for set in compute_backup_sets(fname_infos) {
         match set.tp {
-            Type::Full{ .. } => {
+            Type::Full { .. } => {
                 let new_chain = BackupChain::new(set);
                 backup_chains.push(new_chain);
             }
-            Type::Inc{ .. } => {
+            Type::Inc { .. } => {
                 let mut rejected_set = Some(set);
                 for chain in &mut backup_chains {
                     rejected_set = chain.add_inc(rejected_set.unwrap());
@@ -604,16 +630,18 @@ fn compute_backup_sets(fname_infos: &[FileNameInfo]) -> Vec<BackupSet> {
 
 fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain> {
     // collect full signatures, sort them by start time and make the chains from them
-    let mut sig_chains = fname_infos.iter()
-                                    .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
-                                    .map(SignatureChain::from_filename_info)
-                                    .collect::<Vec<_>>();
+    let mut sig_chains = fname_infos
+        .iter()
+        .filter(|f| matches!(f.info.tp, fnm::Type::FullSig{..}))
+        .map(SignatureChain::from_filename_info)
+        .collect::<Vec<_>>();
     sig_chains.sort_by(|a, b| a.start_time().cmp(&b.start_time()));
     // collect inc signatures and sort them by start time
     let inc_sigs = {
-        let mut is = fname_infos.iter()
-                                .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
-                                .collect::<Vec<_>>();
+        let mut is = fname_infos
+            .iter()
+            .filter(|f| matches!(f.info.tp, fnm::Type::NewSig{..}))
+            .collect::<Vec<_>>();
         is.sort_by(|a, b| a.start_time().cmp(&b.start_time()));
         is
     };
@@ -636,46 +664,46 @@ fn compute_signature_chains(fname_infos: &[FileNameInfo]) -> Vec<SignatureChain>
 impl Display for Collections {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         for backup_chain in &self.backup_chains {
-            try!(backup_chain.fmt(f));
+            backup_chain.fmt(f)?;
         }
         Ok(())
     }
 }
 
-
 impl Type {
     pub fn start_time(&self) -> Timespec {
         match *self {
-            Type::Full{ time } => time,
-            Type::Inc{ start_time, .. } => start_time,
+            Type::Full { time } => time,
+            Type::Inc { start_time, .. } => start_time,
         }
     }
 
     pub fn end_time(&self) -> Timespec {
         match *self {
-            Type::Full{ time } => time,
-            Type::Inc{ end_time, .. } => end_time,
+            Type::Full { time } => time,
+            Type::Inc { end_time, .. } => end_time,
         }
     }
 }
 
-
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::file_naming::{FileNameInfo, FileNameParser};
-    use timefmt::parse_time_str;
+    use super::*;
+    use crate::timefmt::parse_time_str;
 
     fn get_test_filenames() -> Vec<&'static str> {
-        vec!["duplicity-full.20150617T182545Z.manifest",
-             "duplicity-full.20150617T182545Z.vol1.difftar.gz",
-             "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
-             "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest",
-             "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz",
-             "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest",
-             "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz",
-             "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz",
-             "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz"]
+        vec![
+            "duplicity-full.20150617T182545Z.manifest",
+            "duplicity-full.20150617T182545Z.vol1.difftar.gz",
+            "duplicity-full-signatures.20150617T182545Z.sigtar.gz",
+            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest",
+            "duplicity-inc.20150617T182545Z.to.20150617T182629Z.vol1.difftar.gz",
+            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.manifest",
+            "duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz",
+            "duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz",
+            "duplicity-new-signatures.20150617T182629Z.to.20150617T182650Z.sigtar.gz",
+        ]
     }
 
     #[test]
@@ -725,10 +753,14 @@ mod test {
         // backup chain
         let backup_chain = collection_status.backup_chains().next().unwrap();
         assert_eq!(backup_chain.incsets.len(), 2);
-        assert_eq!(backup_chain.start_time,
-                   parse_time_str("20150617t182545z").unwrap());
-        assert_eq!(backup_chain.end_time,
-                   parse_time_str("20150617t182650z").unwrap());
+        assert_eq!(
+            backup_chain.start_time,
+            parse_time_str("20150617t182545z").unwrap()
+        );
+        assert_eq!(
+            backup_chain.end_time,
+            parse_time_str("20150617t182650z").unwrap()
+        );
         // full backup
         let full = &backup_chain.fullset;
         assert!(full.is_full());
@@ -737,33 +769,39 @@ mod test {
         {
             let inc = &backup_chain.incsets[0];
             assert!(inc.is_incremental());
-            assert_eq!(inc.start_time(),
-                       parse_time_str("20150617t182545z").unwrap());
+            assert_eq!(
+                inc.start_time(),
+                parse_time_str("20150617t182545z").unwrap()
+            );
             assert_eq!(inc.end_time(), parse_time_str("20150617t182629z").unwrap());
         }
         {
             let inc = &backup_chain.incsets[1];
             assert!(inc.is_incremental());
-            assert_eq!(inc.start_time(),
-                       parse_time_str("20150617t182629z").unwrap());
+            assert_eq!(
+                inc.start_time(),
+                parse_time_str("20150617t182629z").unwrap()
+            );
             assert_eq!(inc.end_time(), parse_time_str("20150617t182650z").unwrap());
         }
     }
 
     #[test]
     fn multi_chain() {
-        let fnames = vec!["duplicity-full.20160108T223144Z.manifest",
-                          "duplicity-full.20160108T223144Z.vol1.difftar.gz",
-                          "duplicity-full.20160108T223209Z.manifest",
-                          "duplicity-full.20160108T223209Z.vol1.difftar.gz",
-                          "duplicity-full-signatures.20160108T223144Z.sigtar.gz",
-                          "duplicity-full-signatures.20160108T223209Z.sigtar.gz",
-                          "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
-                          "duplicity-inc.20160108T223144Z.to.20160108T223159Z.vol1.difftar.gz",
-                          "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
-                          "duplicity-inc.20160108T223209Z.to.20160108T223217Z.vol1.difftar.gz",
-                          "duplicity-new-signatures.20160108T223144Z.to.20160108T223159Z.sigtar.gz",
-                          "duplicity-new-signatures.20160108T223209Z.to.20160108T223217Z.sigtar.gz"];
+        let fnames = vec![
+            "duplicity-full.20160108T223144Z.manifest",
+            "duplicity-full.20160108T223144Z.vol1.difftar.gz",
+            "duplicity-full.20160108T223209Z.manifest",
+            "duplicity-full.20160108T223209Z.vol1.difftar.gz",
+            "duplicity-full-signatures.20160108T223144Z.sigtar.gz",
+            "duplicity-full-signatures.20160108T223209Z.sigtar.gz",
+            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.manifest",
+            "duplicity-inc.20160108T223144Z.to.20160108T223159Z.vol1.difftar.gz",
+            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.manifest",
+            "duplicity-inc.20160108T223209Z.to.20160108T223217Z.vol1.difftar.gz",
+            "duplicity-new-signatures.20160108T223144Z.to.20160108T223159Z.sigtar.gz",
+            "duplicity-new-signatures.20160108T223209Z.to.20160108T223217Z.sigtar.gz",
+        ];
         let collection = Collections::from_filenames(&fnames);
         assert_eq!(collection.backup_chains().count(), 2);
         assert_eq!(collection.signature_chains().count(), 2);

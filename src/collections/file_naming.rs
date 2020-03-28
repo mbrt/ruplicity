@@ -1,8 +1,7 @@
 use regex::Regex;
 use time::Timespec;
 
-use timefmt::parse_time_str;
-
+use crate::timefmt::parse_time_str;
 
 pub struct FileNameInfo<'a> {
     pub file_name: &'a str,
@@ -57,7 +56,6 @@ pub struct FileNameParser {
     new_sig_re: Regex,
 }
 
-
 impl<'a> FileNameInfo<'a> {
     pub fn new(name: &'a str, info: Info) -> Self {
         FileNameInfo {
@@ -74,16 +72,27 @@ impl<'a> FileNameInfo<'a> {
 impl Type {
     pub fn time_range(&self) -> (Timespec, Timespec) {
         match *self {
-            Type::Full{ time, .. } |
-            Type::FullSig{ time, .. } |
-            Type::FullManifest{ time, .. } => (time, time),
-            Type::Inc{ start_time, end_time, .. } |
-            Type::IncManifest{ start_time, end_time, .. } |
-            Type::NewSig{ start_time, end_time, .. } => (start_time, end_time),
+            Type::Full { time, .. }
+            | Type::FullSig { time, .. }
+            | Type::FullManifest { time, .. } => (time, time),
+            Type::Inc {
+                start_time,
+                end_time,
+                ..
+            }
+            | Type::IncManifest {
+                start_time,
+                end_time,
+                ..
+            }
+            | Type::NewSig {
+                start_time,
+                end_time,
+                ..
+            } => (start_time, end_time),
         }
     }
 }
-
 
 impl FileNameParser {
     pub fn new() -> Self {
@@ -98,18 +107,15 @@ impl FileNameParser {
     }
 
     pub fn parse(&self, filename: &str) -> Option<Info> {
-        use std::ascii::AsciiExt;
-
         let lower_fname = filename.to_ascii_lowercase();
-        let opt_type = self.check_full(&lower_fname)
-                           .or(self.check_inc(&lower_fname))
-                           .or(self.check_sig(&lower_fname));
-        opt_type.map(|t| {
-            Info {
-                tp: t,
-                compressed: is_compressed(lower_fname.as_ref()),
-                encrypted: is_encrypted(lower_fname.as_ref()),
-            }
+        let opt_type = self
+            .check_full(&lower_fname)
+            .or(self.check_inc(&lower_fname))
+            .or(self.check_sig(&lower_fname));
+        opt_type.map(|t| Info {
+            tp: t,
+            compressed: is_compressed(lower_fname.as_ref()),
+            encrypted: is_encrypted(lower_fname.as_ref()),
         })
     }
 
@@ -176,7 +182,6 @@ impl FileNameParser {
     }
 }
 
-
 fn get_vol_num(s: &str) -> Option<usize> {
     s.parse::<usize>().ok()
 }
@@ -189,11 +194,10 @@ fn is_compressed(s: &str) -> bool {
     s.ends_with(".gz") || s.ends_with(".z")
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use timefmt::parse_time_str;
+    use crate::timefmt::parse_time_str;
 
     #[test]
     fn parser_test() {
@@ -201,59 +205,79 @@ mod test {
         // invalid
         assert_eq!(parser.parse("invalid"), None);
         // full
-        assert_eq!(parser.parse("duplicity-full.20150617T182545Z.vol1.difftar.gz"),
-                   Some(Info {
-                       tp: Type::Full {
-                           time: parse_time_str("20150617t182545z").unwrap(),
-                           volume_number: 1,
-                       },
-                       compressed: true,
-                       encrypted: false,
-                   }));
+        assert_eq!(
+            parser.parse("duplicity-full.20150617T182545Z.vol1.difftar.gz"),
+            Some(Info {
+                tp: Type::Full {
+                    time: parse_time_str("20150617t182545z").unwrap(),
+                    volume_number: 1,
+                },
+                compressed: true,
+                encrypted: false,
+            })
+        );
         // full manifest
-        assert_eq!(parser.parse("duplicity-full.20150617T182545Z.manifest"),
-                   Some(Info {
-                       tp: Type::FullManifest {
-                           time: parse_time_str("20150617t182545z").unwrap(),
-                           partial: false,
-                       },
-                       compressed: false,
-                       encrypted: false,
-                   }));
+        assert_eq!(
+            parser.parse("duplicity-full.20150617T182545Z.manifest"),
+            Some(Info {
+                tp: Type::FullManifest {
+                    time: parse_time_str("20150617t182545z").unwrap(),
+                    partial: false,
+                },
+                compressed: false,
+                encrypted: false,
+            })
+        );
         // inc
-        assert_eq!(parser.parse("duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz"),
-                   Some(Info{ tp: Type::Inc{ start_time: parse_time_str("20150617t182629z").unwrap(),
-                                             end_time: parse_time_str("20150617t182650z").unwrap(),
-                                             volume_number: 1 },
-                              compressed: true,
-                              encrypted: false }));
+        assert_eq!(
+            parser.parse("duplicity-inc.20150617T182629Z.to.20150617T182650Z.vol1.difftar.gz"),
+            Some(Info {
+                tp: Type::Inc {
+                    start_time: parse_time_str("20150617t182629z").unwrap(),
+                    end_time: parse_time_str("20150617t182650z").unwrap(),
+                    volume_number: 1
+                },
+                compressed: true,
+                encrypted: false
+            })
+        );
         // inc manifest
-        assert_eq!(parser.parse("duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest"),
-                   Some(Info {
-                       tp: Type::IncManifest {
-                           start_time: parse_time_str("20150617t182545z").unwrap(),
-                           end_time: parse_time_str("20150617t182629z").unwrap(),
-                           partial: false,
-                       },
-                       compressed: false,
-                       encrypted: false,
-                   }));
+        assert_eq!(
+            parser.parse("duplicity-inc.20150617T182545Z.to.20150617T182629Z.manifest"),
+            Some(Info {
+                tp: Type::IncManifest {
+                    start_time: parse_time_str("20150617t182545z").unwrap(),
+                    end_time: parse_time_str("20150617t182629z").unwrap(),
+                    partial: false,
+                },
+                compressed: false,
+                encrypted: false,
+            })
+        );
         // new sig
-        assert_eq!(parser.parse("duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz"),
-                   Some(Info{ tp: Type::NewSig{ start_time: parse_time_str("20150617t182545z").unwrap(),
-                                                end_time: parse_time_str("20150617t182629z").unwrap(),
-                                                partial: false },
-                              compressed: true,
-                              encrypted: false }));
+        assert_eq!(
+            parser.parse("duplicity-new-signatures.20150617T182545Z.to.20150617T182629Z.sigtar.gz"),
+            Some(Info {
+                tp: Type::NewSig {
+                    start_time: parse_time_str("20150617t182545z").unwrap(),
+                    end_time: parse_time_str("20150617t182629z").unwrap(),
+                    partial: false
+                },
+                compressed: true,
+                encrypted: false
+            })
+        );
         // full sig
-        assert_eq!(parser.parse("duplicity-full-signatures.20150617T182545Z.sigtar.gz"),
-                   Some(Info {
-                       tp: Type::FullSig {
-                           time: parse_time_str("20150617t182545z").unwrap(),
-                           partial: false,
-                       },
-                       compressed: true,
-                       encrypted: false,
-                   }));
+        assert_eq!(
+            parser.parse("duplicity-full-signatures.20150617T182545Z.sigtar.gz"),
+            Some(Info {
+                tp: Type::FullSig {
+                    time: parse_time_str("20150617t182545z").unwrap(),
+                    partial: false,
+                },
+                compressed: true,
+                encrypted: false,
+            })
+        );
     }
 }

@@ -1,13 +1,15 @@
 extern crate time;
-use time::{Tm, at_utc, strftime, strptime};
+use time::{at_utc, strftime, strptime, Tm};
 
 #[test]
 fn time_crate() {
     // parse
     let tm = strptime("20150617t182545z", "%Y%m%dt%H%M%S%Z").unwrap();
     // format
-    assert_eq!(strftime("%a %d/%m/%Y %H:%M:%S", &tm).unwrap(),
-               "Sun 17/06/2015 18:25:45");
+    assert_eq!(
+        strftime("%a %d/%m/%Y %H:%M:%S", &tm).unwrap(),
+        "Sun 17/06/2015 18:25:45"
+    );
     assert_eq!(format!("{}", tm.rfc3339()), "2015-06-17T18:25:45Z");
     // store in Timespec and restore in Tm
     let ts = tm.to_timespec();

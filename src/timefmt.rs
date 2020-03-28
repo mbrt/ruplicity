@@ -13,10 +13,9 @@
 //! println!("My birth is {}", time.into_local_display());
 //! ```
 
+use std::fmt::{Display, Formatter, Result};
 use time;
 use time::{Timespec, Tm};
-use std::fmt::{Display, Result, Formatter};
-
 
 /// Trait that allows to display a time into a local or UTC timezone.
 pub trait TimeDisplay {
@@ -40,15 +39,15 @@ pub trait TimeDisplay {
 #[derive(Copy, Clone, Debug)]
 pub struct PrettyDisplay(Tm);
 
-
 /// Parse a string representing a duplicity timestamp and returns a `Timespec` if all goes well.
 ///
 /// An example of such a timestamp is "19881211t152000z" which represents the date
 /// `1988-12-11T15:20:00Z` in the UTC time zone.
 pub fn parse_time_str(s: &str) -> Option<Timespec> {
-    time::strptime(s, "%Y%m%dt%H%M%S%Z").ok().map(|tm| tm.to_timespec())
+    time::strptime(s, "%Y%m%dt%H%M%S%Z")
+        .ok()
+        .map(|tm| tm.to_timespec())
 }
-
 
 impl TimeDisplay for Timespec {
     type D = PrettyDisplay;
@@ -61,7 +60,6 @@ impl TimeDisplay for Timespec {
         PrettyDisplay(time::at_utc(self))
     }
 }
-
 
 impl Display for PrettyDisplay {
     fn fmt(&self, f: &mut Formatter) -> Result {
@@ -76,12 +74,10 @@ impl Display for PrettyDisplay {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
     use time::{self, Tm};
-
 
     fn time(y: i32, mon: i32, d: i32, h: i32, min: i32, s: i32) -> Tm {
         Tm {
@@ -120,7 +116,7 @@ mod test {
         let time = parse_time_str("19881211t152000z").unwrap();
         let tm = time::at_utc(time);
         assert_eq!(tm.tm_year, 88);
-        assert_eq!(tm.tm_mon, 11);  // month in [0 - 11]
+        assert_eq!(tm.tm_mon, 11); // month in [0 - 11]
         assert_eq!(tm.tm_mday, 11);
         assert_eq!(tm.tm_hour, 15);
         assert_eq!(tm.tm_min, 20);
@@ -130,8 +126,10 @@ mod test {
     #[test]
     fn display_utc() {
         let time = move_to_this_year(time(1988, 12, 11, 15, 20, 0));
-        assert_eq!(format!("{}", time.to_timespec().into_utc_display()),
-                   "Dec 11 15:20");
+        assert_eq!(
+            format!("{}", time.to_timespec().into_utc_display()),
+            "Dec 11 15:20"
+        );
     }
 
     // NOTE: changing the time zone is global in the process,
@@ -147,18 +145,24 @@ mod test {
     fn display_local() {
         let time = move_to_this_year(time(1988, 12, 11, 15, 20, 0));
         set_time_zone("Europe/London");
-        assert_eq!(format!("{}", time.to_timespec().into_local_display()),
-                   "Dec 11 15:20");
+        assert_eq!(
+            format!("{}", time.to_timespec().into_local_display()),
+            "Dec 11 15:20"
+        );
         set_time_zone("Europe/Rome");
-        assert_eq!(format!("{}", time.to_timespec().into_local_display()),
-                   "Dec 11 16:20");
+        assert_eq!(
+            format!("{}", time.to_timespec().into_local_display()),
+            "Dec 11 16:20"
+        );
     }
 
     #[test]
     fn display_past_year() {
         let time = time(1988, 12, 11, 15, 20, 0);
-        assert_eq!(format!("{}", time.to_timespec().into_utc_display()),
-                   "Dec 11  1988");
+        assert_eq!(
+            format!("{}", time.to_timespec().into_utc_display()),
+            "Dec 11  1988"
+        );
     }
 
     #[test]

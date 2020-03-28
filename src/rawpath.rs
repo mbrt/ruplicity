@@ -1,6 +1,5 @@
 pub use self::os::RawPath;
 
-
 #[cfg(unix)]
 mod os {
     use std::ffi::OsString;
@@ -10,7 +9,6 @@ mod os {
 
     #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
     pub struct RawPath(PathBuf);
-
 
     impl RawPath {
         #[allow(dead_code)]
@@ -45,7 +43,6 @@ mod os {
     }
 }
 
-
 #[cfg(windows)]
 mod os {
     use std::cmp::{Ordering, PartialOrd};
@@ -58,7 +55,6 @@ mod os {
         Path(PathBuf),
         Bytes(Vec<u8>),
     }
-
 
     impl RawPath {
         #[allow(dead_code)]

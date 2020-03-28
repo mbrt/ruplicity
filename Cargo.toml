@@ -2,6 +2,7 @@
 name = "ruplicity"
 version = "0.2.2"
 authors = ["Michele Bertasi <@brt_device>"]
+edition = "2018"
 description = "Library to read duplicity backups"
 repository = "https://github.com/mbrt/ruplicity"
 documentation = "http://mbrt.github.io/ruplicity"

@@ -9,8 +9,7 @@ use std::path::Path;
 use std::str::{self, FromStr, Utf8Error};
 use std::usize;
 
-use rawpath::RawPath;
-
+use crate::rawpath::RawPath;
 
 /// Manifest file info.
 #[derive(Debug, Eq, PartialEq)]
@@ -50,7 +49,6 @@ pub enum ParseError {
     Utf8(Utf8Error),
 }
 
-
 #[derive(Debug, Eq, PartialEq)]
 struct PathBlock {
     path: RawPath,
@@ -63,7 +61,6 @@ struct ManifestParser<R> {
 }
 
 struct WordIter<'a>(&'a [u8]);
-
 
 impl Manifest {
     /// Parses a stream to get a manifest.
@@ -92,7 +89,11 @@ impl Manifest {
     /// Note that volumes are counting starting from one, so the last volume number is equal to the
     /// number of volumes. If no volume corresponds to the given number, `None` is returned.
     pub fn volume(&self, num: usize) -> Option<&Volume> {
-        if num == 0 { None } else { self.volumes.get(num - 1) }
+        if num == 0 {
+            None
+        } else {
+            self.volumes.get(num - 1)
+        }
     }
 
     /// Returns the index of the first volume containing the given path, if present.
@@ -103,22 +104,16 @@ impl Manifest {
     /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn first_volume_of_path(&self, path: &[u8]) -> Option<usize> {
         self.volumes
-            .binary_search_by(|v| {
-                match path.cmp(v.start_path_bytes()) {
-                    Ordering::Less => Ordering::Greater,
-                    Ordering::Greater => {
-                        match path.cmp(v.end_path_bytes()) {
-                            Ordering::Less | Ordering::Equal => Ordering::Equal,
-                            Ordering::Greater => Ordering::Less,
-                        }
-                    }
-                    Ordering::Equal => {
-                        match v.start_path.block {
-                            Some(n) if n > 0 => Ordering::Greater,
-                            _ => Ordering::Equal,
-                        }
-                    }
-                }
+            .binary_search_by(|v| match path.cmp(v.start_path_bytes()) {
+                Ordering::Less => Ordering::Greater,
+                Ordering::Greater => match path.cmp(v.end_path_bytes()) {
+                    Ordering::Less | Ordering::Equal => Ordering::Equal,
+                    Ordering::Greater => Ordering::Less,
+                },
+                Ordering::Equal => match v.start_path.block {
+                    Some(n) if n > 0 => Ordering::Greater,
+                    _ => Ordering::Equal,
+                },
             })
             .map(|idx| idx + 1)
             .ok()
@@ -132,17 +127,17 @@ impl Manifest {
     /// * under Windows `Path` is not allowed to contain non-UTF8 sequences.
     pub fn last_volume_of_path(&self, path: &[u8]) -> Option<usize> {
         self.volumes
-            .binary_search_by(|v| {
-                match path.cmp(v.end_path_bytes()) {
-                    Ordering::Greater => Ordering::Less,
-                    Ordering::Less => {
-                        match path.cmp(v.start_path_bytes()) {
-                            Ordering::Greater | Ordering::Equal => Ordering::Equal,
-                            Ordering::Less => Ordering::Greater,
-                        }
-                    }
-                    Ordering::Equal => {
-                        if v.end_path.block.is_some() { Ordering::Less } else { Ordering::Equal }
+            .binary_search_by(|v| match path.cmp(v.end_path_bytes()) {
+                Ordering::Greater => Ordering::Less,
+                Ordering::Less => match path.cmp(v.start_path_bytes()) {
+                    Ordering::Greater | Ordering::Equal => Ordering::Equal,
+                    Ordering::Less => Ordering::Greater,
+                },
+                Ordering::Equal => {
+                    if v.end_path.block.is_some() {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
                     }
                 }
             })
@@ -150,7 +145,6 @@ impl Manifest {
             .ok()
     }
 }
-
 
 impl Volume {
     /// Returns the first path handled by this volume.
@@ -208,33 +202,21 @@ impl Volume {
     }
 }
 
-
-impl Error for ParseError {
-    fn description(&self) -> &str {
-        match *self {
-            ParseError::Io(ref err) => err.description(),
-            ParseError::MissingKeyword(_) => "missing keyword in manifest",
-            ParseError::MissingHash => "missing required hash",
-            ParseError::MissingHashType => "missing required hash type",
-            ParseError::MissingPath => "missing required path",
-            ParseError::OutOfOrderVolume(_) => "a volume is missing or volumes are unsorted",
-            ParseError::ParseInt(ref err) => err.description(),
-            ParseError::Utf8(ref err) => err.description(),
-        }
-    }
-}
+impl Error for ParseError {}
 
 impl Display for ParseError {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         match *self {
             ParseError::Io(ref e) => write!(fmt, "{}", e),
             ParseError::MissingKeyword(ref e) => write!(fmt, "missing keyword '{}' in manifest", e),
+            ParseError::MissingHash => write!(fmt, "missing required hash"),
+            ParseError::MissingHashType => write!(fmt, "missing required hash type"),
+            ParseError::MissingPath => write!(fmt, "missing required path"),
             ParseError::OutOfOrderVolume(v) => {
                 write!(fmt, "volumes are not sorted around volume {}", v)
             }
             ParseError::ParseInt(ref e) => write!(fmt, "{}", e),
             ParseError::Utf8(ref e) => write!(fmt, "{}", e),
-            _ => write!(fmt, "{}", self.description()),
         }
     }
 }
@@ -257,16 +239,14 @@ impl From<Utf8Error> for ParseError {
     }
 }
 
-
 macro_rules! check_eof(
     ($e:expr) => (
-        if !try!($e) {
+        if !$e? {
             return Err(From::from(io::Error::new(io::ErrorKind::UnexpectedEof,
                                                  "file ends unexpectedly")));
         }
     )
 );
-
 
 impl<R: BufRead> ManifestParser<R> {
     pub fn new(input: R) -> Self {
@@ -278,12 +258,12 @@ impl<R: BufRead> ManifestParser<R> {
 
     pub fn parse(mut self) -> Result<Manifest, ParseError> {
         check_eof!(self.read_line());
-        let hostname = try!(self.read_param_str("Hostname"));
+        let hostname = self.read_param_str("Hostname")?;
         check_eof!(self.read_line());
-        let local_dir = RawPath::from_bytes(try!(self.read_param_bytes("Localdir")));
+        let local_dir = RawPath::from_bytes(self.read_param_bytes("Localdir")?);
 
         let mut volumes = Vec::new();
-        while let Some((vol, i)) = try!(self.read_volume()) {
+        while let Some((vol, i)) = self.read_volume()? {
             // check if out of order
             if i != volumes.len() + 1 {
                 return Err(ParseError::OutOfOrderVolume(i));
@@ -299,23 +279,23 @@ impl<R: BufRead> ManifestParser<R> {
     }
 
     fn read_volume(&mut self) -> Result<Option<(Volume, usize)>, ParseError> {
-        if !try!(self.read_line()) {
+        if !self.read_line()? {
             // EOF
             return Ok(None);
         }
 
         // volume number
-        let mut param = try!(self.read_param_str("Volume"));
+        let mut param = self.read_param_str("Volume")?;
         if param.ends_with(':') {
             param.pop();
         }
-        let num = try!(usize::from_str(&param));
+        let num = usize::from_str(&param)?;
         check_eof!(self.read_line());
-        let start_path = try!(self.read_path_block("StartingPath"));
+        let start_path = self.read_path_block("StartingPath")?;
         check_eof!(self.read_line());
-        let end_path = try!(self.read_path_block("EndingPath"));
+        let end_path = self.read_path_block("EndingPath")?;
         check_eof!(self.read_line());
-        let (htype, h) = try!(self.read_hash_param());
+        let (htype, h) = self.read_hash_param()?;
 
         let vol = Volume {
             start_path: start_path,
@@ -328,7 +308,7 @@ impl<R: BufRead> ManifestParser<R> {
 
     fn read_line(&mut self) -> io::Result<bool> {
         self.buf.clear();
-        let mut len = try!(self.input.read_until(b'\n', &mut self.buf));
+        let mut len = self.input.read_until(b'\n', &mut self.buf)?;
         if len > 0 && self.buf[len - 1] == b'\n' {
             len -= 1;
         }
@@ -343,7 +323,7 @@ impl<R: BufRead> ManifestParser<R> {
     fn read_param_bytes(&mut self, key: &str) -> Result<Vec<u8>, ParseError> {
         let mut words = WordIter(&self.buf);
         let kw = match words.next() {
-            Some(word) => try!(str::from_utf8(word)),
+            Some(word) => str::from_utf8(word)?,
             None => "",
         };
         if kw != key {
@@ -359,14 +339,14 @@ impl<R: BufRead> ManifestParser<R> {
     }
 
     fn read_param_str(&mut self, key: &str) -> Result<String, ParseError> {
-        let bytes = try!(self.read_param_bytes(key));
+        let bytes = self.read_param_bytes(key)?;
         String::from_utf8(bytes).map_err(|e| From::from(e.utf8_error()))
     }
 
     fn read_path_block(&mut self, key: &str) -> Result<PathBlock, ParseError> {
         let mut words = WordIter(&self.buf);
         let kw = match words.next() {
-            Some(word) => try!(str::from_utf8(word)),
+            Some(word) => str::from_utf8(word)?,
             None => "",
         };
         if kw != key {
@@ -380,8 +360,8 @@ impl<R: BufRead> ManifestParser<R> {
         };
         let block = match words.next() {
             Some(word) => {
-                let s = try!(str::from_utf8(word));
-                Some(try!(usize::from_str(s)))
+                let s = str::from_utf8(word)?;
+                Some(usize::from_str(s)?)
             }
             None => None,
         };
@@ -395,14 +375,14 @@ impl<R: BufRead> ManifestParser<R> {
     fn read_hash_param(&mut self) -> Result<(String, Vec<u8>), ParseError> {
         let mut words = WordIter(&self.buf);
         let kw = match words.next() {
-            Some(word) => try!(str::from_utf8(word)),
+            Some(word) => str::from_utf8(word)?,
             None => "",
         };
         if kw != "Hash" {
             return Err(ParseError::MissingKeyword("Hash".to_owned()));
         }
         let htype = match words.next() {
-            Some(word) => try!(str::from_utf8(word)).to_owned(),
+            Some(word) => str::from_utf8(word)?.to_owned(),
             None => {
                 return Err(ParseError::MissingHashType);
             }
@@ -418,7 +398,6 @@ impl<R: BufRead> ManifestParser<R> {
     }
 }
 
-
 impl<'a> Iterator for WordIter<'a> {
     type Item = &'a [u8];
 
@@ -427,7 +406,11 @@ impl<'a> Iterator for WordIter<'a> {
             if self.0.is_empty() {
                 return None;
             }
-            let pos = self.0.iter().position(|b| *b == b' ').unwrap_or(self.0.len());
+            let pos = self
+                .0
+                .iter()
+                .position(|b| *b == b' ')
+                .unwrap_or(self.0.len());
             let (w, rest) = {
                 let (w, rest) = self.0.split_at(pos);
                 // skip all the spaces from rest
@@ -441,7 +424,6 @@ impl<'a> Iterator for WordIter<'a> {
         }
     }
 }
-
 
 fn unescape(mut buf: &[u8]) -> Vec<u8> {
     let mut result = Vec::with_capacity(buf.len());
@@ -495,12 +477,11 @@ fn from_hex(s: &[u8]) -> Vec<u8> {
 
 fn nibble(b: u8) -> u8 {
     match b {
-        b'a'...b'f' => b - b'a' + 10,
-        b'0'...b'9' => b - b'0',
+        b'a'..=b'f' => b - b'a' + 10,
+        b'0'..=b'9' => b - b'0',
         _ => 0,
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -508,7 +489,6 @@ mod test {
     use std::fs::File;
     use std::io::BufReader;
     use std::path::Path;
-
 
     fn full1_manifest() -> Result<Manifest, ParseError> {
         let file = File::open("tests/manifest/full1.manifest").unwrap();
@@ -521,7 +501,6 @@ mod test {
         let mut bfile = BufReader::new(file);
         Manifest::parse(&mut bfile)
     }
-
 
     #[test]
     fn parse_no_err_full() {
@@ -536,37 +515,65 @@ mod test {
     #[test]
     fn first_volume_of_path() {
         let manifest = inc1_manifest().unwrap();
-        assert_eq!(manifest.first_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
-                           .unwrap(),
-                   28);
-        assert_eq!(manifest.first_volume_of_path(b"home/michele/Documenti/Scuola/Open Class/\
+        assert_eq!(
+            manifest
+                .first_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
+                .unwrap(),
+            28
+        );
+        assert_eq!(
+            manifest
+                .first_volume_of_path(
+                    b"home/michele/Documenti/Scuola/Open Class/\
                                                  Epfl/Principles of Reactive Programming/lectures/\
-                                                 week7/lecture_slides_week7-1-annotated.pdf")
-                           .unwrap(),
-                   1);
-        assert_eq!(manifest.first_volume_of_path(b"home/michele/Documenti/Scuola/Uni/\
-                                                 Calcolo Numerico/octave docs/tutorial.pdf")
-                           .unwrap(),
-                   18);
+                                                 week7/lecture_slides_week7-1-annotated.pdf"
+                )
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            manifest
+                .first_volume_of_path(
+                    b"home/michele/Documenti/Scuola/Uni/\
+                                                 Calcolo Numerico/octave docs/tutorial.pdf"
+                )
+                .unwrap(),
+            18
+        );
     }
 
     #[test]
     fn last_volume_of_path() {
         let manifest = inc1_manifest().unwrap();
-        assert_eq!(manifest.last_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
-                           .unwrap(),
-                   28);
-        assert_eq!(manifest.last_volume_of_path(b"home/michele/Documenti/Scuola/Open Class/\
+        assert_eq!(
+            manifest
+                .last_volume_of_path(b"home/michele/Immagini/Foto/albumfiles.txt")
+                .unwrap(),
+            28
+        );
+        assert_eq!(
+            manifest
+                .last_volume_of_path(
+                    b"home/michele/Documenti/Scuola/Open Class/\
                                                 Epfl/Principles of Reactive Programming/lectures/\
-                                                week7/lecture_slides_week7-1-annotated.pdf")
-                           .unwrap(),
-                   2);
-        assert_eq!(manifest.last_volume_of_path(b"home/michele/Documenti/Scuola/Uni/\
-                                                Calcolo Numerico/octave docs/tutorial.pdf")
-                           .unwrap(),
-                   19);
-        assert_eq!(manifest.last_volume_of_path(b"home/michele/Immagini/Foto/foto1.jpg"),
-                   None);
+                                                week7/lecture_slides_week7-1-annotated.pdf"
+                )
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            manifest
+                .last_volume_of_path(
+                    b"home/michele/Documenti/Scuola/Uni/\
+                                                Calcolo Numerico/octave docs/tutorial.pdf"
+                )
+                .unwrap(),
+            19
+        );
+        assert_eq!(
+            manifest.last_volume_of_path(b"home/michele/Immagini/Foto/foto1.jpg"),
+            None
+        );
     }
 
     #[test]
@@ -577,20 +584,23 @@ mod test {
         assert_eq!(manifest.last_volume_index(), 1);
         let vol = manifest.volume(1).unwrap();
         assert_eq!(vol.start_path().unwrap(), Path::new("."));
-        let path = vec![0xd8, 0xab, 0xb1, 0x57, 0x62, 0xae, 0xc5, 0x5d, 0x8a, 0xbb, 0x15, 0x76,
-                        0x2a, 0xf4, 0x0f, 0x21, 0xf9, 0x3e, 0xe2, 0x59, 0x86, 0xbb, 0xab, 0xdb,
-                        0x70, 0xb0, 0x84, 0x13, 0x6b, 0x1d, 0xc2, 0xf1, 0xf5, 0x65, 0xa5, 0x55,
-                        0x82, 0x9a, 0x55, 0x56, 0xa0, 0xf4, 0xdf, 0x34, 0xba, 0xfd, 0x58, 0x03,
-                        0x82, 0x07, 0x73, 0xce, 0x9e, 0x8b, 0xb3, 0x34, 0x04, 0x9f, 0x17, 0x20,
-                        0xf4, 0x8f, 0xa6, 0xfa, 0x97, 0xab, 0xd8, 0xac, 0xda, 0x85, 0xdc, 0x4b,
-                        0x76, 0x43, 0xfa, 0x23, 0x94, 0x92, 0x9e, 0xc9, 0xb7, 0xc3, 0x5f, 0x0f,
-                        0x84, 0x67, 0x9a, 0x42, 0x11, 0x3c, 0x3d, 0x5e, 0xdb, 0x4d, 0x13, 0x96,
-                        0x63, 0x8b, 0xa7, 0x7c, 0x2a, 0x22, 0x5c, 0x27, 0x5e, 0x24, 0x40, 0x23,
-                        0x21, 0x28, 0x29, 0x7b, 0x7d, 0x3f, 0x2b, 0x20, 0x7e, 0x60, 0x20];
+        let path = vec![
+            0xd8, 0xab, 0xb1, 0x57, 0x62, 0xae, 0xc5, 0x5d, 0x8a, 0xbb, 0x15, 0x76, 0x2a, 0xf4,
+            0x0f, 0x21, 0xf9, 0x3e, 0xe2, 0x59, 0x86, 0xbb, 0xab, 0xdb, 0x70, 0xb0, 0x84, 0x13,
+            0x6b, 0x1d, 0xc2, 0xf1, 0xf5, 0x65, 0xa5, 0x55, 0x82, 0x9a, 0x55, 0x56, 0xa0, 0xf4,
+            0xdf, 0x34, 0xba, 0xfd, 0x58, 0x03, 0x82, 0x07, 0x73, 0xce, 0x9e, 0x8b, 0xb3, 0x34,
+            0x04, 0x9f, 0x17, 0x20, 0xf4, 0x8f, 0xa6, 0xfa, 0x97, 0xab, 0xd8, 0xac, 0xda, 0x85,
+            0xdc, 0x4b, 0x76, 0x43, 0xfa, 0x23, 0x94, 0x92, 0x9e, 0xc9, 0xb7, 0xc3, 0x5f, 0x0f,
+            0x84, 0x67, 0x9a, 0x42, 0x11, 0x3c, 0x3d, 0x5e, 0xdb, 0x4d, 0x13, 0x96, 0x63, 0x8b,
+            0xa7, 0x7c, 0x2a, 0x22, 0x5c, 0x27, 0x5e, 0x24, 0x40, 0x23, 0x21, 0x28, 0x29, 0x7b,
+            0x7d, 0x3f, 0x2b, 0x20, 0x7e, 0x60, 0x20,
+        ];
         assert_eq!(vol.end_path_bytes().to_vec(), path);
         assert_eq!(vol.hash_type(), "SHA1");
-        let hash = vec![0xe4, 0xa2, 0xe8, 0xe2, 0xab, 0xfb, 0xa2, 0xcb, 0x24, 0x77, 0x2e, 0x5f,
-                        0xf9, 0xda, 0x4b, 0x85, 0xb3, 0xc1, 0x9a, 0x0c];
+        let hash = vec![
+            0xe4, 0xa2, 0xe8, 0xe2, 0xab, 0xfb, 0xa2, 0xcb, 0x24, 0x77, 0x2e, 0x5f, 0xf9, 0xda,
+            0x4b, 0x85, 0xb3, 0xc1, 0x9a, 0x0c,
+        ];
         assert_eq!(vol.hash().to_vec(), hash);
     }
 }

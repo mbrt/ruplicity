@@ -14,11 +14,10 @@ use flate2::read::GzDecoder;
 use tar;
 use time::Timespec;
 
-use backend::Backend;
-use collections::{SignatureChain, SignatureFile};
-use rawpath::RawPath;
-use timefmt::TimeDisplay;
-
+use crate::backend::Backend;
+use crate::collections::{SignatureChain, SignatureFile};
+use crate::rawpath::RawPath;
+use crate::timefmt::TimeDisplay;
 
 /// Stores information about paths in a backup chain.
 ///
@@ -86,7 +85,6 @@ pub enum EntryType {
     Unknown(u8),
 }
 
-
 #[derive(Copy, Clone, Debug)]
 enum DiffType {
     Signature,
@@ -113,8 +111,8 @@ struct PathSnapshot {
 #[derive(Debug)]
 struct PathInfo {
     mtime: Timespec,
-    uid: Option<u32>,
-    gid: Option<u32>,
+    uid: Option<u64>,
+    gid: Option<u64>,
     mode: Option<u32>,
     entry_type: u8,
     size_hint: Option<(usize, usize)>,
@@ -123,13 +121,12 @@ struct PathInfo {
 
 #[derive(Debug)]
 struct UserGroupMap {
-    uid_map: HashMap<u32, String>,
-    gid_map: HashMap<u32, String>,
+    uid_map: HashMap<u64, String>,
+    gid_map: HashMap<u64, String>,
 }
 
 #[derive(Debug)]
 struct ModeDisplay(Option<u32>);
-
 
 impl Chain {
     /// Builds a new empty signature chain.
@@ -149,13 +146,13 @@ impl Chain {
         let mut chain = Chain::new();
         // add to the chain the full signature and all the incremental signatures
         // if an error occurs in the full signature exit
-        let file = try!(backend.open_file(coll.full_signature().file_name.as_ref()));
-        try!(chain.add_sigfile(file, coll.full_signature()));
+        let file = backend.open_file(coll.full_signature().file_name.as_ref())?;
+        chain.add_sigfile(file, coll.full_signature())?;
         for inc in coll.inc_signatures() {
             // TODO(#4): if an error occurs here, do not exit with an error, instead
             // break the iteration and store the error inside the chain
-            let file = try!(backend.open_file(inc.file_name.as_ref()));
-            try!(chain.add_sigfile(file, &inc));
+            let file = backend.open_file(inc.file_name.as_ref())?;
+            chain.add_sigfile(file, &inc)?;
         }
         Ok(chain)
     }
@@ -172,7 +169,7 @@ impl Chain {
         let result = {
             let snapshot_id = self.num_snapshots;
             if sigfile.compressed {
-                let gz_decoder = try!(GzDecoder::new(file));
+                let gz_decoder = GzDecoder::new(file)?;
                 self.add_sigtar_to_snapshots(tar::Archive::new(gz_decoder), snapshot_id)
             } else {
                 self.add_sigtar_to_snapshots(tar::Archive::new(file), snapshot_id)
@@ -187,14 +184,15 @@ impl Chain {
         result
     }
 
-    fn add_sigtar_to_snapshots<R: Read>(&mut self,
-                                        mut tar: tar::Archive<R>,
-                                        snapshot_id: u8)
-                                        -> io::Result<()> {
+    fn add_sigtar_to_snapshots<R: Read>(
+        &mut self,
+        mut tar: tar::Archive<R>,
+        snapshot_id: u8,
+    ) -> io::Result<()> {
         let mut new_files: Vec<PathSnapshots> = Vec::new();
         {
             let mut old_snapshots = self.files.iter_mut().peekable();
-            for tarfile in try!(tar.entries()) {
+            for tarfile in tar.entries()? {
                 // we can ignore paths with errors
                 // the only problem here is that we miss some change in the chain, but it is
                 // better than abort the whole signature
@@ -212,8 +210,9 @@ impl Chain {
                         if let (Ok(gid), Ok(Some(name))) = (header.gid(), header.groupname()) {
                             self.ug_map.add_group(gid, name.to_owned());
                         }
-                        let link = tarfile.link_name_bytes()
-                                          .map(|b| RawPath::from_bytes(b.into_owned()));
+                        let link = tarfile
+                            .link_name_bytes()
+                            .map(|b| RawPath::from_bytes(b.into_owned()));
                         Some(PathInfo {
                             mtime: time,
                             uid: header.uid().ok(),
@@ -281,7 +280,6 @@ impl Chain {
     }
 }
 
-
 // some optimizations are implemented for snapshots iteration, like `nth` and `ExactSizeIterator`.
 impl<'a> Iterator for Snapshots<'a> {
     type Item = Snapshot<'a>;
@@ -324,7 +322,6 @@ impl<'a> ExactSizeIterator for Snapshots<'a> {
     }
 }
 
-
 impl<'a> Snapshot<'a> {
     /// Returns the files inside this backup snapshot.
     pub fn files(&self) -> SnapshotEntries<'a> {
@@ -342,7 +339,6 @@ impl<'a> Display for Snapshot<'a> {
     }
 }
 
-
 impl<'a> SnapshotEntries<'a> {
     /// Returns a displayable struct for the files.
     ///
@@ -357,9 +353,14 @@ impl<'a> Iterator for SnapshotEntries<'a> {
     type Item = Entry<'a>;
 
     fn next(&mut self) -> Option<Entry<'a>> {
-        let index = self.index;     // prevents borrow checker complains
+        let index = self.index; // prevents borrow checker complains
         for path_snapshots in &mut self.iter {
-            if let Some(s) = path_snapshots.snapshots.iter().rev().find(|s| s.index <= index) {
+            if let Some(s) = path_snapshots
+                .snapshots
+                .iter()
+                .rev()
+                .find(|s| s.index <= index)
+            {
                 // now we have a path info present in this snapshot
                 // if it is not deleted return it
                 if let Some(ref info) = s.info {
@@ -374,7 +375,6 @@ impl<'a> Iterator for SnapshotEntries<'a> {
         None
     }
 }
-
 
 impl<'a> Display for SnapshotEntriesDisplay<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
@@ -391,7 +391,6 @@ impl<'a> Display for SnapshotEntriesDisplay<'a> {
     }
 }
 
-
 impl<'a> Entry<'a> {
     /// Returns the full path of the entry.
     ///
@@ -407,12 +406,12 @@ impl<'a> Entry<'a> {
     }
 
     /// Returns the value of the owner's user ID field.
-    pub fn userid(&self) -> Option<u32> {
+    pub fn userid(&self) -> Option<u64> {
         self.info.uid
     }
 
     /// Returns the value of the group's user ID field.
-    pub fn groupid(&self) -> Option<u32> {
+    pub fn groupid(&self) -> Option<u64> {
         self.info.gid
     }
 
@@ -428,7 +427,9 @@ impl<'a> Entry<'a> {
 
     /// Returns the name of the group.
     pub fn groupname(&self) -> Option<&'a str> {
-        self.info.gid.and_then(|gid| self.ug_map.get_group_name(gid))
+        self.info
+            .gid
+            .and_then(|gid| self.ug_map.get_group_name(gid))
     }
 
     /// Returns the last modification time.
@@ -459,20 +460,22 @@ impl<'a> Entry<'a> {
 
 impl<'a> Display for Entry<'a> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f,
-               "{}{}\t{}\t{}\t{}\t{}\t{}",
-               self.entry_type(),
-               ModeDisplay(self.mode()),
-               self.username().unwrap_or("?"),
-               self.groupname().unwrap_or("?"),
-               self.size_hint().map_or("?".to_owned(), |hint| format!("{}", hint.1)),
-               self.mtime().into_local_display(),
-               // handle special case for the root:
-               // the path is empty, return "." instead
-               self.path)
+        write!(
+            f,
+            "{}{}\t{}\t{}\t{}\t{}\t{}",
+            self.entry_type(),
+            ModeDisplay(self.mode()),
+            self.username().unwrap_or("?"),
+            self.groupname().unwrap_or("?"),
+            self.size_hint()
+                .map_or("?".to_owned(), |hint| format!("{}", hint.1)),
+            self.mtime().into_local_display(),
+            // handle special case for the root:
+            // the path is empty, return "." instead
+            self.path
+        )
     }
 }
-
 
 impl EntryType {
     /// Creates a new entry type from a raw byte.
@@ -492,19 +495,20 @@ impl EntryType {
 
 impl Display for EntryType {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f,
-               "{}",
-               match *self {
-                   EntryType::File => '-',
-                   EntryType::Dir => 'd',
-                   EntryType::HardLink => '-',
-                   EntryType::SymLink => 'l',
-                   EntryType::Fifo => 'p',
-                   EntryType::Unknown(_) => '?',
-               })
+        write!(
+            f,
+            "{}",
+            match *self {
+                EntryType::File => '-',
+                EntryType::Dir => 'd',
+                EntryType::HardLink => '-',
+                EntryType::SymLink => 'l',
+                EntryType::Fifo => 'p',
+                EntryType::Unknown(_) => '?',
+            }
+        )
     }
 }
-
 
 impl UserGroupMap {
     pub fn new() -> Self {
@@ -514,23 +518,22 @@ impl UserGroupMap {
         }
     }
 
-    pub fn add_user(&mut self, uid: u32, name: String) -> bool {
+    pub fn add_user(&mut self, uid: u64, name: String) -> bool {
         self.uid_map.insert(uid, name).is_none()
     }
 
-    pub fn add_group(&mut self, gid: u32, name: String) -> bool {
+    pub fn add_group(&mut self, gid: u64, name: String) -> bool {
         self.gid_map.insert(gid, name).is_none()
     }
 
-    pub fn get_user_name(&self, uid: u32) -> Option<&str> {
+    pub fn get_user_name(&self, uid: u64) -> Option<&str> {
         self.uid_map.get(&uid).map(AsRef::as_ref)
     }
 
-    pub fn get_group_name(&self, gid: u32) -> Option<&str> {
+    pub fn get_group_name(&self, gid: u64) -> Option<&str> {
         self.gid_map.get(&gid).map(AsRef::as_ref)
     }
 }
-
 
 impl Display for ModeDisplay {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
@@ -546,10 +549,22 @@ impl Display for ModeDisplay {
                 let x = match (curr & 0b001 > 0, special & (1 << i) > 0) {
                     (true, false) => "x",
                     (false, false) => "-",
-                    (true, true) => if i == 0 { "t" } else { "s" },
-                    (false, true) => if i == 0 { "T" } else { "S" },
+                    (true, true) => {
+                        if i == 0 {
+                            "t"
+                        } else {
+                            "s"
+                        }
+                    }
+                    (false, true) => {
+                        if i == 0 {
+                            "T"
+                        } else {
+                            "S"
+                        }
+                    }
                 };
-                try!(write!(f, "{}{}{}", r, w, x));
+                write!(f, "{}{}{}", r, w, x)?;
             }
             Ok(())
         } else {
@@ -557,7 +572,6 @@ impl Display for ModeDisplay {
         }
     }
 }
-
 
 fn parse_snapshot_path(path: &[u8]) -> Option<(DiffType, &[u8])> {
     // split the path in (first directory, the remaining path)
@@ -627,18 +641,16 @@ fn compute_size_hint_snapshot<R: Read>(file: &mut tar::Entry<R>) -> Option<(usiz
     Some((bytes, bytes))
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use backend::Backend;
-    use backend::local::LocalBackend;
-    use collections::Collections;
-    use timefmt::parse_time_str;
+    use crate::backend::local::LocalBackend;
+    use crate::backend::Backend;
+    use crate::collections::Collections;
+    use crate::timefmt::parse_time_str;
 
     use std::path::{Path, PathBuf};
     use time::Timespec;
-
 
     #[derive(Debug, Clone, Eq, PartialEq)]
     struct EntryTest {
@@ -662,13 +674,14 @@ mod test {
             }
         }
 
-        pub fn from_info(path: &[u8],
-                         mtime: &str,
-                         uname: &str,
-                         gname: &str,
-                         etype: EntryType,
-                         link: Option<&Path>)
-                         -> Self {
+        pub fn from_info(
+            path: &[u8],
+            mtime: &str,
+            uname: &str,
+            gname: &str,
+            etype: EntryType,
+            link: Option<&Path>,
+        ) -> Self {
             EntryTest {
                 path: path.to_owned(),
                 mtime: parse_time_str(mtime).unwrap(),
@@ -685,98 +698,128 @@ mod test {
     }
 
     fn make_ftest_link(path: &[u8], time: &str, link: &str) -> EntryTest {
-        EntryTest::from_info(path,
-                             time,
-                             "michele",
-                             "michele",
-                             EntryType::SymLink,
-                             Some(Path::new(link)))
+        EntryTest::from_info(
+            path,
+            time,
+            "michele",
+            "michele",
+            EntryType::SymLink,
+            Some(Path::new(link)),
+        )
     }
 
     fn single_vol_expected_files() -> Vec<Vec<EntryTest>> {
-        let nonutf8path = vec![0xd8, 0xab, 0xb1, 0x57, 0x62, 0xae, 0xc5, 0x5d, 0x8a, 0xbb, 0x15,
-                               0x76, 0x2a, 0xf4, 0x0f, 0x21, 0xf9, 0x3e, 0xe2, 0x59, 0x86, 0xbb,
-                               0xab, 0xdb, 0x70, 0xb0, 0x84, 0x13, 0x6b, 0x1d, 0xc2, 0xf1, 0xf5,
-                               0x65, 0xa5, 0x55, 0x82, 0x9a, 0x55, 0x56, 0xa0, 0xf4, 0xdf, 0x34,
-                               0xba, 0xfd, 0x58, 0x03, 0x82, 0x07, 0x73, 0xce, 0x9e, 0x8b, 0xb3,
-                               0x34, 0x04, 0x9f, 0x17, 0x20, 0xf4, 0x8f, 0xa6, 0xfa, 0x97, 0xab,
-                               0xd8, 0xac, 0xda, 0x85, 0xdc, 0x4b, 0x76, 0x43, 0xfa, 0x23, 0x94,
-                               0x92, 0x9e, 0xc9, 0xb7, 0xc3, 0x5f, 0x0f, 0x84, 0x67, 0x9a, 0x42,
-                               0x11, 0x3c, 0x3d, 0x5e, 0xdb, 0x4d, 0x13, 0x96, 0x63, 0x8b, 0xa7,
-                               0x7c, 0x2a, 0x22, 0x5c, 0x27, 0x5e, 0x24, 0x40, 0x23, 0x21, 0x28,
-                               0x29, 0x7b, 0x7d, 0x3f, 0x2b, 0x20, 0x7e, 0x60, 0x20];
+        let nonutf8path = vec![
+            0xd8, 0xab, 0xb1, 0x57, 0x62, 0xae, 0xc5, 0x5d, 0x8a, 0xbb, 0x15, 0x76, 0x2a, 0xf4,
+            0x0f, 0x21, 0xf9, 0x3e, 0xe2, 0x59, 0x86, 0xbb, 0xab, 0xdb, 0x70, 0xb0, 0x84, 0x13,
+            0x6b, 0x1d, 0xc2, 0xf1, 0xf5, 0x65, 0xa5, 0x55, 0x82, 0x9a, 0x55, 0x56, 0xa0, 0xf4,
+            0xdf, 0x34, 0xba, 0xfd, 0x58, 0x03, 0x82, 0x07, 0x73, 0xce, 0x9e, 0x8b, 0xb3, 0x34,
+            0x04, 0x9f, 0x17, 0x20, 0xf4, 0x8f, 0xa6, 0xfa, 0x97, 0xab, 0xd8, 0xac, 0xda, 0x85,
+            0xdc, 0x4b, 0x76, 0x43, 0xfa, 0x23, 0x94, 0x92, 0x9e, 0xc9, 0xb7, 0xc3, 0x5f, 0x0f,
+            0x84, 0x67, 0x9a, 0x42, 0x11, 0x3c, 0x3d, 0x5e, 0xdb, 0x4d, 0x13, 0x96, 0x63, 0x8b,
+            0xa7, 0x7c, 0x2a, 0x22, 0x5c, 0x27, 0x5e, 0x24, 0x40, 0x23, 0x21, 0x28, 0x29, 0x7b,
+            0x7d, 0x3f, 0x2b, 0x20, 0x7e, 0x60, 0x20,
+        ];
         // snapshot 1
-        let s1 = vec![make_ftest(b"", "20020928t183059z", EntryType::Dir),
-                      make_ftest(b"changeable_permission",
-                                 "20010828t182330z",
-                                 EntryType::File),
-                      make_ftest(b"deleted_file", "20020727t230005z", EntryType::File),
-                      make_ftest(b"directory_to_file", "20020727t230036z", EntryType::Dir),
-                      make_ftest(b"directory_to_file/file",
-                                 "20020727t230036z",
-                                 EntryType::File),
-                      make_ftest(b"executable", "20010828t073429z", EntryType::File),
-                      make_ftest(b"executable2", "20010828t181927z", EntryType::File),
-                      make_ftest(b"fifo", "20010828t073246z", EntryType::Fifo),
-                      make_ftest(b"file_to_directory", "20020727t232354z", EntryType::File),
-                      make_ftest(b"largefile", "20020731t015430z", EntryType::File),
-                      make_ftest(b"regular_file", "20010828t073052z", EntryType::File),
-                      make_ftest(b"regular_file.sig", "20010830t004037z", EntryType::File),
-                      make_ftest_link(b"symbolic_link", "20021101t044447z", "regular_file"),
-                      make_ftest(b"test", "20010828t215638z", EntryType::File),
-                      make_ftest(b"two_hardlinked_files1",
-                                 "20010828t073142z",
-                                 EntryType::File),
-                      make_ftest(b"two_hardlinked_files2",
-                                 "20010828t073142z",
-                                 EntryType::File),
-                      make_ftest(&nonutf8path, "20010828t220347z", EntryType::File)];
+        let s1 = vec![
+            make_ftest(b"", "20020928t183059z", EntryType::Dir),
+            make_ftest(
+                b"changeable_permission",
+                "20010828t182330z",
+                EntryType::File,
+            ),
+            make_ftest(b"deleted_file", "20020727t230005z", EntryType::File),
+            make_ftest(b"directory_to_file", "20020727t230036z", EntryType::Dir),
+            make_ftest(
+                b"directory_to_file/file",
+                "20020727t230036z",
+                EntryType::File,
+            ),
+            make_ftest(b"executable", "20010828t073429z", EntryType::File),
+            make_ftest(b"executable2", "20010828t181927z", EntryType::File),
+            make_ftest(b"fifo", "20010828t073246z", EntryType::Fifo),
+            make_ftest(b"file_to_directory", "20020727t232354z", EntryType::File),
+            make_ftest(b"largefile", "20020731t015430z", EntryType::File),
+            make_ftest(b"regular_file", "20010828t073052z", EntryType::File),
+            make_ftest(b"regular_file.sig", "20010830t004037z", EntryType::File),
+            make_ftest_link(b"symbolic_link", "20021101t044447z", "regular_file"),
+            make_ftest(b"test", "20010828t215638z", EntryType::File),
+            make_ftest(
+                b"two_hardlinked_files1",
+                "20010828t073142z",
+                EntryType::File,
+            ),
+            make_ftest(
+                b"two_hardlinked_files2",
+                "20010828t073142z",
+                EntryType::File,
+            ),
+            make_ftest(&nonutf8path, "20010828t220347z", EntryType::File),
+        ];
         // snapshot 2
-        let s2 = vec![make_ftest(b"", "20020731t015532z", EntryType::Dir),
-                      make_ftest(b"changeable_permission",
-                                 "20010828t182330z",
-                                 EntryType::File),
-                      make_ftest(b"directory_to_file", "20020727t230048z", EntryType::File),
-                      make_ftest(b"executable", "20010828t073429z", EntryType::File),
-                      make_ftest(b"executable2", "20020727t230133z", EntryType::Dir),
-                      make_ftest(b"executable2/another_file",
-                                 "20020727t230133z",
-                                 EntryType::File),
-                      make_ftest(b"fifo", "20010828t073246z", EntryType::Fifo),
-                      make_ftest(b"file_to_directory", "20020727t232406z", EntryType::Dir),
-                      make_ftest(b"largefile", "20020731t015524z", EntryType::File),
-                      make_ftest(b"new_file", "20020727t230018z", EntryType::File),
-                      make_ftest(b"regular_file", "20020727t225932z", EntryType::File),
-                      make_ftest(b"regular_file.sig", "20010830t004037z", EntryType::File),
-                      make_ftest(b"symbolic_link", "20020727t225946z", EntryType::Dir),
-                      make_ftest(b"test", "20010828t215638z", EntryType::File),
-                      make_ftest(b"two_hardlinked_files1",
-                                 "20010828t073142z",
-                                 EntryType::File),
-                      make_ftest(b"two_hardlinked_files2",
-                                 "20010828t073142z",
-                                 EntryType::File),
-                      make_ftest(&nonutf8path, "20010828t220347z", EntryType::File)];
+        let s2 = vec![
+            make_ftest(b"", "20020731t015532z", EntryType::Dir),
+            make_ftest(
+                b"changeable_permission",
+                "20010828t182330z",
+                EntryType::File,
+            ),
+            make_ftest(b"directory_to_file", "20020727t230048z", EntryType::File),
+            make_ftest(b"executable", "20010828t073429z", EntryType::File),
+            make_ftest(b"executable2", "20020727t230133z", EntryType::Dir),
+            make_ftest(
+                b"executable2/another_file",
+                "20020727t230133z",
+                EntryType::File,
+            ),
+            make_ftest(b"fifo", "20010828t073246z", EntryType::Fifo),
+            make_ftest(b"file_to_directory", "20020727t232406z", EntryType::Dir),
+            make_ftest(b"largefile", "20020731t015524z", EntryType::File),
+            make_ftest(b"new_file", "20020727t230018z", EntryType::File),
+            make_ftest(b"regular_file", "20020727t225932z", EntryType::File),
+            make_ftest(b"regular_file.sig", "20010830t004037z", EntryType::File),
+            make_ftest(b"symbolic_link", "20020727t225946z", EntryType::Dir),
+            make_ftest(b"test", "20010828t215638z", EntryType::File),
+            make_ftest(
+                b"two_hardlinked_files1",
+                "20010828t073142z",
+                EntryType::File,
+            ),
+            make_ftest(
+                b"two_hardlinked_files2",
+                "20010828t073142z",
+                EntryType::File,
+            ),
+            make_ftest(&nonutf8path, "20010828t220347z", EntryType::File),
+        ];
         // snapshot 3
-        let s3 = vec![make_ftest(b"", "20020928t183059z", EntryType::Dir),
-                      make_ftest(b"changeable_permission",
-                                 "20010828t182330z",
-                                 EntryType::File),
-                      make_ftest(b"executable", "20010828t073429z", EntryType::File),
-                      make_ftest(b"executable2", "20010828t181927z", EntryType::File),
-                      make_ftest(b"fifo", "20010828t073246z", EntryType::Fifo),
-                      make_ftest(b"largefile", "20020731t034334z", EntryType::File),
-                      make_ftest(b"regular_file", "20010828t073052z", EntryType::File),
-                      make_ftest(b"regular_file.sig", "20010830t004037z", EntryType::File),
-                      make_ftest_link(b"symbolic_link", "20021101t044448z", "regular_file"),
-                      make_ftest(b"test", "20010828t215638z", EntryType::File),
-                      make_ftest(b"two_hardlinked_files1",
-                                 "20010828t073142z",
-                                 EntryType::File),
-                      make_ftest(b"two_hardlinked_files2",
-                                 "20010828t073142z",
-                                 EntryType::File),
-                      make_ftest(&nonutf8path, "20010828t220347z", EntryType::File)];
+        let s3 = vec![
+            make_ftest(b"", "20020928t183059z", EntryType::Dir),
+            make_ftest(
+                b"changeable_permission",
+                "20010828t182330z",
+                EntryType::File,
+            ),
+            make_ftest(b"executable", "20010828t073429z", EntryType::File),
+            make_ftest(b"executable2", "20010828t181927z", EntryType::File),
+            make_ftest(b"fifo", "20010828t073246z", EntryType::Fifo),
+            make_ftest(b"largefile", "20020731t034334z", EntryType::File),
+            make_ftest(b"regular_file", "20010828t073052z", EntryType::File),
+            make_ftest(b"regular_file.sig", "20010830t004037z", EntryType::File),
+            make_ftest_link(b"symbolic_link", "20021101t044448z", "regular_file"),
+            make_ftest(b"test", "20010828t215638z", EntryType::File),
+            make_ftest(
+                b"two_hardlinked_files1",
+                "20010828t073142z",
+                EntryType::File,
+            ),
+            make_ftest(
+                b"two_hardlinked_files2",
+                "20010828t073142z",
+                EntryType::File,
+            ),
+            make_ftest(&nonutf8path, "20010828t220347z", EntryType::File),
+        ];
 
         vec![s1, s2, s3]
     }
@@ -793,11 +836,16 @@ mod test {
         // null sized.
         // note also that symbolic links are considered to be null sized. This is an open question
         // if it is correct or not.
-        vec![vec![0, 0, 0, 0, 0, 30, 30, 0, 456, 3500000, 75650, 456, 0, 0, 11, 11, 0],
-             vec![0, 0, 456, 30, 0, 13, 0, 0, 3500001, 6, 75656, 456, 0, 0, 11, 11, 0],
-             vec![0, 0, 30, 30, 0, 3500000, 75650, 456, 0, 0, 11, 11, 0]]
+        vec![
+            vec![
+                0, 0, 0, 0, 0, 30, 30, 0, 456, 3500000, 75650, 456, 0, 0, 11, 11, 0,
+            ],
+            vec![
+                0, 0, 456, 30, 0, 13, 0, 0, 3500001, 6, 75656, 456, 0, 0, 11, 11, 0,
+            ],
+            vec![0, 0, 30, 30, 0, 3500000, 75650, 456, 0, 0, 11, 11, 0],
+        ]
     }
-
 
     #[test]
     fn file_list() {
@@ -806,8 +854,8 @@ mod test {
         // println!("debug files\n---------\n{:#?}\n----------", files);
         let actual_files = files.snapshots().map(|s| {
             s.files()
-             .map(|f| EntryTest::from_entry(&f))
-             .collect::<Vec<_>>()
+                .map(|f| EntryTest::from_entry(&f))
+                .collect::<Vec<_>>()
         });
         assert_eq!(files.snapshots().count(), 3);
         for (actual, expected) in actual_files.zip(expected_files) {
@@ -821,8 +869,8 @@ mod test {
         let files = single_vol_files();
         let actual_sizes = files.snapshots().map(|s| {
             s.files()
-             .map(|f| f.size_hint().unwrap())
-             .collect::<Vec<_>>()
+                .map(|f| f.size_hint().unwrap())
+                .collect::<Vec<_>>()
         });
         let expected_sizes = single_vol_sizes();
 
@@ -832,11 +880,13 @@ mod test {
             assert_eq!(actual.len(), expected.len());
             // iterate all the files
             for (actual, expected) in actual.iter().zip(expected) {
-                assert!(actual.0 <= expected && actual.1 >= expected,
-                        "failed: valid interval: [{} - {}], real value: {}",
-                        actual.0,
-                        actual.1,
-                        expected);
+                assert!(
+                    actual.0 <= expected && actual.1 >= expected,
+                    "failed: valid interval: [{} - {}], real value: {}",
+                    actual.0,
+                    actual.1,
+                    expected
+                );
             }
         }
     }
