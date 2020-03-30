@@ -169,7 +169,7 @@ impl Chain {
         let result = {
             let snapshot_id = self.num_snapshots;
             if sigfile.compressed {
-                let gz_decoder = GzDecoder::new(file)?;
+                let gz_decoder = GzDecoder::new(file);
                 self.add_sigtar_to_snapshots(tar::Archive::new(gz_decoder), snapshot_id)
             } else {
                 self.add_sigtar_to_snapshots(tar::Archive::new(file), snapshot_id)
