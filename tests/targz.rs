@@ -17,7 +17,7 @@ macro_rules! unwrap_or_continue(
 #[test]
 fn targz() {
     let file = File::open("tests/simple.tar.gz").unwrap();
-    let gz_decoder = GzDecoder::new(file).unwrap();
+    let gz_decoder = GzDecoder::new(file);
     let mut tar = Archive::new(gz_decoder);
     let expected = ["a", "b", "c/", "c/d"];
     let actual = tar
@@ -41,7 +41,7 @@ fn infinite_loop() {
     let file =
         File::open("tests/backups/single_vol/duplicity-full.20150617T182545Z.vol1.difftar.gz")
             .unwrap();
-    let gz_decoder = GzDecoder::new(file).unwrap();
+    let gz_decoder = GzDecoder::new(file);
     let mut tar = Archive::new(gz_decoder);
     for _entry in tar.entries().unwrap() {}
 }
@@ -51,7 +51,7 @@ fn single_vol_names() {
     let file =
         File::open("tests/backups/single_vol/duplicity-full.20150617T182545Z.vol1.difftar.gz")
             .unwrap();
-    let gz_decoder = GzDecoder::new(file).unwrap();
+    let gz_decoder = GzDecoder::new(file);
     let mut tar = Archive::new(gz_decoder);
     for file in tar.entries().unwrap() {
         if let Ok(f) = file {
