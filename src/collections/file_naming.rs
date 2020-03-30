@@ -121,14 +121,14 @@ impl FileNameParser {
 
     fn check_full(&self, filename: &str) -> Option<Type> {
         if let Some(captures) = self.full_vol_re.captures(filename) {
-            let time = parse_time_str(captures.name("time").unwrap())?;
-            let vol_num = get_vol_num(captures.name("num").unwrap())?;
+            let time = parse_time_str(captures.name("time").unwrap().as_str())?;
+            let vol_num = get_vol_num(captures.name("num").unwrap().as_str())?;
             Some(Type::Full {
                 time: time,
                 volume_number: vol_num,
             })
         } else if let Some(captures) = self.full_manifest_re.captures(filename) {
-            let time = parse_time_str(captures.name("time").unwrap())?;
+            let time = parse_time_str(captures.name("time").unwrap().as_str())?;
             Some(Type::FullManifest {
                 time: time,
                 partial: captures.name("partial").is_some(),
@@ -140,17 +140,17 @@ impl FileNameParser {
 
     fn check_inc(&self, filename: &str) -> Option<Type> {
         if let Some(captures) = self.inc_vol_re.captures(filename) {
-            let start_time = parse_time_str(captures.name("start_time").unwrap())?;
-            let end_time = parse_time_str(captures.name("end_time").unwrap())?;
-            let vol_num = get_vol_num(captures.name("num").unwrap())?;
+            let start_time = parse_time_str(captures.name("start_time").unwrap().as_str())?;
+            let end_time = parse_time_str(captures.name("end_time").unwrap().as_str())?;
+            let vol_num = get_vol_num(captures.name("num").unwrap().as_str())?;
             Some(Type::Inc {
                 start_time: start_time,
                 end_time: end_time,
                 volume_number: vol_num,
             })
         } else if let Some(captures) = self.inc_manifest_re.captures(filename) {
-            let start_time = parse_time_str(captures.name("start_time").unwrap())?;
-            let end_time = parse_time_str(captures.name("end_time").unwrap())?;
+            let start_time = parse_time_str(captures.name("start_time").unwrap().as_str())?;
+            let end_time = parse_time_str(captures.name("end_time").unwrap().as_str())?;
             Some(Type::IncManifest {
                 start_time: start_time,
                 end_time: end_time,
@@ -163,14 +163,14 @@ impl FileNameParser {
 
     fn check_sig(&self, filename: &str) -> Option<Type> {
         if let Some(captures) = self.full_sig_re.captures(filename) {
-            let time = parse_time_str(captures.name("time").unwrap())?;
+            let time = parse_time_str(captures.name("time").unwrap().as_str())?;
             Some(Type::FullSig {
                 time: time,
                 partial: captures.name("partial").is_some(),
             })
         } else if let Some(captures) = self.new_sig_re.captures(filename) {
-            let start_time = parse_time_str(captures.name("start_time").unwrap())?;
-            let end_time = parse_time_str(captures.name("end_time").unwrap())?;
+            let start_time = parse_time_str(captures.name("start_time").unwrap().as_str())?;
+            let end_time = parse_time_str(captures.name("end_time").unwrap().as_str())?;
             Some(Type::NewSig {
                 start_time: start_time,
                 end_time: end_time,
