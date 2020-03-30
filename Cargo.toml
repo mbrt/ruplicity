@@ -20,7 +20,7 @@ unstable = ["lints", "nightly"] # for building with travis-cargo
 flate2 = "1.0"
 tar = "0.4.4"
 regex = "1.3"
-time = "0.1"
+time = "0.2"
 byteorder = "1.3"
 tabwriter = "1.2"
 clippy = { version = "*", optional = true }
