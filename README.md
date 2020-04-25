@@ -1,6 +1,7 @@
 # ruplicity
 ![Rust](https://github.com/mbrt/ruplicity/workflows/Rust/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/mbrt/ruplicity/badge.svg?branch=master&service=github)](https://coveralls.io/github/mbrt/ruplicity?branch=master)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fmbrt%2Fruplicity.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fmbrt%2Fruplicity?ref=badge_shield)
 [![](http://meritbadge.herokuapp.com/ruplicity)](https://crates.io/crates/ruplicity)
 
 Rust library to explore [duplicity backups](http://duplicity.nongnu.org/).
@@ -65,3 +66,6 @@ Contributions are welcome! There are lots of features still to be implemented. T
 This crate is distributed under the MIT license. See LICENSE for details.
 
 And for those who are wondering: Can you use this license even if duplicity project is licensed under GNU GPL v2? Yes, because this project does not take a single line of code of duplicity and I wanted a permissive license to ease the use of the crate.
+
+
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fmbrt%2Fruplicity.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fmbrt%2Fruplicity?ref=badge_large)
